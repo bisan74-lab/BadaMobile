@@ -73,5 +73,27 @@ void main() {
       });
       expect(() => parseDataGoKrItems(body), throwsFormatException);
     });
+
+    test('response 래퍼 없는 JSON 축약형 봉투도 처리한다 (실측 형태)', () {
+      final body = jsonEncode({
+        'header': {'resultCode': '00', 'resultMsg': 'NORMAL_SERVICE'},
+        'body': {
+          'items': {
+            'item': [
+              {'lot': 126.56305, 'lat': 35.97555},
+            ],
+          },
+          'totalCount': 1,
+        },
+      });
+      expect(parseDataGoKrItems(body), hasLength(1));
+    });
+
+    test('NODATA_ERROR(03)는 빈 목록을 돌려준다', () {
+      final body = jsonEncode({
+        'header': {'resultCode': '03', 'resultMsg': 'NODATA_ERROR'},
+      });
+      expect(parseDataGoKrItems(body), isEmpty);
+    });
   });
 }

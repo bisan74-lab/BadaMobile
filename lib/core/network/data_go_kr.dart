@@ -2,11 +2,13 @@ import 'dart:convert';
 
 /// 공공데이터포털(data.go.kr) 공통 응답 봉투 파서.
 ///
-/// 두 가지 봉투를 지원한다:
-/// 1) 표준 data.go.kr: response.header.resultCode == '00',
-///    response.body.items.item = [...]
-/// 2) KHOA 바다누리 미러(1192136 계열): result.data = [...]
-///    (오류 시 result.error 메시지)
+/// 지원하는 봉투 (1192136 KHOA 계열에서 실제 관찰된 형태 포함):
+/// 1) 표준: response.header / response.body.items.item
+/// 2) JSON 축약형: 루트에 header / body 가 바로 옴 (type=json 실측)
+/// 3) KHOA 바다누리 미러: result.data (오류 시 result.error)
+///
+/// resultCode '00' = 정상, '03'(NODATA_ERROR) = 빈 목록으로 처리,
+/// 그 외 코드는 예외.
 List<Map<String, dynamic>> parseDataGoKrItems(String body) {
   final root = jsonDecode(body) as Map<String, dynamic>;
 
@@ -22,15 +24,22 @@ List<Map<String, dynamic>> parseDataGoKrItems(String body) {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  final response = root['response'] as Map<String, dynamic>?;
-  if (response == null) {
-    throw const FormatException('data.go.kr 응답에 response/result 필드가 없음');
-  }
+  // 'response' 래퍼가 있으면 벗기고, 없으면 루트가 곧 봉투다 (JSON 축약형).
+  final response = switch (root['response']) {
+    final Map<String, dynamic> r => r,
+    _ => root,
+  };
   final header = response['header'] as Map<String, dynamic>?;
-  final resultCode = header?['resultCode']?.toString();
+  if (header == null) {
+    throw const FormatException('data.go.kr 응답에 header/result 필드가 없음');
+  }
+  final resultCode = header['resultCode']?.toString();
+  if (resultCode == '03') {
+    return const []; // NODATA_ERROR: 해당 조건에 데이터 없음
+  }
   if (resultCode != null && resultCode != '00') {
     throw FormatException(
-      'data.go.kr 오류 응답: $resultCode ${header?['resultMsg'] ?? ''}',
+      'data.go.kr 오류 응답: $resultCode ${header['resultMsg'] ?? ''}',
     );
   }
   final items = (response['body'] as Map<String, dynamic>?)?['items'];

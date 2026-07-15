@@ -26,14 +26,23 @@ class DataGoKrFishingRepository implements FishingRepository {
 
   @override
   Future<FishingForecast> fetchForecast(SeaLocation location) async {
-    // 조석예보 API에서 확정된 공통 규격을 따른다:
-    // serviceKey / pageNo / numOfRows / type (+ API별 추가 파라미터)
+    // 요청변수(포털 상세기능 화면에서 확정):
+    // serviceKey / type / reqDate(yyyyMMdd) / gubun(갯바위·선상 등)
+    // / pageNo / numOfRows / placeName(포인트명, 선택)
+    // 낚시지수는 예보 데이터라 과거 날짜는 NODATA_ERROR(03)가 난다.
+    final today = DateTime.now();
+    final ymd =
+        '${today.year}'
+        '${today.month.toString().padLeft(2, '0')}'
+        '${today.day.toString().padLeft(2, '0')}';
     final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiService', {
       'serviceKey': _serviceKey,
+      'type': 'json',
+      'reqDate': ymd,
+      'gubun': '갯바위',
       'pageNo': '1',
       'numOfRows': '100',
-      'type': 'json',
-      // TODO(bisan74): 미리보기로 지점/날짜/어종 파라미터 이름 확정.
+      // placeName 미지정 → 전체 포인트에서 응답을 받아 지점 매칭은 앱에서 처리.
     });
 
     final res = await _client.get(uri);
