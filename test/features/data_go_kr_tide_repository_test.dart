@@ -103,8 +103,9 @@ void main() {
         request.url.path,
         '/1192136/tideFcstHghLw/GetTideFcstHghLwApiService',
       );
-      expect(request.url.queryParameters['ObsCode'], 'DT_0001');
-      final ymd = request.url.queryParameters['Date']!;
+      expect(request.url.queryParameters['obsCode'], 'DT_0001');
+      expect(request.url.queryParameters['type'], 'json');
+      final ymd = request.url.queryParameters['reqDate']!;
       final date = DateTime.parse(ymd);
       String t(int hour) =>
           '${ymd.substring(0, 4)}-${ymd.substring(4, 6)}-${ymd.substring(6)} '
@@ -148,7 +149,7 @@ void main() {
 
     test('바다누리식 봉투(result.data)와 tph_level 필드도 처리한다', () async {
       final khoaClient = MockClient((request) async {
-        final ymd = request.url.queryParameters['Date']!;
+        final ymd = request.url.queryParameters['reqDate']!;
         String t(int hour) =>
             '${ymd.substring(0, 4)}-${ymd.substring(4, 6)}-${ymd.substring(6)} '
             '${hour.toString().padLeft(2, '0')}:00:00';

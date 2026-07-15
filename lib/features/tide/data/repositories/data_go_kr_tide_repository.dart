@@ -73,16 +73,15 @@ class DataGoKrTideRepository implements TideRepository {
         '${date.year}'
         '${date.month.toString().padLeft(2, '0')}'
         '${date.day.toString().padLeft(2, '0')}';
-    // 1192136(국립해양조사원) 계열은 바다누리 미러라
-    // Get{이름}ApiService 오퍼레이션 + ObsCode/Date 파라미터를 쓴다.
-    // 인증키는 게이트웨이(serviceKey)와 백엔드(ServiceKey) 표기가 달라
-    // 둘 다 전달한다.
+    // 파라미터는 포털 상세기능(요청변수) 화면에서 확정된 규격:
+    // serviceKey / pageNo / numOfRows / type / obsCode / reqDate
     final uri = Uri.https(_host, '$_basePath/GetTideFcstHghLwApiService', {
       'serviceKey': _serviceKey,
-      'ServiceKey': _serviceKey,
-      'ObsCode': obsCode,
-      'Date': ymd,
-      'ResultType': 'json',
+      'pageNo': '1',
+      'numOfRows': '10',
+      'type': 'json',
+      'obsCode': obsCode,
+      'reqDate': ymd,
     });
     final res = await _client.get(uri);
     if (res.statusCode != 200) {
