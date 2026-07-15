@@ -99,9 +99,12 @@ void main() {
   group('DataGoKrTideRepository', () {
     MockClient client({bool camel = true}) => MockClient((request) async {
       expect(request.url.host, 'apis.data.go.kr');
-      expect(request.url.path, '/1192136/tideFcstHghLw/getTideFcstHghLw');
-      expect(request.url.queryParameters['obsCode'], 'DT_0001');
-      final ymd = request.url.queryParameters['reqDate']!;
+      expect(
+        request.url.path,
+        '/1192136/tideFcstHghLw/GetTideFcstHghLwApiService',
+      );
+      expect(request.url.queryParameters['ObsCode'], 'DT_0001');
+      final ymd = request.url.queryParameters['Date']!;
       final date = DateTime.parse(ymd);
       String t(int hour) =>
           '${ymd.substring(0, 4)}-${ymd.substring(4, 6)}-${ymd.substring(6)} '
@@ -141,6 +144,39 @@ void main() {
       expect(tide.hourlyHeightsCm, hasLength(25));
       // 08시 만조 700cm이 곡선에 반영됐는지
       expect(tide.hourlyHeightsCm[8], closeTo(700, 0.01));
+    });
+
+    test('바다누리식 봉투(result.data)와 tph_level 필드도 처리한다', () async {
+      final khoaClient = MockClient((request) async {
+        final ymd = request.url.queryParameters['Date']!;
+        String t(int hour) =>
+            '${ymd.substring(0, 4)}-${ymd.substring(4, 6)}-${ymd.substring(6)} '
+            '${hour.toString().padLeft(2, '0')}:00:00';
+        return http.Response(
+          jsonEncode({
+            'result': {
+              'meta': {'obs_post_id': 'DT_0001'},
+              'data': [
+                {'tph_time': t(5), 'tph_level': '705', 'hl_code': '고조'},
+                {'tph_time': t(11), 'tph_level': '95', 'hl_code': '저조'},
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final repo = DataGoKrTideRepository(
+        client: khoaClient,
+        serviceKey: 'test-key',
+      );
+      final tide = await repo.fetchTideDay(
+        incheon,
+        DateTime.now().add(const Duration(days: 3)),
+      );
+      expect(tide.extremes, hasLength(2));
+      expect(tide.extremes.first.heightCm, 705);
+      expect(tide.hourlyHeightsCm[5], closeTo(705, 0.01));
     });
 
     test('관측소 코드가 없는 지점은 예외를 던진다', () async {

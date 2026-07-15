@@ -26,13 +26,11 @@ class DataGoKrFishingRepository implements FishingRepository {
 
   @override
   Future<FishingForecast> fetchForecast(SeaLocation location) async {
+    // 1192136 계열은 바다누리 미러 규격: Get{이름}ApiService + ServiceKey.
     final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiService', {
-      'serviceKey': _serviceKey,
-      'dataType': 'JSON',
-      'pageNo': '1',
-      'numOfRows': '100',
-      // TODO(bisan74): 활용가이드로 지점/날짜 파라미터 이름 확정
-      //  (예: reqDate=yyyyMMdd, 지점 식별자).
+      'ServiceKey': _serviceKey,
+      'ResultType': 'json',
+      // TODO(bisan74): 활용가이드로 지점/날짜/어종 파라미터 이름 확정.
     });
 
     final res = await _client.get(uri);
