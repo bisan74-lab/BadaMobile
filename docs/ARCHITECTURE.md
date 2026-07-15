@@ -1,4 +1,19 @@
-# BadaMobile 아키텍처
+# BadaMobile 초기 구조 설계
+
+> 입력 문서: [REQUIREMENTS.md](REQUIREMENTS.md) — FR/NFR ID를 본 문서에서 추적한다.
+
+## 화면 구조와 흐름
+
+```
+AppShell (하단 탭)
+├── 홈        HomeScreen        FR-07  오늘 요약: 물때 + 다음 만조/간조 + 현재 바람·파고
+├── 물때      TideScreen        FR-01~04  날짜 이동, 물때 배지, 조위 그래프, 만조/간조 목록
+├── 날씨      WeatherScreen     FR-05, FR-12  현재 요약, 바람지도(예정), 시간별 예보
+└── 지역      LocationsScreen   FR-06  검색, 선택, 즐겨찾기
+```
+
+- 지역 변경은 `selectedLocationProvider` 하나로 전파된다 — 화면 간 별도 네비게이션 연동 불필요.
+- 새 기능(예: 주간 물때표, 알림 설정)은 `features/` 아래 새 디렉터리로 추가한다.
 
 ## 설계 원칙
 
@@ -40,7 +55,7 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 ### features/home — 홈 대시보드
 - 선택 지역의 "오늘": 물때, 다음 만조/간조, 현재 바람·파고 요약
 
-## 데이터 소스 연동 계획
+## 데이터 소스 연동 설계 (FR-08, FR-09)
 
 | 데이터 | 소스 | 비고 |
 |---|---|---|
@@ -49,7 +64,42 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 | 바람·기온·강수 | Open-Meteo Forecast API | 키 불필요 |
 
 API 키는 `--dart-define=KHOA_API_KEY=...` 로 주입한다 (`core/config/env.dart` 참고).
-저장소에 키를 커밋하지 않는다.
+저장소에 키를 커밋하지 않는다 (NFR-04).
+
+### 연동 구현 계획
+
+```
+KhoaTideRepository implements TideRepository
+  GET /api/oceangrid/tideObcPreTab/search.do   조석예보(만조/간조) → TideExtreme[]
+  GET /api/oceangrid/tideObcPre/search.do      1시간 조위 예측     → hourlyHeightsCm
+  파라미터: ServiceKey, ObsCode(SeaLocation.khoaStationCode), Date(yyyyMMdd)
+
+OpenMeteoMarineRepository implements MarineWeatherRepository
+  GET https://marine-api.open-meteo.com/v1/marine
+      ?latitude&longitude&hourly=wave_height,sea_surface_temperature
+  GET https://api.open-meteo.com/v1/forecast
+      ?latitude&longitude&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m
+  두 응답을 시간축 기준으로 병합해 HourlyMarine[] 생성
+```
+
+- DTO(JSON) ↔ 도메인 모델 매핑 코드는 각 `data/dto/` 아래에 두고, 도메인 모델은 API 형태에 오염되지 않게 유지한다.
+- 전환 방법: `tideRepositoryProvider` / `marineWeatherRepositoryProvider` 에서
+  `Env.useMockData` 로 목/실구현을 분기한다. UI 코드는 변경 없음.
+
+### 캐싱·오프라인 설계 (FR-11, NFR-03, v0.3)
+
+```
+Repository 구현 내부에 2계층 캐시:
+  1) 메모리: Riverpod FutureProvider 캐시 (현재 동작)
+  2) 디스크: (지역 id, 날짜) 키로 JSON 저장 — shared_preferences 또는 경량 파일 캐시
+네트워크 실패 시: 디스크 캐시 → 없으면 오류 카드 표시 (한국어 메시지)
+```
+
+### 오류 처리 정책 (NFR-03)
+
+- Repository는 실패 시 도메인 예외(`DataUnavailableException` 등, 추후 `core/errors/`)를 던진다.
+- 화면은 `AsyncValue.when(error:)` 에서 사용자용 한국어 메시지로 변환해 표시한다.
+- API 응답 파싱 실패는 로그(추후 crashlytics 검토) 후 캐시로 폴백한다.
 
 ## 상태 관리 규칙
 
@@ -63,7 +113,32 @@ API 키는 `--dart-define=KHOA_API_KEY=...` 로 주입한다 (`core/config/env.d
 - 리포지토리 목 구현은 그 자체로 테스트 픽스처 역할
 - 화면은 스모크 위젯 테스트(렌더링 + 핵심 텍스트 존재) 수준으로 시작
 
-## iOS 확장
+## 모듈 의존 규칙
+
+```
+app/        → features/*  (화면 조립만)
+features/A  → core/, shared/, 그리고 다른 feature의 "공개 provider"만
+core/       → 외부 패키지만 (features를 알지 못함)
+shared/     → core/ 만
+```
+
+- feature 간 직접 위젯 import는 지양하고, 공유가 필요한 상태는 provider로 노출한다.
+  (현재 허용된 교차 의존: home → tide/weather/locations의 provider와 WindArrow)
+- 순환 의존이 생기면 해당 모델/로직을 `core/` 로 승격한다.
+
+## 요구사항 추적 요약
+
+| 요구사항 | 담당 모듈 |
+|---|---|
+| FR-01~04 (물때/조석) | `features/tide`, `core/utils/mul_ttae.dart` |
+| FR-05 (해양 예보) | `features/weather` |
+| FR-06 (지역) | `features/locations` |
+| FR-07 (홈 요약) | `features/home` |
+| FR-08/09 (실데이터) | 각 feature `data/repositories/` 신규 구현체 |
+| FR-12 (바람 지도) | `features/weather` 내 신규 화면/레이어 |
+| NFR-06 (품질) | `analysis_options.yaml`, `test/`, `.github/workflows/ci.yml` |
+
+## iOS 확장 (NFR-01)
 
 Dart 코드는 플랫폼 독립적이다. iOS 추가 시:
 1. `flutter create --platforms ios .` 로 `ios/` 생성
