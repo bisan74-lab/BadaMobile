@@ -1,8 +1,7 @@
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 import '../../../../core/config/env.dart';
+import '../../../../core/network/data_go_kr.dart';
 import '../../../locations/data/models/sea_location.dart';
 import '../models/fishing_index.dart';
 import 'fishing_repository.dart';
@@ -51,34 +50,4 @@ class DataGoKrFishingRepository implements FishingRepository {
   FishingIndex _itemToIndex(Map<String, dynamic> item) {
     throw UnimplementedError('바다낚시지수 응답 필드 매핑은 샘플 응답 확인 후 구현');
   }
-}
-
-/// data.go.kr 공통 응답 봉투를 파싱해 item 목록을 꺼낸다.
-///
-/// 표준 구조: response.header.resultCode == '00',
-///           response.body.items.item = [...]
-List<Map<String, dynamic>> parseDataGoKrItems(String body) {
-  final root = jsonDecode(body) as Map<String, dynamic>;
-  final response = root['response'] as Map<String, dynamic>?;
-  if (response == null) {
-    throw const FormatException('data.go.kr 응답에 response 필드가 없음');
-  }
-  final header = response['header'] as Map<String, dynamic>?;
-  final resultCode = header?['resultCode']?.toString();
-  if (resultCode != null && resultCode != '00') {
-    throw FormatException(
-      'data.go.kr 오류 응답: $resultCode ${header?['resultMsg'] ?? ''}',
-    );
-  }
-  final items = (response['body'] as Map<String, dynamic>?)?['items'];
-  final List<dynamic> itemList;
-  if (items is List) {
-    itemList = items;
-  } else if (items is Map<String, dynamic>) {
-    final item = items['item'];
-    itemList = item is List ? item : (item == null ? const [] : [item]);
-  } else {
-    itemList = const [];
-  }
-  return itemList.whereType<Map<String, dynamic>>().toList();
 }

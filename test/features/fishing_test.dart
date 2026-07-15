@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import 'package:bada_mobile/core/network/data_go_kr.dart';
 import 'package:bada_mobile/features/fishing/data/models/fishing_index.dart';
-import 'package:bada_mobile/features/fishing/data/repositories/data_go_kr_fishing_repository.dart';
 import 'package:bada_mobile/features/fishing/data/repositories/mock_fishing_repository.dart';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:flutter_test/flutter_test.dart';

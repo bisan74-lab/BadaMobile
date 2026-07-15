@@ -102,11 +102,16 @@ DataGoKrFishingRepository implements FishingRepository          [뼈대 구현]
   ⚠️ item 필드 매핑은 포털 활용가이드/샘플 응답 확인 후 확정 →
      확정 전까지 fishingRepositoryProvider는 MockFishingRepository 사용.
 
-KhoaTideRepository implements TideRepository                    [계획, v0.2]
-  GET /api/oceangrid/tideObcPreTab/search.do   조석예보(만조/간조) → TideExtreme[]
-  GET /api/oceangrid/tideObcPre/search.do      1시간 조위 예측     → hourlyHeightsCm
-  파라미터: ServiceKey, ObsCode(SeaLocation.khoaStationCode), Date(yyyyMMdd)
-  ※ KHOA 조석예보는 연간 조석표 기반이라 미래 1년 요구(FR-15)를 충족한다.
+DataGoKrTideRepository implements TideRepository                [구현됨]
+  End Point: https://apis.data.go.kr/1192136/tideFcstHghLw  (활용신청 승인됨)
+  - 고조/저조 극값만 제공하므로 전날~다음날 3일치를 조회한 뒤
+    극값 사이를 코사인 보간해 차트용 25개 시간별 조위를 생성한다.
+  - 응답 필드명은 KHOA 계열 명명 후보(camel/snake)를 허용하는 매퍼로 흡수,
+    매핑 실패·네트워크 오류 시 합성 데이터로 폴백 (범위 위반은 폴백 안 함).
+  - 키가 주입된 빌드(--dart-define=DATA_GO_KR_API_KEY=...)에서만 활성화.
+  ※ 조석예보는 연간 조석표 기반이라 미래 1년 요구(FR-15)를 충족한다.
+  ※ 첫 실기기 실행 시 실제 응답 필드명이 후보에 없으면 폴백으로 동작하므로,
+    로그의 FormatException 메시지(필드 목록 포함)로 후보를 보강한다.
 ```
 
 API 키(KHOA)는 `--dart-define=KHOA_API_KEY=...` 로 주입한다 (`core/config/env.dart`).

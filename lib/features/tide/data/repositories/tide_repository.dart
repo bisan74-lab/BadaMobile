@@ -16,6 +16,13 @@ import '../models/tide_data.dart';
 abstract class TideRepository {
   Future<TideDay> fetchTideDay(SeaLocation location, DateTime date);
 
+  /// [primary] 실패 시 [fallback]으로 폴백하는 래퍼를 만든다 (NFR-03).
+  /// 제공 범위 위반([DataRangeException])은 양쪽에 공통이므로 폴백하지 않는다.
+  factory TideRepository.withFallback({
+    required TideRepository primary,
+    required TideRepository fallback,
+  }) = _FallbackTideRepository;
+
   /// [date]가 조석 예보 제공 범위인지 검사하고, 벗어나면 예외를 던진다.
   static void ensureInRange(DateTime date, {DateTime? now}) {
     final today = DateTime.now();
@@ -23,6 +30,27 @@ abstract class TideRepository {
     final diff = DateTime(date.year, date.month, date.day).difference(base);
     if (diff > maxTideForecastRange || diff < -maxTideForecastRange) {
       throw const DataRangeException('조석 예보는 오늘 기준 ±1년 범위만 제공됩니다');
+    }
+  }
+}
+
+class _FallbackTideRepository implements TideRepository {
+  const _FallbackTideRepository({
+    required this.primary,
+    required this.fallback,
+  });
+
+  final TideRepository primary;
+  final TideRepository fallback;
+
+  @override
+  Future<TideDay> fetchTideDay(SeaLocation location, DateTime date) async {
+    try {
+      return await primary.fetchTideDay(location, date);
+    } on DataRangeException {
+      rethrow;
+    } catch (_) {
+      return fallback.fetchTideDay(location, date);
     }
   }
 }

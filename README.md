@@ -56,7 +56,10 @@ android/                       # Android 네이티브 설정
 
 ```bash
 flutter pub get
-flutter run          # 연결된 Android 기기/에뮬레이터에서 실행
+flutter run          # 연결된 Android 기기/에뮬레이터에서 실행 (합성 데이터)
+
+# 실데이터(조석예보·낚시지수)까지 켜려면 공공데이터포털 키 주입:
+flutter run --dart-define=DATA_GO_KR_API_KEY=발급받은키
 ```
 
 3. 검사 및 테스트:
