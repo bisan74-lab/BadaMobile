@@ -41,5 +41,8 @@ String formatWind(double ms) => '${ms.toStringAsFixed(1)}m/s';
 /// 파고(m)를 소수 1자리 문자열로.
 String formatWave(double m) => '${m.toStringAsFixed(1)}m';
 
+/// 파주기(초)를 문자열로.
+String formatPeriod(double s) => '${s.toStringAsFixed(1)}s';
+
 /// 조위(cm)를 정수 문자열로.
 String formatTideHeight(double cm) => '${cm.round()}cm';

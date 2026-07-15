@@ -5,10 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final repo = MockMarineWeatherRepository();
 
+  test('기본으로 16일(384시간) 예보를 반환한다 — 최소 2주 요건', () async {
+    final forecast = await repo.fetchForecast(sampleLocations.first);
+    expect(forecast.hourly, hasLength(16 * 24));
+    expect(forecast.forecastDays, greaterThanOrEqualTo(14));
+    expect(forecast.locationId, sampleLocations.first.id);
+  });
+
   test('요청한 시간 수만큼 시간별 예보를 반환한다', () async {
     final forecast = await repo.fetchForecast(sampleLocations.first, hours: 48);
     expect(forecast.hourly, hasLength(48));
-    expect(forecast.locationId, sampleLocations.first.id);
   });
 
   test('예보 값이 물리적으로 타당한 범위에 있다', () async {
@@ -18,6 +24,8 @@ void main() {
       expect(h.windGustMs, greaterThanOrEqualTo(h.windSpeedMs));
       expect(h.windDirectionDeg, inInclusiveRange(0, 360));
       expect(h.waveHeightM, greaterThanOrEqualTo(0));
+      expect(h.wavePeriodS, inInclusiveRange(1, 20));
+      expect(h.waveDirectionDeg, inInclusiveRange(0, 360));
       expect(h.waterTempC, inInclusiveRange(-2, 35));
     }
   });

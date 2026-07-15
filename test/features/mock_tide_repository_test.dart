@@ -1,15 +1,16 @@
+import 'package:bada_mobile/core/errors/data_errors.dart';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:bada_mobile/features/tide/data/repositories/mock_tide_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final repo = MockTideRepository();
-  final date = DateTime(2026, 7, 15);
+  final date = DateTime.now().add(const Duration(days: 30));
 
   test('25개의 시간별 조위를 반환한다', () async {
     final tide = await repo.fetchTideDay(sampleLocations.first, date);
     expect(tide.hourlyHeightsCm, hasLength(25));
-    expect(tide.date, DateTime(2026, 7, 15));
+    expect(tide.date, DateTime(date.year, date.month, date.day));
   });
 
   test('만조/간조가 번갈아 나타난다', () async {
@@ -53,5 +54,29 @@ void main() {
       range(west.hourlyHeightsCm),
       greaterThan(range(east.hourlyHeightsCm)),
     );
+  });
+
+  group('제공 범위 (조석 1년)', () {
+    test('1년 이내 미래 날짜는 제공된다', () async {
+      final in11Months = DateTime.now().add(const Duration(days: 330));
+      final tide = await repo.fetchTideDay(sampleLocations.first, in11Months);
+      expect(tide.extremes, isNotEmpty);
+    });
+
+    test('1년을 넘는 날짜는 DataRangeException', () {
+      final beyond = DateTime.now().add(const Duration(days: 370));
+      expect(
+        () => repo.fetchTideDay(sampleLocations.first, beyond),
+        throwsA(isA<DataRangeException>()),
+      );
+    });
+
+    test('과거 1년을 넘는 날짜도 DataRangeException', () {
+      final past = DateTime.now().subtract(const Duration(days: 370));
+      expect(
+        () => repo.fetchTideDay(sampleLocations.first, past),
+        throwsA(isA<DataRangeException>()),
+      );
+    });
   });
 }

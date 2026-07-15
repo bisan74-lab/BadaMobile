@@ -2,8 +2,8 @@ import 'package:bada_mobile/core/utils/mul_ttae.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('mulTtaeForLunarDay (7물때식)', () {
-    test('음력 10일은 1물', () {
+  group('7물때식 (서해)', () {
+    test('음력 10일·25일은 1물', () {
       expect(mulTtaeForLunarDay(10).label, '1물');
       expect(mulTtaeForLunarDay(25).label, '1물');
     });
@@ -35,6 +35,48 @@ void main() {
     });
   });
 
+  group('8물때식 (남해·동해·제주)', () {
+    MulTtae south(int day) =>
+        mulTtaeForLunarDay(day, system: MulTtaeSystem.south8);
+
+    test('음력 1일·16일은 8물', () {
+      expect(south(1).label, '8물');
+      expect(south(16).label, '8물');
+      expect(south(16).isSari, isTrue);
+    });
+
+    test('음력 9일·24일은 1물', () {
+      expect(south(9).label, '1물');
+      expect(south(24).label, '1물');
+    });
+
+    test('음력 8일·23일은 조금이고 무시는 없다', () {
+      expect(south(8).label, '조금');
+      expect(south(23).label, '조금');
+      expect(mulTtaeLabelsSouth8, isNot(contains('무시')));
+    });
+
+    test('같은 날 서해와 남해 물때 번호는 1 차이난다', () {
+      // 예: 음력 1일 → 서해 7물, 남해 8물
+      for (final day in [1, 5, 16, 20]) {
+        final west = mulTtaeForLunarDay(day);
+        expect(
+          '${int.parse(west.label.replaceAll('물', '')) + 1}물',
+          south(day).label,
+        );
+      }
+    });
+  });
+
+  group('mulTtaeSystemForRegion', () {
+    test('서해만 7물때식, 나머지는 8물때식', () {
+      expect(mulTtaeSystemForRegion('서해'), MulTtaeSystem.west7);
+      expect(mulTtaeSystemForRegion('남해'), MulTtaeSystem.south8);
+      expect(mulTtaeSystemForRegion('동해'), MulTtaeSystem.south8);
+      expect(mulTtaeSystemForRegion('제주'), MulTtaeSystem.south8);
+    });
+  });
+
   group('approximateLunarDay', () {
     test('기준 신월 직후는 음력 1일', () {
       expect(approximateLunarDay(DateTime.utc(2000, 1, 6, 20)), 1);
@@ -43,6 +85,13 @@ void main() {
     test('신월 + 14일은 보름 부근(14~16일)', () {
       final day = approximateLunarDay(DateTime.utc(2000, 1, 20, 20));
       expect(day, inInclusiveRange(14, 16));
+    });
+
+    test('2년 뒤 날짜에도 유효한 음력 일자를 반환한다 (단순 물때 2년 제공)', () {
+      final farFuture = DateTime.now().add(maxSimpleMulTtaeRange);
+      final day = approximateLunarDay(farFuture);
+      expect(day, inInclusiveRange(1, 30));
+      expect(mulTtaeFor(farFuture).label, isNotEmpty);
     });
 
     test('한 삭망월 뒤에는 같은 음력 일자로 돌아온다', () {

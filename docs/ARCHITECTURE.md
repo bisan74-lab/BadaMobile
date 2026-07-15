@@ -57,34 +57,56 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 
 ## 데이터 소스 연동 설계 (FR-08, FR-09)
 
-| 데이터 | 소스 | 비고 |
+### API 후보 조사 결과 (해양 기상, "최소 2주 예보" 기준)
+
+| 후보 | 예보 기간 | 제공 항목 | 비용/키 | 판정 |
+|---|---|---|---|---|
+| **Open-Meteo Marine + Forecast** | **16일** | 파고·파주기·파향·수온 / 풍속·돌풍·풍향·기온 | 무료(비상업)·키 불필요 | **채택** |
+| Windy Point Forecast API | 10일 | 바람·파도 등 | 유료 | 제외(무료 앱 원칙) |
+| 기상청 단기예보/중기예보 API | 3일/10일 | 바람·기온 (파고는 해상예보 별도) | 무료·키 필요 | 2주 미달, 보조 후보 |
+| NOAA GFS/WaveWatch3 원자료 | 16일 | 원시 격자 데이터 | 무료 | 직접 전처리 서버 필요, 제외 |
+| KHOA 바다누리 Open API | 조석 연 단위 | 조석예보·조위·수온 | 무료·키 필요 | **조석용 채택(예정)** |
+
+Open-Meteo Marine API는 hourly 변수로 `wave_height, wave_period, wave_direction,
+sea_surface_temperature` 등을 제공하고 `forecast_days` 는 1~16일(기본 7일)이다.
+Forecast API에서 `wind_speed_10m, wind_gusts_10m, wind_direction_10m, temperature_2m`
+(단위 m/s)를 함께 받아 시간축으로 병합한다.
+
+### 데이터 제공 범위 정책
+
+| 데이터 | 범위 | 근거/구현 |
 |---|---|---|
-| 조석 예보(만조/간조), 조위 | KHOA 바다누리 Open API | 서비스 키 발급 필요, 무료 |
-| 파고·수온·너울 | Open-Meteo Marine API | 키 불필요, 무료(비상업) |
-| 바람·기온·강수 | Open-Meteo Forecast API | 키 불필요 |
+| 해양 기상(바람·파고·파주기) | 16일 (`defaultForecastHours`) | FR-05, Open-Meteo 한도 |
+| 조석(만조/간조·조위) | 오늘 기준 ±1년 (`maxTideForecastRange`) | FR-15, 범위 밖은 `DataRangeException` |
+| 단순 물때(명칭만) | 미래 2년 (`maxSimpleMulTtaeRange`) | FR-16, 근사 음력 기반 |
 
-API 키는 `--dart-define=KHOA_API_KEY=...` 로 주입한다 (`core/config/env.dart` 참고).
-저장소에 키를 커밋하지 않는다 (NFR-04).
-
-### 연동 구현 계획
+### 연동 구현 현황
 
 ```
-KhoaTideRepository implements TideRepository
+OpenMeteoMarineRepository implements MarineWeatherRepository   [구현됨]
+  GET https://marine-api.open-meteo.com/v1/marine
+      ?latitude&longitude&forecast_days=16
+      &hourly=wave_height,wave_period,wave_direction,sea_surface_temperature
+  GET https://api.open-meteo.com/v1/forecast
+      ?latitude&longitude&forecast_days=16&wind_speed_unit=ms
+      &hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m
+  두 응답을 시간축 기준으로 병합해 HourlyMarine[] 생성 (null은 직전 값으로 채움)
+
+FallbackMarineWeatherRepository                                 [구현됨]
+  실데이터 호출 실패(오프라인 등) 시 MockMarineWeatherRepository로 폴백 (NFR-03)
+
+KhoaTideRepository implements TideRepository                    [계획, v0.2]
   GET /api/oceangrid/tideObcPreTab/search.do   조석예보(만조/간조) → TideExtreme[]
   GET /api/oceangrid/tideObcPre/search.do      1시간 조위 예측     → hourlyHeightsCm
   파라미터: ServiceKey, ObsCode(SeaLocation.khoaStationCode), Date(yyyyMMdd)
-
-OpenMeteoMarineRepository implements MarineWeatherRepository
-  GET https://marine-api.open-meteo.com/v1/marine
-      ?latitude&longitude&hourly=wave_height,sea_surface_temperature
-  GET https://api.open-meteo.com/v1/forecast
-      ?latitude&longitude&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m
-  두 응답을 시간축 기준으로 병합해 HourlyMarine[] 생성
+  ※ KHOA 조석예보는 연간 조석표 기반이라 미래 1년 요구(FR-15)를 충족한다.
 ```
 
-- DTO(JSON) ↔ 도메인 모델 매핑 코드는 각 `data/dto/` 아래에 두고, 도메인 모델은 API 형태에 오염되지 않게 유지한다.
+API 키(KHOA)는 `--dart-define=KHOA_API_KEY=...` 로 주입한다 (`core/config/env.dart`).
+저장소에 키를 커밋하지 않는다 (NFR-04). Open-Meteo는 키가 필요 없다.
+
 - 전환 방법: `tideRepositoryProvider` / `marineWeatherRepositoryProvider` 에서
-  `Env.useMockData` 로 목/실구현을 분기한다. UI 코드는 변경 없음.
+  구현체만 교체한다. UI 코드는 변경 없음. 테스트는 provider override로 목을 주입한다.
 
 ### 캐싱·오프라인 설계 (FR-11, NFR-03, v0.3)
 

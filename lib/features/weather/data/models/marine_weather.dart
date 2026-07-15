@@ -6,6 +6,8 @@ class HourlyMarine {
     required this.windGustMs,
     required this.windDirectionDeg,
     required this.waveHeightM,
+    required this.wavePeriodS,
+    required this.waveDirectionDeg,
     required this.waterTempC,
     required this.airTempC,
   });
@@ -17,6 +19,12 @@ class HourlyMarine {
   /// 바람이 불어오는 방향 (기상 관례, 도).
   final double windDirectionDeg;
   final double waveHeightM;
+
+  /// 파주기 (초).
+  final double wavePeriodS;
+
+  /// 파도가 밀려오는 방향 (도).
+  final double waveDirectionDeg;
   final double waterTempC;
   final double airTempC;
 }
@@ -31,4 +39,11 @@ class MarineForecast {
   final List<HourlyMarine> hourly;
 
   HourlyMarine get current => hourly.first;
+
+  /// 예보가 며칠치인지 (부분 일 포함 올림).
+  int get forecastDays {
+    if (hourly.isEmpty) return 0;
+    final span = hourly.last.time.difference(hourly.first.time);
+    return (span.inHours / 24).ceil();
+  }
 }

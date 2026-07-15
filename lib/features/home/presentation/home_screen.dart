@@ -22,7 +22,10 @@ class HomeScreen extends ConsumerWidget {
       tideDayProvider((location: location, date: today)),
     );
     final forecastAsync = ref.watch(marineForecastProvider(location));
-    final mulTtae = mulTtaeFor(now);
+    final mulTtae = mulTtaeFor(
+      now,
+      system: mulTtaeSystemForRegion(location.region),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('바다모바일')),
@@ -90,7 +93,8 @@ class HomeScreen extends ConsumerWidget {
                   title: Text(
                     '${compassKo(current.windDirectionDeg)}풍 '
                     '${formatWind(current.windSpeedMs)} · '
-                    '파고 ${formatWave(current.waveHeightM)}',
+                    '파고 ${formatWave(current.waveHeightM)} '
+                    '(${formatPeriod(current.wavePeriodS)})',
                   ),
                   subtitle: Text(
                     '수온 ${current.waterTempC.toStringAsFixed(1)}° · '

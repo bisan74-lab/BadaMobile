@@ -7,12 +7,13 @@ import 'marine_weather_repository.dart';
 /// 합성 해양 기상 리포지토리.
 ///
 /// 지점 좌표를 시드로 하는 부드러운 사인 조합으로 그럴듯한
-/// 바람·파고·수온 시계열을 만든다 (재현 가능, 네트워크 불필요).
+/// 바람·파고·파주기·수온 시계열을 만든다 (재현 가능, 네트워크 불필요).
+/// 실데이터(Open-Meteo) 호출 실패 시 폴백으로도 사용된다.
 class MockMarineWeatherRepository implements MarineWeatherRepository {
   @override
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
-    int hours = 48,
+    int hours = defaultForecastHours,
   }) async {
     final seed = (location.latitude * 7 + location.longitude * 13) % 10;
     final start = DateTime.now();
@@ -30,6 +31,9 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
         0.2,
         0.8 + 0.6 * math.sin(x / 11 + 1) + 0.2 * math.sin(x / 4),
       );
+      // 파주기는 파고와 느슨하게 비례 (풍랑 4~6초, 너울 7~10초 수준).
+      final period = 4.0 + 2.5 * wave + 0.8 * math.sin(x / 23);
+      final waveDirection = (direction + 25 * math.sin(x / 13) + 360) % 360;
       final waterTemp = 21 + 2 * math.sin(x / 30 + seed);
       final airTemp =
           24 +
@@ -44,6 +48,8 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
         ),
         windDirectionDeg: double.parse(direction.toStringAsFixed(0)),
         waveHeightM: double.parse(wave.toStringAsFixed(1)),
+        wavePeriodS: double.parse(period.toStringAsFixed(1)),
+        waveDirectionDeg: double.parse(waveDirection.toStringAsFixed(0)),
         waterTempC: double.parse(waterTemp.toStringAsFixed(1)),
         airTempC: double.parse(airTemp.toStringAsFixed(1)),
       );

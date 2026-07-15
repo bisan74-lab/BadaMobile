@@ -15,6 +15,7 @@ class MockTideRepository implements TideRepository {
 
   @override
   Future<TideDay> fetchTideDay(SeaLocation location, DateTime date) async {
+    TideRepository.ensureInRange(date);
     final day = DateTime(date.year, date.month, date.day);
 
     double heightAt(DateTime t) => _heightCm(location, t);
