@@ -95,6 +95,13 @@ OpenMeteoMarineRepository implements MarineWeatherRepository   [구현됨]
 FallbackMarineWeatherRepository                                 [구현됨]
   실데이터 호출 실패(오프라인 등) 시 MockMarineWeatherRepository로 폴백 (NFR-03)
 
+DataGoKrFishingRepository implements FishingRepository          [뼈대 구현]
+  End Point: https://apis.data.go.kr/1192136/fcstFishingv2  (활용신청 승인됨)
+  인증: 공공데이터포털 일반 인증키 (--dart-define=DATA_GO_KR_API_KEY=...)
+  공통 응답 봉투(response.header/body.items.item) 파싱 완료.
+  ⚠️ item 필드 매핑은 포털 활용가이드/샘플 응답 확인 후 확정 →
+     확정 전까지 fishingRepositoryProvider는 MockFishingRepository 사용.
+
 KhoaTideRepository implements TideRepository                    [계획, v0.2]
   GET /api/oceangrid/tideObcPreTab/search.do   조석예보(만조/간조) → TideExtreme[]
   GET /api/oceangrid/tideObcPre/search.do      1시간 조위 예측     → hourlyHeightsCm

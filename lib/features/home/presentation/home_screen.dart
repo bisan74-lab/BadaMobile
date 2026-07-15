@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
+import '../../fishing/data/models/fishing_index.dart';
+import '../../fishing/presentation/providers.dart';
 import '../../locations/presentation/providers.dart';
 import '../../tide/presentation/providers.dart';
 import '../../weather/presentation/providers.dart';
@@ -104,12 +106,70 @@ class HomeScreen extends ConsumerWidget {
               );
             },
           ),
+          const SizedBox(height: 8),
+          ref
+              .watch(fishingForecastProvider(location))
+              .when(
+                loading: () => const _LoadingCard(),
+                error: (e, _) => _ErrorCard(message: '낚시지수 오류: $e'),
+                data: (fishing) {
+                  final todayIndices = fishing.forDate(now);
+                  if (todayIndices.isEmpty) return const SizedBox.shrink();
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.phishing),
+                      title: Text(
+                        '오늘의 바다낚시지수: '
+                        '${todayIndices.map((i) => '${i.timeSlot} ${i.grade.label}').join(' · ')}',
+                      ),
+                      subtitle: todayIndices.first.species == null
+                          ? null
+                          : Text('기준 어종: ${todayIndices.first.species}'),
+                      trailing: _GradeDots(
+                        score: todayIndices.first.grade.score,
+                      ),
+                    ),
+                  );
+                },
+              ),
           const SizedBox(height: 16),
           Text(
             '하단 탭에서 상세 물때표와 시간별 해양 날씨를 확인하세요.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 1~5점 낚시지수를 점 5개로 표시.
+class _GradeDots extends StatelessWidget {
+  const _GradeDots({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = score >= 4
+        ? Colors.green
+        : score >= 3
+        ? Colors.amber
+        : Colors.redAccent;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        FishingGrade.values.length,
+        (i) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1.5),
+          child: Icon(
+            Icons.circle,
+            size: 8,
+            color: i < score
+                ? active
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+        ),
       ),
     );
   }
