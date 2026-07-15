@@ -40,6 +40,59 @@ class _TideScreenState extends ConsumerState<TideScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 주간 물때 스트립: 오늘부터 7일치, 탭하면 해당 날짜로 이동.
+          SizedBox(
+            height: 76,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 7,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final day = _today.add(Duration(days: i));
+                final dayMulTtae = mulTtaeFor(day, system: system);
+                final isSelected = DateUtils.isSameDay(day, _date);
+                final scheme = Theme.of(context).colorScheme;
+                return GestureDetector(
+                  onTap: () => setState(() => _date = day),
+                  child: Container(
+                    width: 64,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                      border: isSelected
+                          ? Border.all(color: scheme.primary)
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          formatMonthDay(day),
+                          style: Theme.of(context).textTheme.labelSmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          dayMulTtae.label,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: dayMulTtae.isSari
+                                    ? scheme.error
+                                    : scheme.onSurface,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [

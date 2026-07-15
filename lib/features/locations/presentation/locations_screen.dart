@@ -76,7 +76,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
                         ref.read(favoritesProvider.notifier).toggle(loc.id),
                   ),
                   onTap: () =>
-                      ref.read(selectedLocationProvider.notifier).state = loc,
+                      ref.read(selectedLocationProvider.notifier).select(loc),
                 );
               },
             ),
