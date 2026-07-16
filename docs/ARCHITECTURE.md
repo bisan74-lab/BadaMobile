@@ -45,8 +45,19 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 ### features/weather — 바람·해양 날씨 (윈디 영역)
 - `MarineWeatherRepository`: 시간별 풍향·풍속·돌풍·파고·수온 예보 제공
 - 화면: 시간별 예보 리스트, 풍향 화살표, 요약 카드
-- **바람 지도(파티클 애니메이션)** 는 2단계 과제 — `WindMapScreen` 에 자리만 잡아 둠.
-  구현 시 후보: `flutter_map` + 커스텀 파티클 레이어, 또는 WebView + leaflet-velocity
+- **바람 지도(파티클 애니메이션)**: `WindMapScreen` — 날씨 화면의 지도 카드를 탭하면 진입.
+  타일맵(flutter_map 등) 없이 격자 벡터장 + 파티클로 구성한 경량 구현 (v0.4).
+  - `WindField`: 위경도 격자(8×10)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형 보간으로
+    임의 좌표의 바람 벡터를 조회 (`core` 아님, `features/weather/data/models`).
+  - `OpenMeteoWindFieldRepository`: Open-Meteo Forecast API에 격자점 좌표를 콤마로
+    묶어 한 번에 요청(`current=wind_speed_10m,wind_direction_10m`), 실패 시
+    `MockWindFieldRepository`(소용돌이 합성 바람장)로 폴백.
+  - `WindMapScreen`: `Ticker` 기반 파티클 240개가 벡터장을 따라 이동하며 궤적을
+    남기고(`WindMapPainter`), 지리 좌표 → 정규화 캔버스 좌표로 매 프레임 투영한다.
+    이동 배율은 화면에서 보기 쉽도록 과장한 값이며 실제 이동 속도가 아니다.
+    선택 지역과 전체 관측 지점을 지도 위 마커로 함께 표시.
+  - 실제 지도 타일(해안선 등)이 필요해지면 `flutter_map` 오버레이로 확장 가능
+    (현재는 그라디언트 배경 위에 벡터장만 표시하는 경량 버전).
 
 ### features/locations — 지역
 - 해양 관측 지점(포인트) 목록·검색, 즐겨찾기(추후 `shared_preferences` 영속화)
@@ -183,7 +194,7 @@ shared/     → core/ 만
 | FR-06 (지역) | `features/locations` |
 | FR-07 (홈 요약) | `features/home` |
 | FR-08/09 (실데이터) | 각 feature `data/repositories/` 신규 구현체 |
-| FR-12 (바람 지도) | `features/weather` 내 신규 화면/레이어 |
+| FR-12 (바람 지도) | `features/weather/presentation/wind_map_screen.dart`, `data/{models,repositories}/wind_field*` |
 | NFR-06 (품질) | `analysis_options.yaml`, `test/`, `.github/workflows/ci.yml` |
 
 ## iOS 확장 (NFR-01)

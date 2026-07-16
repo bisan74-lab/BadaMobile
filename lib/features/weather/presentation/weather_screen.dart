@@ -6,6 +6,7 @@ import '../../locations/presentation/providers.dart';
 import '../data/models/marine_weather.dart';
 import 'providers.dart';
 import 'widgets/wind_arrow.dart';
+import 'wind_map_screen.dart';
 
 /// 바람·해양 날씨 화면 (윈디 영역). 16일치 시간별 예보를 날짜별로 묶어 보여준다.
 class WeatherScreen extends ConsumerWidget {
@@ -145,30 +146,34 @@ class _Header extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        // 바람 지도 자리 (로드맵 v0.4)
         Card(
           clipBehavior: Clip.antiAlias,
-          child: Container(
-            height: 120,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primaryContainer,
-                  Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: InkWell(
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const WindMapScreen())),
+            child: Container(
+              height: 120,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primaryContainer,
+                    Theme.of(context).colorScheme.surfaceContainerHigh,
+                  ],
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.map_outlined, size: 32),
+                  const SizedBox(height: 6),
+                  Text(
+                    '바람 지도 (윈디 스타일) — 탭하여 보기',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                 ],
               ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.map_outlined, size: 32),
-                const SizedBox(height: 6),
-                Text(
-                  '바람 지도 (윈디 스타일) — 준비 중',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ],
             ),
           ),
         ),
