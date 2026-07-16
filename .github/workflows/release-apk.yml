@@ -1,0 +1,49 @@
+name: Release APK
+
+# 수동 트리거 전용 — 테스트 설치용 APK를 GitHub Release로 배포한다.
+# (Actions 아티팩트는 조직 네트워크 정책에 따라 다운로드가 막히는 경우가 있어
+#  누구나 로그인 없이 받을 수 있는 Release 첨부 파일 방식을 쓴다.)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.5'
+          channel: stable
+          cache: true
+
+      - name: 의존성 설치
+        run: flutter pub get
+
+      - name: 릴리스 APK 빌드 (합성 데이터 — 실 API 키는 저장소에 두지 않음)
+        run: flutter build apk --release
+
+      - name: 태그 계산
+        id: vars
+        run: echo "tag=test-build-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: GitHub Release 생성 및 APK 첨부
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: 테스트 빌드 ${{ steps.vars.outputs.tag }}
+          body: |
+            수동 트리거 테스트 빌드입니다. 합성(mock) 데이터로 동작하며,
+            조석·낚시지수 실데이터는 `--dart-define=DATA_GO_KR_API_KEY=...` 로
+            직접 빌드해야 확인할 수 있습니다.
+          files: build/app/outputs/flutter-apk/app-release.apk
+          prerelease: true
