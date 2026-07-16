@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -13,6 +14,7 @@ import '../data/models/wind_field.dart';
 import 'providers.dart';
 import 'wind_field_providers.dart';
 import 'widgets/wind_arrow.dart';
+import 'widgets/wind_heatmap.dart';
 import 'widgets/wind_map_painter.dart';
 
 /// 바람·해양 날씨 화면 (윈디 영역).
@@ -132,6 +134,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                       ref.read(selectedLocationProvider.notifier).select(loc),
                 ),
               ),
+              const WindSpeedLegend(),
               _TimeScrubber(
                 times: series.hourly.map((f) => f.time).toList(),
                 value: _hourOffset,
@@ -152,8 +155,9 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   }
 }
 
-/// 지도 영역: 파티클 흐름 + 지역 마커. 마커를 탭하면 해당 지역이 선택된다.
-class _WindMapArea extends StatelessWidget {
+/// 지도 영역: 풍속 색상 히트맵 + 파티클 흐름 + 지역 마커.
+/// 마커를 탭하면 해당 지역이 선택되고, 손가락으로 확대/축소·이동할 수 있다.
+class _WindMapArea extends StatefulWidget {
   const _WindMapArea({
     required this.field,
     required this.particles,
@@ -167,7 +171,51 @@ class _WindMapArea extends StatelessWidget {
   final ValueChanged<SeaLocation> onLocationTap;
 
   @override
+  State<_WindMapArea> createState() => _WindMapAreaState();
+}
+
+class _WindMapAreaState extends State<_WindMapArea> {
+  ui.Image? _heatmap;
+  DateTime? _heatmapTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuildHeatmap();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WindMapArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.field.time != _heatmapTime) {
+      _rebuildHeatmap();
+    }
+  }
+
+  Future<void> _rebuildHeatmap() async {
+    final field = widget.field;
+    final time = field.time;
+    final image = await buildWindHeatmapImage(field);
+    if (!mounted || widget.field.time != time) {
+      image.dispose();
+      return;
+    }
+    _heatmap?.dispose();
+    setState(() {
+      _heatmap = image;
+      _heatmapTime = time;
+    });
+  }
+
+  @override
+  void dispose() {
+    _heatmap?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final field = widget.field;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       clipBehavior: Clip.antiAlias,
@@ -182,34 +230,49 @@ class _WindMapArea extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
-          return Stack(
-            children: [
-              CustomPaint(
-                painter: WindMapPainter(
-                  particles: particles,
-                  color: Colors.cyanAccent,
-                ),
-                size: size,
-              ),
-              for (final loc in sampleLocations)
-                if (field.contains(loc.latitude, loc.longitude))
-                  _LocationMarker(
-                    location: loc,
-                    highlighted: loc.id == selected.id,
-                    onTap: () => onLocationTap(loc),
-                    left:
-                        (loc.longitude - field.minLon) /
-                            (field.maxLon - field.minLon) *
-                            size.width -
-                        10,
-                    top:
-                        (1 -
-                                (loc.latitude - field.minLat) /
-                                    (field.maxLat - field.minLat)) *
-                            size.height -
-                        10,
+          final heatmap = _heatmap;
+          return InteractiveViewer(
+            minScale: 1,
+            maxScale: 6,
+            boundaryMargin: const EdgeInsets.all(double.infinity),
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: Stack(
+                children: [
+                  if (heatmap != null)
+                    CustomPaint(
+                      painter: WindHeatmapPainter(image: heatmap),
+                      size: size,
+                    ),
+                  CustomPaint(
+                    painter: WindMapPainter(
+                      particles: widget.particles,
+                      color: Colors.white,
+                    ),
+                    size: size,
                   ),
-            ],
+                  for (final loc in sampleLocations)
+                    if (field.contains(loc.latitude, loc.longitude))
+                      _LocationMarker(
+                        location: loc,
+                        highlighted: loc.id == widget.selected.id,
+                        onTap: () => widget.onLocationTap(loc),
+                        left:
+                            (loc.longitude - field.minLon) /
+                                (field.maxLon - field.minLon) *
+                                size.width -
+                            10,
+                        top:
+                            (1 -
+                                    (loc.latitude - field.minLat) /
+                                        (field.maxLat - field.minLat)) *
+                                size.height -
+                            10,
+                      ),
+                ],
+              ),
+            ),
           );
         },
       ),

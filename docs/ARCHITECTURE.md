@@ -40,13 +40,24 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 ### features/tide — 조석·물때 (바다타임 영역)
 - `TideRepository`: 특정 지역·날짜의 만조/간조 이벤트와 시간별 조위 곡선 제공
 - 물때(1물~15물, 조금/사리) 계산은 `core/utils/mul_ttae.dart` 에서 음력 기반 표준 공식으로 처리
-- 화면: `TideDatePicker`(연도→월→일 계층 날짜 선택기) + 일간 조석표 +
-  조위 그래프(CustomPaint) + 물때 배지
+- 화면: `TideDatePicker`(연도→월→일 계층 날짜 선택기) + 그래픽 물때 카드
+  (`_TideGraphicBody`, 바다타임 스타일 참고해 v0.5에서 개편)
   - `TideDatePicker`(`widgets/tide_date_picker.dart`): 연도 행 → 월 행 → 일 행 3단
     가로 스크롤. 연도/월을 탭하면 그 해·달로 이동하고, 일 행에 해당 달 날짜와
     물때가 표시되어 좌우 스크롤로 고른다. `date`가 바뀌면 세 행 모두 선택
     항목이 중앙에 오도록 자동 스크롤. 진입 시 오늘 날짜가 기본 선택되며,
     범위는 조석 ±1년 / 물때 2년([maxTideForecastRange], [maxSimpleMulTtaeRange]).
+  - `_TideGraphicBody`(`tide_screen.dart`): 바다색 그라디언트 카드 위에
+    날짜·음력일·물때 배지·`MoonPhaseIcon`(월령 기반 달 위상)·
+    `TideCurrentStrengthBar`(하루 조위 변화폭 기준 정성적 조류세기)를 얹고,
+    그 아래 `TideTimeline`을 붙인다. 상세 조위 곡선(`TideChart`)은
+    `ExpansionTile`로 접어 두어 필요할 때만 펼친다.
+  - `TideTimeline`(`widgets/tide_timeline.dart`): 0~24시 세로 축 위에 만조(붉은)/
+    간조(파란) 카드를 시각 비례 위치에 배치하고, 이전 극값 대비 조위 증감(▲▼)을
+    함께 표시한다. 오늘이면 현재 시각선을 그린다.
+  - `MoonPhaseIcon`(`widgets/moon_phase_icon.dart`): `lunarAgeDays()`로 구한
+    월령을 0~1 위상으로 정규화해 초승~보름~그믐 형태를 `CustomPainter`로 그린다
+    (장식용 지표, 정밀 천문 계산 아님).
   - `TideRepository.withFallback`은 관측소 코드 미보유(`Exception`)와 범위 초과
     (`DataRangeException`)를 구분한다 — 코드가 없는 지점은 합성 데이터로
     자연스럽게 폴백하고, 범위 초과만 사용자에게 안내 카드로 알린다.
@@ -55,10 +66,18 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 - `MarineWeatherRepository`: 시간별 풍향·풍속·돌풍·파고·수온 예보 제공
 - **`WeatherScreen`이 곧 윈디 스타일 지도다** (v0.5 개편) — 별도 라우팅 없이
   탭 진입 즉시 지도가 첫 화면으로 뜬다.
-  - 상단: 바람 지도(파티클 흐름) — 전체 관측 지점이 마커로 표시되고, 탭하면
-    `selectedLocationProvider`가 그 지역으로 바뀐다.
-  - 중단: 시간 스크러버(`Slider`) — 좌우로 밀면 지도의 바람장과 하단 상세
-    정보가 그 시각 기준으로 함께 바뀐다("지금"부터 48시간).
+  - 상단: 바람 지도(풍속 색상 히트맵 + 파티클 흐름) — 전체 관측 지점이 마커로
+    표시되고, 탭하면 `selectedLocationProvider`가 그 지역으로 바뀐다.
+    `InteractiveViewer`로 감싸 손가락 확대/축소·이동이 가능하다.
+    - `windSpeedColor()`/`windSpeedRgb()`(`widgets/wind_heatmap.dart`): 윈디
+      스타일 m/s→색상 스케일(파랑→청록→초록→노랑→주황→빨강→자주, 태풍급
+      강풍을 자주/보라로 표현). `buildWindHeatmapImage()`가 격자를 96×72
+      래스터로 구워 `ui.Image`를 만들고, `WindHeatmapPainter`가 이를 캔버스에
+      확대해 그린다 — 매 파티클 프레임(60fps)이 아니라 시간 스크러버로 필드가
+      바뀔 때만 다시 굽는다(`_WindMapAreaState._rebuildHeatmap`).
+    - `WindSpeedLegend`: 지도 아래 0~30+ m/s 색상 범례 바.
+  - 중단: 시간 스크러버(`Slider`) — 좌우로 밀면 지도의 바람장(히트맵·파티클)과
+    하단 상세 정보가 그 시각 기준으로 함께 바뀐다("지금"부터 48시간).
   - 하단: 선택 지역의 스크러버 시각 기준 요약(풍향·파고·수온) + 시간별
     예보 목록(탭하면 그 시각으로 스크러버 이동).
   - `WindField`: 위경도 격자(8×10)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형 보간으로

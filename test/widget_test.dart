@@ -42,8 +42,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('물때 · '), findsOneWidget);
-    expect(find.text('만조'), findsWidgets);
-    expect(find.text('간조'), findsWidgets);
+    expect(find.textContaining('만조 '), findsWidgets);
+    expect(find.textContaining('간조 '), findsWidgets);
   });
 
   testWidgets('지역 탭에서 지점을 선택할 수 있다', (tester) async {

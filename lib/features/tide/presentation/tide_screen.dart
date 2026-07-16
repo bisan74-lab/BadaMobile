@@ -5,8 +5,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../locations/presentation/providers.dart';
 import 'providers.dart';
+import 'widgets/moon_phase_icon.dart';
 import 'widgets/tide_chart.dart';
 import 'widgets/tide_date_picker.dart';
+import 'widgets/tide_timeline.dart';
 
 /// 조석·물때 화면 (바다타임 영역).
 ///
@@ -50,60 +52,79 @@ class _TideScreenState extends ConsumerState<TideScreen> {
             onChanged: (d) => setState(() => _date = d),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: _date.isAfter(_minDate)
-                    ? () => setState(
-                        () => _date = _date.subtract(const Duration(days: 1)),
-                      )
-                    : null,
-              ),
-              Column(
-                children: [
-                  Text(
-                    formatMonthDay(_date),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  _MulTtaeBadge(mulTtae: mulTtae),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: _date.isBefore(_maxDate)
-                    ? () => setState(
-                        () => _date = _date.add(const Duration(days: 1)),
-                      )
-                    : null,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
           if (!_tideAvailable)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
+            Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.info_outline, size: 32),
-                    const SizedBox(height: 8),
-                    Text(
-                      '조석(만조/간조·조위) 예보는 오늘 기준 1년 이내만 제공됩니다.\n'
-                      '이 날짜는 물때 정보만 확인할 수 있습니다 (최대 2년).',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: _date.isAfter(_minDate)
+                          ? () => setState(
+                              () => _date = _date.subtract(
+                                const Duration(days: 1),
+                              ),
+                            )
+                          : null,
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          formatMonthDay(_date),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        _MulTtaeBadge(mulTtae: mulTtae),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: _date.isBefore(_maxDate)
+                          ? () => setState(
+                              () => _date = _date.add(const Duration(days: 1)),
+                            )
+                          : null,
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.info_outline, size: 32),
+                        const SizedBox(height: 8),
+                        Text(
+                          '조석(만조/간조·조위) 예보는 오늘 기준 1년 이내만 제공됩니다.\n'
+                          '이 날짜는 물때 정보만 확인할 수 있습니다 (최대 2년).',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             )
           else
-            _TideBody(
+            _TideGraphicBody(
               query: (location: location, date: _date),
+              date: _date,
+              mulTtae: mulTtae,
               isToday: isToday,
+              onPrevDay: _date.isAfter(_minDate)
+                  ? () => setState(
+                      () => _date = _date.subtract(const Duration(days: 1)),
+                    )
+                  : null,
+              onNextDay: _date.isBefore(_maxDate)
+                  ? () => setState(
+                      () => _date = _date.add(const Duration(days: 1)),
+                    )
+                  : null,
+              onToday: () => setState(() => _date = _today),
             ),
         ],
       ),
@@ -111,11 +132,45 @@ class _TideScreenState extends ConsumerState<TideScreen> {
   }
 }
 
-class _TideBody extends ConsumerWidget {
-  const _TideBody({required this.query, required this.isToday});
+/// 그래픽 물때 화면 본문: 바다색 카드 위에 날짜·달 위상·물때 배지·조류세기,
+/// 그 아래 세로 타임라인(만조/간조 카드)을 보여준다. 상세 조위 곡선은
+/// 접이식으로 필요할 때만 펼친다.
+class _TideGraphicBody extends ConsumerWidget {
+  const _TideGraphicBody({
+    required this.query,
+    required this.date,
+    required this.mulTtae,
+    required this.isToday,
+    required this.onPrevDay,
+    required this.onNextDay,
+    required this.onToday,
+  });
 
   final TideQuery query;
+  final DateTime date;
+  final MulTtae mulTtae;
   final bool isToday;
+  final VoidCallback? onPrevDay;
+  final VoidCallback? onNextDay;
+  final VoidCallback onToday;
+
+  /// 하루 조위 변화폭 기준의 정성적 조류세기(0~1, 라벨).
+  (double, String) _strength(List<double> hourlyHeightsCm) {
+    if (hourlyHeightsCm.isEmpty) return (0, '보통');
+    final maxV = hourlyHeightsCm.reduce((a, b) => a > b ? a : b);
+    final minV = hourlyHeightsCm.reduce((a, b) => a < b ? a : b);
+    final range = maxV - minV;
+    // 대략적인 대조기 조차(~800cm)를 상한으로 정규화한다.
+    final fraction = (range / 800).clamp(0.0, 1.0);
+    final label = fraction >= 0.75
+        ? '최대'
+        : fraction >= 0.5
+        ? '강함'
+        : fraction >= 0.25
+        ? '보통'
+        : '약함';
+    return (fraction, label);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -129,36 +184,114 @@ class _TideBody extends ConsumerWidget {
         padding: const EdgeInsets.all(24),
         child: Text('조석 정보를 불러오지 못했습니다: $e'),
       ),
-      data: (tide) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-              child: TideChart(
-                hourlyHeightsCm: tide.hourlyHeightsCm,
+      data: (tide) {
+        final (fraction, label) = _strength(tide.hourlyHeightsCm);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0E3454),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${date.year}년 ${formatMonthDay(date)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '음력 ${mulTtae.lunarDay}일 · ${mulTtae.label}'
+                              '${mulTtae.isSari
+                                  ? ' · 사리'
+                                  : mulTtae.isJogeum
+                                  ? ' · 소조기'
+                                  : ''}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      MoonPhaseIcon(date: date, size: 34),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TideCurrentStrengthBar(fraction: fraction, label: label),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(20),
+              ),
+              child: TideTimeline(
+                extremes: tide.extremes,
                 now: isToday ? DateTime.now() : null,
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          ...tide.extremes.map(
-            (e) => Card(
-              child: ListTile(
-                leading: Icon(
-                  e.isHigh ? Icons.arrow_upward : Icons.arrow_downward,
-                  color: e.isHigh ? Colors.redAccent : Colors.blueAccent,
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton.icon(
+                  onPressed: onPrevDay,
+                  icon: const Icon(Icons.chevron_left, size: 18),
+                  label: const Text('-1일'),
                 ),
-                title: Text(e.isHigh ? '만조' : '간조'),
-                trailing: Text(
-                  '${formatHm(e.time)}  ·  ${formatTideHeight(e.heightCm)}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                TextButton(onPressed: onToday, child: const Text('오늘')),
+                TextButton.icon(
+                  onPressed: onNextDay,
+                  icon: const Icon(Icons.chevron_right, size: 18),
+                  label: const Text('+1일'),
+                  iconAlignment: IconAlignment.end,
                 ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Theme(
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('상세 조위 그래프'),
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                      child: TideChart(
+                        hourlyHeightsCm: tide.hourlyHeightsCm,
+                        now: isToday ? DateTime.now() : null,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }
