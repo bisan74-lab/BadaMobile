@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   analyze-and-test:
@@ -53,4 +54,13 @@ jobs:
         with:
           name: app-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+
+      - name: 릴리스 APK 빌드 (합성 데이터 — 실 API 키는 CI에 두지 않음)
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
