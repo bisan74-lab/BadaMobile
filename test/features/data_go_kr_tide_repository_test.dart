@@ -20,6 +20,35 @@ void main() {
   final incheon = sampleLocations.firstWhere((l) => l.id == 'incheon');
 
   group('mapTideItem 필드 후보 매핑', () {
+    test('실측 응답 형식 (predcDt/predcTdlvVl/extrSe)', () {
+      // 2026-07-16 인천 실제 응답 그대로.
+      final high = mapTideItem({
+        'obsvtrNm': '인천',
+        'lot': 126.59222,
+        'lat': 37.45194,
+        'predcDt': '2026-07-16 06:11',
+        'predcTdlvVl': 949.0,
+        'extrSe': '1',
+      });
+      expect(high.time, DateTime(2026, 7, 16, 6, 11));
+      expect(high.heightCm, 949.0);
+      expect(high.isHigh, isTrue);
+
+      final low = mapTideItem({
+        'predcDt': '2026-07-16 12:38',
+        'predcTdlvVl': 109.0,
+        'extrSe': '4',
+      });
+      expect(low.isHigh, isFalse);
+
+      final secondHigh = mapTideItem({
+        'predcDt': '2026-07-16 18:24',
+        'predcTdlvVl': 838.0,
+        'extrSe': '3',
+      });
+      expect(secondHigh.isHigh, isTrue);
+    });
+
     test('camelCase(tphTime/tphHght/hlCode) 형식', () {
       final e = mapTideItem({
         'tphTime': '2026-07-20 04:12:00',

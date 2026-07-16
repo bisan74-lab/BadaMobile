@@ -93,9 +93,14 @@ class DataGoKrTideRepository implements TideRepository {
 
 /// 고저조 응답 item 하나를 [TideExtreme]으로 변환한다.
 ///
-/// KHOA 계열 API에서 관찰되는 필드명 후보를 순서대로 시도한다.
+/// 실측(2026-07) 확정 필드:
+///   predcDt      예측일시 "yyyy-MM-dd HH:mm"
+///   predcTdlvVl  예측조위값 (cm, 숫자)
+///   extrSe       극치구분 — 홀수(1,3)=고조, 짝수(2,4)=저조
+/// 과거 KHOA 계열 명명(tph_time/tph_level/hl_code 등)도 함께 수용한다.
 TideExtreme mapTideItem(Map<String, dynamic> item) {
   final timeRaw = pickField(item, const [
+    'predcDt', // 실측 확정
     'tphTime',
     'tph_time',
     'recordTime',
@@ -104,7 +109,8 @@ TideExtreme mapTideItem(Map<String, dynamic> item) {
     'tideTime',
   ]);
   final heightRaw = pickField(item, const [
-    'tph_level', // 바다누리 조석예보 표준 필드
+    'predcTdlvVl', // 실측 확정
+    'tph_level',
     'tphLevel',
     'tphHght',
     'tph_hght',
@@ -114,6 +120,7 @@ TideExtreme mapTideItem(Map<String, dynamic> item) {
     'tphLvl',
   ]);
   final hlRaw = pickField(item, const [
+    'extrSe', // 실측 확정
     'hlCode',
     'hl_code',
     'tphType',
@@ -127,8 +134,11 @@ TideExtreme mapTideItem(Map<String, dynamic> item) {
   final time = DateTime.parse(timeRaw.toString().replaceFirst(' ', 'T'));
   final height = double.parse(heightRaw.toString());
   final hl = hlRaw.toString();
+  final code = int.tryParse(hl);
   final bool isHigh;
-  if (hl.contains('고') || hl.toUpperCase().startsWith('H')) {
+  if (code != null) {
+    isHigh = code.isOdd; // extrSe: 1·3=고조, 2·4=저조
+  } else if (hl.contains('고') || hl.toUpperCase().startsWith('H')) {
     isHigh = true;
   } else if (hl.contains('저') || hl.toUpperCase().startsWith('L')) {
     isHigh = false;
