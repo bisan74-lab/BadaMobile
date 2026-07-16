@@ -31,7 +31,7 @@ void main() {
     expect(find.text('물때'), findsOneWidget);
     expect(find.text('날씨'), findsOneWidget);
     expect(find.text('지역'), findsOneWidget);
-    expect(find.text('바다모바일'), findsOneWidget);
+    expect(find.text('바다윈디'), findsOneWidget);
   });
 
   testWidgets('물때 탭으로 이동하면 만조/간조 목록이 보인다', (tester) async {

@@ -2,7 +2,7 @@
     <!-- 조석/기상 API 호출용 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="바다모바일"
+        android:label="바다윈디"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

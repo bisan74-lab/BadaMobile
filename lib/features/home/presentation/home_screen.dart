@@ -30,7 +30,7 @@ class HomeScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('바다모바일')),
+      appBar: AppBar(title: const Text('바다윈디')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
