@@ -54,6 +54,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('지역 선택'), findsOneWidget);
+    // 지역 목록이 길어 화면 밖일 수 있으므로 스크롤하며 찾는다.
+    await tester.scrollUntilVisible(
+      find.text('부산(영도)'),
+      200,
+      scrollable: find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.text('부산(영도)'), findsOneWidget);
   });
 }

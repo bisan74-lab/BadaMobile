@@ -40,27 +40,52 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 ### features/tide — 조석·물때 (바다타임 영역)
 - `TideRepository`: 특정 지역·날짜의 만조/간조 이벤트와 시간별 조위 곡선 제공
 - 물때(1물~15물, 조금/사리) 계산은 `core/utils/mul_ttae.dart` 에서 음력 기반 표준 공식으로 처리
-- 화면: 일간 조석표, 조위 그래프(CustomPaint), 물때 배지
+- 화면: `TideDatePicker`(연도→월→일 계층 날짜 선택기) + 일간 조석표 +
+  조위 그래프(CustomPaint) + 물때 배지
+  - `TideDatePicker`(`widgets/tide_date_picker.dart`): 연도 행 → 월 행 → 일 행 3단
+    가로 스크롤. 연도/월을 탭하면 그 해·달로 이동하고, 일 행에 해당 달 날짜와
+    물때가 표시되어 좌우 스크롤로 고른다. `date`가 바뀌면 세 행 모두 선택
+    항목이 중앙에 오도록 자동 스크롤. 진입 시 오늘 날짜가 기본 선택되며,
+    범위는 조석 ±1년 / 물때 2년([maxTideForecastRange], [maxSimpleMulTtaeRange]).
+  - `TideRepository.withFallback`은 관측소 코드 미보유(`Exception`)와 범위 초과
+    (`DataRangeException`)를 구분한다 — 코드가 없는 지점은 합성 데이터로
+    자연스럽게 폴백하고, 범위 초과만 사용자에게 안내 카드로 알린다.
 
 ### features/weather — 바람·해양 날씨 (윈디 영역)
 - `MarineWeatherRepository`: 시간별 풍향·풍속·돌풍·파고·수온 예보 제공
-- 화면: 시간별 예보 리스트, 풍향 화살표, 요약 카드
-- **바람 지도(파티클 애니메이션)**: `WindMapScreen` — 날씨 화면의 지도 카드를 탭하면 진입.
-  타일맵(flutter_map 등) 없이 격자 벡터장 + 파티클로 구성한 경량 구현 (v0.4).
+- **`WeatherScreen`이 곧 윈디 스타일 지도다** (v0.5 개편) — 별도 라우팅 없이
+  탭 진입 즉시 지도가 첫 화면으로 뜬다.
+  - 상단: 바람 지도(파티클 흐름) — 전체 관측 지점이 마커로 표시되고, 탭하면
+    `selectedLocationProvider`가 그 지역으로 바뀐다.
+  - 중단: 시간 스크러버(`Slider`) — 좌우로 밀면 지도의 바람장과 하단 상세
+    정보가 그 시각 기준으로 함께 바뀐다("지금"부터 48시간).
+  - 하단: 선택 지역의 스크러버 시각 기준 요약(풍향·파고·수온) + 시간별
+    예보 목록(탭하면 그 시각으로 스크러버 이동).
   - `WindField`: 위경도 격자(8×10)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형 보간으로
-    임의 좌표의 바람 벡터를 조회 (`core` 아님, `features/weather/data/models`).
-  - `OpenMeteoWindFieldRepository`: Open-Meteo Forecast API에 격자점 좌표를 콤마로
-    묶어 한 번에 요청(`current=wind_speed_10m,wind_direction_10m`), 실패 시
-    `MockWindFieldRepository`(소용돌이 합성 바람장)로 폴백.
-  - `WindMapScreen`: `Ticker` 기반 파티클 240개가 벡터장을 따라 이동하며 궤적을
-    남기고(`WindMapPainter`), 지리 좌표 → 정규화 캔버스 좌표로 매 프레임 투영한다.
+    임의 좌표의 바람 벡터를 조회 (`features/weather/data/models`).
+  - `WindFieldSeries`: 같은 격자의 시간별 `WindField` 목록 — 시간 스크러버가
+    가리키는 인덱스로 `.at(offset)` 조회.
+  - `OpenMeteoWindFieldRepository`: `fetchField()`(현재 시점, `current` 파라미터)와
+    `fetchSeries()`(48시간, `hourly` 파라미터)를 모두 지원. 격자점 80개를 콤마로
+    묶어 각각 한 번의 요청으로 가져온다. 실패 시 `MockWindFieldRepository`
+    (소용돌이 합성 바람장, 시간별 시드 변주)로 폴백.
+  - `Ticker` 기반 파티클 220개가 벡터장을 따라 이동하며 궤적을 남기고
+    (`WindMapPainter`), 지리 좌표 → 정규화 캔버스 좌표로 매 프레임 투영한다.
     이동 배율은 화면에서 보기 쉽도록 과장한 값이며 실제 이동 속도가 아니다.
-    선택 지역과 전체 관측 지점을 지도 위 마커로 함께 표시.
   - 실제 지도 타일(해안선 등)이 필요해지면 `flutter_map` 오버레이로 확장 가능
     (현재는 그라디언트 배경 위에 벡터장만 표시하는 경량 버전).
+  - ⚠️ `app/app.dart`의 `IndexedStack`은 4개 탭을 전부 마운트해 두므로, 날씨 탭이
+    보이지 않을 때도 Ticker가 돌지 않도록 각 탭을 `TickerMode(enabled: 현재탭)`
+    로 감싼다 — 빠뜨리면 `pumpAndSettle` 기반 위젯 테스트가 다른 탭에서도
+    멈춘다(직접 겪은 문제).
 
 ### features/locations — 지역
-- 해양 관측 지점(포인트) 목록·검색, 즐겨찾기(추후 `shared_preferences` 영속화)
+- 전국 해안·낚시 포인트 41곳 (`sample_locations.dart`, 서해/남해/동해/제주).
+  `khoaStationCode`가 있는 지점(9곳)만 조석 실데이터가 붙고, 나머지는 해역별
+  합성 조석 곡선으로 대체된다 — 물때·해양 날씨·낚시지수는 좌표만 있으면
+  지점 구분 없이 전부 동작한다.
+- 지역 검색·선택·즐겨찾기 화면(`LocationsScreen`), 목록이 길어 `ListView.builder`로
+  지연 렌더링.
 - 선택된 지역은 앱 전역 상태(`selectedLocationProvider`)로 공유되어 tide/weather 화면이 반응
 
 ### features/home — 홈 대시보드
@@ -194,7 +219,9 @@ shared/     → core/ 만
 | FR-06 (지역) | `features/locations` |
 | FR-07 (홈 요약) | `features/home` |
 | FR-08/09 (실데이터) | 각 feature `data/repositories/` 신규 구현체 |
-| FR-12 (바람 지도) | `features/weather/presentation/wind_map_screen.dart`, `data/{models,repositories}/wind_field*` |
+| FR-12 (바람 지도) | `features/weather/presentation/weather_screen.dart`, `data/{models,repositories}/wind_field*` |
+| FR-04 (물때 날짜 선택기) | `features/tide/presentation/widgets/tide_date_picker.dart` |
+| FR-06 (전국 지역) | `features/locations/data/sample_locations.dart` |
 | NFR-06 (품질) | `analysis_options.yaml`, `test/`, `.github/workflows/ci.yml` |
 
 ## iOS 확장 (NFR-01)

@@ -1,7 +1,20 @@
 import 'models/sea_location.dart';
 
-/// 초기 제공 지점 목록. 실제 서비스에서는 KHOA 관측소 전체 목록으로 대체한다.
+/// 전국 해안·낚시 포인트 목록.
+///
+/// `khoaStationCode`가 있는 지점은 조석(만조/간조) 실데이터가 연동되고,
+/// 없는 지점은 해역별 근사치로 합성된 조석 곡선을 대신 보여준다
+/// (물때·해양 날씨·낚시지수는 khoaStationCode 여부와 무관하게 모두 동작).
+/// 코드는 국립해양조사원 조위관측소 기준으로, 확인된 지점만 채워 두었다.
 const List<SeaLocation> sampleLocations = [
+  // ── 서해 ──────────────────────────────────────────────
+  SeaLocation(
+    id: 'ganghwado',
+    name: '강화도',
+    region: '서해',
+    latitude: 37.706,
+    longitude: 126.445,
+  ),
   SeaLocation(
     id: 'incheon',
     name: '인천',
@@ -18,12 +31,75 @@ const List<SeaLocation> sampleLocations = [
     longitude: 126.649,
   ),
   SeaLocation(
+    id: 'gungpyeong',
+    name: '궁평항(화성)',
+    region: '서해',
+    latitude: 37.001,
+    longitude: 126.559,
+  ),
+  SeaLocation(
+    id: 'pyeongtaek',
+    name: '평택항',
+    region: '서해',
+    latitude: 36.966,
+    longitude: 126.823,
+  ),
+  SeaLocation(
+    id: 'seosan',
+    name: '가로림만(서산)',
+    region: '서해',
+    latitude: 36.885,
+    longitude: 126.312,
+  ),
+  SeaLocation(
+    id: 'anmyeondo',
+    name: '안면도(태안)',
+    region: '서해',
+    latitude: 36.527,
+    longitude: 126.322,
+  ),
+  SeaLocation(
+    id: 'daecheon',
+    name: '대천항(보령)',
+    region: '서해',
+    latitude: 36.325,
+    longitude: 126.508,
+  ),
+  SeaLocation(
+    id: 'jangheang',
+    name: '장항(서천)',
+    region: '서해',
+    latitude: 36.005,
+    longitude: 126.688,
+  ),
+  SeaLocation(
     id: 'gunsan',
     name: '군산',
     region: '서해',
     latitude: 35.975,
     longitude: 126.563,
     khoaStationCode: 'DT_0018',
+  ),
+  SeaLocation(
+    id: 'gyeokpo',
+    name: '격포(부안)',
+    region: '서해',
+    latitude: 35.615,
+    longitude: 126.480,
+  ),
+  SeaLocation(
+    id: 'gusipo',
+    name: '구시포(고창)',
+    region: '서해',
+    latitude: 35.481,
+    longitude: 126.436,
+  ),
+  SeaLocation(
+    id: 'beopseongpo',
+    name: '법성포(영광)',
+    region: '서해',
+    latitude: 35.373,
+    longitude: 126.451,
   ),
   SeaLocation(
     id: 'mokpo',
@@ -34,6 +110,43 @@ const List<SeaLocation> sampleLocations = [
     khoaStationCode: 'DT_0007',
   ),
   SeaLocation(
+    id: 'heuksando',
+    name: '흑산도(신안)',
+    region: '서해',
+    latitude: 34.685,
+    longitude: 125.435,
+  ),
+
+  // ── 남해 ──────────────────────────────────────────────
+  SeaLocation(
+    id: 'paengmok',
+    name: '팽목항(진도)',
+    region: '남해',
+    latitude: 34.418,
+    longitude: 125.964,
+  ),
+  SeaLocation(
+    id: 'ttangkkeut',
+    name: '땅끝(해남)',
+    region: '남해',
+    latitude: 34.318,
+    longitude: 126.497,
+  ),
+  SeaLocation(
+    id: 'wando',
+    name: '완도',
+    region: '남해',
+    latitude: 34.311,
+    longitude: 126.755,
+  ),
+  SeaLocation(
+    id: 'narado',
+    name: '나로도(고흥)',
+    region: '남해',
+    latitude: 34.485,
+    longitude: 127.487,
+  ),
+  SeaLocation(
     id: 'yeosu',
     name: '여수',
     region: '남해',
@@ -42,12 +155,56 @@ const List<SeaLocation> sampleLocations = [
     khoaStationCode: 'DT_0041',
   ),
   SeaLocation(
+    id: 'namhae_mijo',
+    name: '미조항(남해)',
+    region: '남해',
+    latitude: 34.686,
+    longitude: 128.088,
+  ),
+  SeaLocation(
+    id: 'tongyeong',
+    name: '통영',
+    region: '남해',
+    latitude: 34.846,
+    longitude: 128.433,
+  ),
+  SeaLocation(
+    id: 'geoje',
+    name: '거제(장승포)',
+    region: '남해',
+    latitude: 34.878,
+    longitude: 128.719,
+  ),
+  SeaLocation(
+    id: 'masan',
+    name: '마산',
+    region: '남해',
+    latitude: 35.196,
+    longitude: 128.570,
+  ),
+  SeaLocation(
     id: 'busan',
     name: '부산(영도)',
     region: '남해',
     latitude: 35.090,
     longitude: 129.035,
     khoaStationCode: 'DT_0005',
+  ),
+
+  // ── 동해 ──────────────────────────────────────────────
+  SeaLocation(
+    id: 'ulsan',
+    name: '울산(방어진)',
+    region: '동해',
+    latitude: 35.500,
+    longitude: 129.417,
+  ),
+  SeaLocation(
+    id: 'gampo',
+    name: '감포(경주)',
+    region: '동해',
+    latitude: 35.798,
+    longitude: 129.499,
   ),
   SeaLocation(
     id: 'pohang',
@@ -58,6 +215,48 @@ const List<SeaLocation> sampleLocations = [
     khoaStationCode: 'DT_0022',
   ),
   SeaLocation(
+    id: 'yeongdeok',
+    name: '강구항(영덕)',
+    region: '동해',
+    latitude: 36.400,
+    longitude: 129.398,
+  ),
+  SeaLocation(
+    id: 'hupo',
+    name: '후포(울진)',
+    region: '동해',
+    latitude: 36.677,
+    longitude: 129.453,
+  ),
+  SeaLocation(
+    id: 'samcheok',
+    name: '삼척',
+    region: '동해',
+    latitude: 37.450,
+    longitude: 129.174,
+  ),
+  SeaLocation(
+    id: 'donghae_mukho',
+    name: '묵호항(동해)',
+    region: '동해',
+    latitude: 37.550,
+    longitude: 129.115,
+  ),
+  SeaLocation(
+    id: 'jumunjin',
+    name: '주문진(강릉)',
+    region: '동해',
+    latitude: 37.897,
+    longitude: 128.827,
+  ),
+  SeaLocation(
+    id: 'yangyang',
+    name: '양양',
+    region: '동해',
+    latitude: 38.078,
+    longitude: 128.628,
+  ),
+  SeaLocation(
     id: 'sokcho',
     name: '속초',
     region: '동해',
@@ -65,6 +264,15 @@ const List<SeaLocation> sampleLocations = [
     longitude: 128.594,
     khoaStationCode: 'DT_0012',
   ),
+  SeaLocation(
+    id: 'goseong_geojin',
+    name: '거진항(고성)',
+    region: '동해',
+    latitude: 38.440,
+    longitude: 128.457,
+  ),
+
+  // ── 제주 ──────────────────────────────────────────────
   SeaLocation(
     id: 'jeju',
     name: '제주',
@@ -74,11 +282,53 @@ const List<SeaLocation> sampleLocations = [
     khoaStationCode: 'DT_0004',
   ),
   SeaLocation(
+    id: 'aewol',
+    name: '애월',
+    region: '제주',
+    latitude: 33.462,
+    longitude: 126.310,
+  ),
+  SeaLocation(
+    id: 'hallim',
+    name: '한림',
+    region: '제주',
+    latitude: 33.408,
+    longitude: 126.269,
+  ),
+  SeaLocation(
+    id: 'gimnyeong',
+    name: '김녕',
+    region: '제주',
+    latitude: 33.558,
+    longitude: 126.759,
+  ),
+  SeaLocation(
+    id: 'seongsan',
+    name: '성산',
+    region: '제주',
+    latitude: 33.458,
+    longitude: 126.927,
+  ),
+  SeaLocation(
+    id: 'pyoseon',
+    name: '표선',
+    region: '제주',
+    latitude: 33.325,
+    longitude: 126.833,
+  ),
+  SeaLocation(
     id: 'seogwipo',
     name: '서귀포',
     region: '제주',
     latitude: 33.240,
     longitude: 126.561,
     khoaStationCode: 'DT_0010',
+  ),
+  SeaLocation(
+    id: 'moseulpo',
+    name: '모슬포',
+    region: '제주',
+    latitude: 33.213,
+    longitude: 126.251,
   ),
 ];

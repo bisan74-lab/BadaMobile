@@ -10,7 +10,20 @@ import 'wind_field_repository.dart';
 /// 실데이터 실패 시 폴백해도 지도 화면이 동일하게 동작한다.
 class MockWindFieldRepository implements WindFieldRepository {
   @override
-  Future<WindField> fetchField() async {
+  Future<WindField> fetchField() async => _buildField(DateTime.now());
+
+  @override
+  Future<WindFieldSeries> fetchSeries({int hours = 48}) async {
+    final start = DateTime.now();
+    return WindFieldSeries(
+      hourly: List.generate(
+        hours,
+        (h) => _buildField(start.add(Duration(hours: h))),
+      ),
+    );
+  }
+
+  WindField _buildField(DateTime at) {
     const minLat = OpenMeteoWindFieldRepository.minLat;
     const maxLat = OpenMeteoWindFieldRepository.maxLat;
     const minLon = OpenMeteoWindFieldRepository.minLon;
@@ -22,8 +35,7 @@ class MockWindFieldRepository implements WindFieldRepository {
     final lonStep = (maxLon - minLon) / (lonSteps - 1);
     final u = <double>[];
     final v = <double>[];
-    final now = DateTime.now();
-    final seed = now.hour + now.minute / 60;
+    final seed = at.hour + at.minute / 60;
 
     for (var i = 0; i < latSteps; i++) {
       final lat = minLat + i * latStep;
@@ -44,7 +56,7 @@ class MockWindFieldRepository implements WindFieldRepository {
     }
 
     return WindField(
-      time: now,
+      time: at,
       minLat: minLat,
       maxLat: maxLat,
       minLon: minLon,

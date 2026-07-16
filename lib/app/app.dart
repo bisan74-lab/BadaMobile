@@ -42,7 +42,15 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: IndexedStack(
+        index: _index,
+        // 화면 밖 탭(특히 애니메이션이 있는 날씨 탭)의 Ticker를 꺼서
+        // 불필요한 리빌드와 배터리 소모, pumpAndSettle 무한대기를 막는다.
+        children: [
+          for (var i = 0; i < _screens.length; i++)
+            TickerMode(enabled: i == _index, child: _screens[i]),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),

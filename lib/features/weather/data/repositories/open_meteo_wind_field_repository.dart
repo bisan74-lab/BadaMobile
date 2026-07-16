@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
@@ -7,8 +8,10 @@ import 'wind_field_repository.dart';
 
 /// 한반도 주변 해역 바람장(격자) 리포지토리.
 ///
-/// Open-Meteo Forecast API의 다중 좌표 요청(콤마 구분 latitude/longitude)과
-/// `current` 파라미터로 격자점마다 "지금" 풍속·풍향만 가볍게 받아온다.
+/// Open-Meteo Forecast API의 다중 좌표 요청(콤마 구분 latitude/longitude)으로
+/// 격자점마다 바람을 받아온다. [fetchField]는 `current` 파라미터로 지금
+/// 시점만 가볍게, [fetchSeries]는 `hourly` 파라미터로 여러 시간대를 한 번에
+/// 받아 시간 스크러버(time slider)에 쓴다.
 /// https://open-meteo.com/en/docs
 class OpenMeteoWindFieldRepository implements WindFieldRepository {
   OpenMeteoWindFieldRepository({http.Client? client})
@@ -20,19 +23,26 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   static const double minLon = 124.3, maxLon = 131.0;
   static const int latSteps = 8, lonSteps = 10;
 
+  List<double> _latGrid() {
+    final step = (maxLat - minLat) / (latSteps - 1);
+    return [
+      for (var i = 0; i < latSteps; i++)
+        for (var j = 0; j < lonSteps; j++) minLat + i * step,
+    ];
+  }
+
+  List<double> _lonGrid() {
+    final step = (maxLon - minLon) / (lonSteps - 1);
+    return [
+      for (var i = 0; i < latSteps; i++)
+        for (var j = 0; j < lonSteps; j++) minLon + j * step,
+    ];
+  }
+
   @override
   Future<WindField> fetchField() async {
-    final lats = <double>[];
-    final lons = <double>[];
-    final latStep = (maxLat - minLat) / (latSteps - 1);
-    final lonStep = (maxLon - minLon) / (lonSteps - 1);
-    for (var i = 0; i < latSteps; i++) {
-      final lat = minLat + i * latStep;
-      for (var j = 0; j < lonSteps; j++) {
-        lats.add(lat);
-        lons.add(minLon + j * lonStep);
-      }
-    }
+    final lats = _latGrid();
+    final lons = _lonGrid();
 
     final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
       'latitude': lats.map((v) => v.toStringAsFixed(3)).join(','),
@@ -79,6 +89,88 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
       lonSteps: lonSteps,
       u: uArr,
       v: vArr,
+    );
+  }
+
+  @override
+  Future<WindFieldSeries> fetchSeries({int hours = 48}) async {
+    final lats = _latGrid();
+    final lons = _lonGrid();
+    final forecastDays = ((hours / 24).ceil() + 1).clamp(1, 16);
+
+    final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
+      'latitude': lats.map((v) => v.toStringAsFixed(3)).join(','),
+      'longitude': lons.map((v) => v.toStringAsFixed(3)).join(','),
+      'hourly': 'wind_speed_10m,wind_direction_10m',
+      'wind_speed_unit': 'ms',
+      'timezone': 'Asia/Seoul',
+      'forecast_days': forecastDays.toString(),
+    });
+
+    final res = await _client.get(uri);
+    if (res.statusCode != 200) {
+      throw http.ClientException('바람장 시계열 응답 오류 ${res.statusCode}', uri);
+    }
+    final decoded = jsonDecode(res.body);
+    final list = decoded is List ? decoded : [decoded];
+    if (list.length != lats.length) {
+      throw FormatException(
+        '바람장 시계열 응답 개수 불일치: 기대 ${lats.length}, 실제 ${list.length}',
+      );
+    }
+
+    // 모든 지점이 같은 timezone·forecast_days로 요청됐으므로 시간축은
+    // 첫 지점 기준으로 통일해 쓴다.
+    final firstHourly =
+        (list[0] as Map<String, dynamic>)['hourly'] as Map<String, dynamic>?;
+    final times = ((firstHourly?['time'] as List?) ?? const [])
+        .map((v) => DateTime.parse(v as String))
+        .toList();
+    final steps = math.min(hours, times.length);
+    if (steps == 0) {
+      throw const FormatException('바람장 시계열 응답에 시간별 데이터가 없음');
+    }
+
+    final uByHour = List.generate(
+      steps,
+      (_) => List<double>.filled(lats.length, 0),
+    );
+    final vByHour = List.generate(
+      steps,
+      (_) => List<double>.filled(lats.length, 0),
+    );
+
+    for (var k = 0; k < list.length; k++) {
+      final hourly =
+          (list[k] as Map<String, dynamic>)['hourly'] as Map<String, dynamic>?;
+      if (hourly == null) continue;
+      final speeds = (hourly['wind_speed_10m'] as List?) ?? const [];
+      final dirs = (hourly['wind_direction_10m'] as List?) ?? const [];
+      for (var h = 0; h < steps; h++) {
+        final speed =
+            (h < speeds.length ? speeds[h] as num? : null)?.toDouble() ?? 0;
+        final dir = (h < dirs.length ? dirs[h] as num? : null)?.toDouble() ?? 0;
+        final (u, v) = windToUv(speed, dir);
+        uByHour[h][k] = u;
+        vByHour[h][k] = v;
+      }
+    }
+
+    return WindFieldSeries(
+      hourly: List.generate(
+        steps,
+        (h) => WindField(
+          time: times[h],
+          minLat: minLat,
+          maxLat: maxLat,
+          minLon: minLon,
+          maxLon: maxLon,
+          latSteps: latSteps,
+          lonSteps: lonSteps,
+          u: uByHour[h],
+          v: vByHour[h],
+        ),
+      ),
     );
   }
 }

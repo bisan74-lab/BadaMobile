@@ -68,3 +68,17 @@ class WindField {
   final rad = directionDeg * math.pi / 180;
   return (-speedMs * math.sin(rad), -speedMs * math.cos(rad));
 }
+
+/// 같은 격자 지리(bbox·해상도)에 대해 시간대별 [WindField] 스냅샷을 모은 것.
+/// 윈디 스타일 시간 스크러버(time slider)에 쓰인다.
+class WindFieldSeries {
+  const WindFieldSeries({required this.hourly});
+
+  /// 시간순 스냅샷(보통 1시간 간격).
+  final List<WindField> hourly;
+
+  /// [offset]시간째 스냅샷. 범위를 벗어나면 가장 가까운 끝으로 고정한다.
+  WindField at(int offset) => hourly[offset.clamp(0, hourly.length - 1)];
+
+  int get length => hourly.length;
+}

@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 
 import '../../../../core/config/env.dart';
-import '../../../../core/errors/data_errors.dart';
 import '../../../../core/network/data_go_kr.dart';
 import '../../../locations/data/models/sea_location.dart';
 import '../models/tide_data.dart';
@@ -36,7 +35,9 @@ class DataGoKrTideRepository implements TideRepository {
     TideRepository.ensureInRange(date);
     final obsCode = location.khoaStationCode;
     if (obsCode == null) {
-      throw DataRangeException('${location.name}에는 조위관측소 코드가 없습니다');
+      // 범위 초과가 아니라 "이 지점은 아직 실데이터 연동 전"이므로
+      // DataRangeException이 아닌 일반 예외로 던져 합성 데이터 폴백을 탄다.
+      throw Exception('${location.name}에는 조위관측소 코드가 없습니다');
     }
 
     final day = DateTime(date.year, date.month, date.day);

@@ -9,12 +9,25 @@ final windFieldRepositoryProvider = Provider<WindFieldRepository>(
   (ref) => OpenMeteoWindFieldRepository(),
 );
 
-/// 화면 진입/새로고침 시 조회하고, 실패하면 합성 바람장으로 폴백한다.
+/// 현재 시점 바람장 스냅샷. 실패하면 합성 바람장으로 폴백한다.
 final windFieldProvider = FutureProvider.autoDispose<WindField>((ref) async {
   final repo = ref.watch(windFieldRepositoryProvider);
   try {
     return await repo.fetchField();
   } catch (_) {
     return MockWindFieldRepository().fetchField();
+  }
+});
+
+/// 48시간 바람장 시계열 — 지도 화면의 시간 스크러버에 쓰인다.
+/// 실패하면 합성 바람장 시계열로 폴백한다.
+final windFieldSeriesProvider = FutureProvider.autoDispose<WindFieldSeries>((
+  ref,
+) async {
+  final repo = ref.watch(windFieldRepositoryProvider);
+  try {
+    return await repo.fetchSeries();
+  } catch (_) {
+    return MockWindFieldRepository().fetchSeries();
   }
 });

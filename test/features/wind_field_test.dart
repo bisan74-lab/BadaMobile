@@ -121,6 +121,50 @@ void main() {
       final repo = OpenMeteoWindFieldRepository(client: client);
       expect(repo.fetchField, throwsFormatException);
     });
+
+    test('fetchSeries는 시간별 격자를 요청 시간 수만큼 반환한다', () async {
+      const latSteps = OpenMeteoWindFieldRepository.latSteps;
+      const lonSteps = OpenMeteoWindFieldRepository.lonSteps;
+      final total = latSteps * lonSteps;
+      const hours = 6;
+
+      final client = MockClient((request) async {
+        expect(
+          request.url.queryParameters['hourly'],
+          contains('wind_speed_10m'),
+        );
+        final times = List.generate(
+          24,
+          (h) => '2026-07-16T${h.toString().padLeft(2, '0')}:00',
+        );
+        final list = List.generate(
+          total,
+          (i) => {
+            'hourly': {
+              'time': times,
+              'wind_speed_10m': List.filled(24, 5.0),
+              'wind_direction_10m': List.filled(24, 180.0),
+            },
+          },
+        );
+        return http.Response(
+          jsonEncode(list),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final repo = OpenMeteoWindFieldRepository(client: client);
+      final series = await repo.fetchSeries(hours: hours);
+
+      expect(series.length, hours);
+      for (final field in series.hourly) {
+        expect(field.u, hasLength(total));
+        expect(field.v[0], closeTo(5, 1e-9)); // 남풍 → v=+5
+      }
+      expect(series.at(0).time, series.hourly.first.time);
+      expect(series.at(9999).time, series.hourly.last.time); // 범위 밖은 끝 고정
+    });
   });
 
   group('MockWindFieldRepository', () {
@@ -138,6 +182,17 @@ void main() {
           math.sqrt(field.u[i] * field.u[i] + field.v[i] * field.v[i]),
           lessThan(30),
         );
+      }
+    });
+
+    test('fetchSeries는 요청 시간 수만큼 스냅샷을 만든다', () async {
+      final series = await MockWindFieldRepository().fetchSeries(hours: 12);
+      expect(series.length, 12);
+      const total =
+          OpenMeteoWindFieldRepository.latSteps *
+          OpenMeteoWindFieldRepository.lonSteps;
+      for (final field in series.hourly) {
+        expect(field.u, hasLength(total));
       }
     });
   });

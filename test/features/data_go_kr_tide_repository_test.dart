@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:bada_mobile/features/tide/data/models/tide_data.dart';
 import 'package:bada_mobile/features/tide/data/repositories/data_go_kr_tide_repository.dart';
+import 'package:bada_mobile/features/tide/data/repositories/mock_tide_repository.dart';
+import 'package:bada_mobile/features/tide/data/repositories/tide_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -221,6 +223,22 @@ void main() {
         () => repo.fetchTideDay(noCode, DateTime.now()),
         throwsA(anything),
       );
+    });
+
+    test('관측소 코드가 없어도 폴백 래퍼에서는 합성 데이터로 정상 조회된다', () async {
+      final noCode = sampleLocations.firstWhere(
+        (l) => l.khoaStationCode == null,
+      );
+      final repo = TideRepository.withFallback(
+        primary: DataGoKrTideRepository(
+          client: client(),
+          serviceKey: 'test-key',
+        ),
+        fallback: MockTideRepository(),
+      );
+      // 코드 없음은 DataRangeException이 아니라 일반 예외라 폴백을 타야 한다.
+      final tide = await repo.fetchTideDay(noCode, DateTime.now());
+      expect(tide.hourlyHeightsCm, hasLength(25));
     });
   });
 }
