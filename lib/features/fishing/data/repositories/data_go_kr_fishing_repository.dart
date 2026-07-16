@@ -35,7 +35,9 @@ class DataGoKrFishingRepository implements FishingRepository {
         '${today.year}'
         '${today.month.toString().padLeft(2, '0')}'
         '${today.day.toString().padLeft(2, '0')}';
-    final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiService', {
+    // 오퍼레이션명은 Get{엔드포인트 PascalCase}ApiService 패턴을 따른다
+    // (조석예보 tideFcstHghLw → GetTideFcstHghLwApiService 실측 확인).
+    final uri = Uri.https(_host, '$_basePath/GetFcstFishingv2ApiService', {
       'serviceKey': _serviceKey,
       'type': 'json',
       'reqDate': ymd,
