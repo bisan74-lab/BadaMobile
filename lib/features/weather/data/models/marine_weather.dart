@@ -27,6 +27,30 @@ class HourlyMarine {
   final double waveDirectionDeg;
   final double waterTempC;
   final double airTempC;
+
+  Map<String, dynamic> toJson() => {
+    'time': time.toIso8601String(),
+    'windSpeedMs': windSpeedMs,
+    'windGustMs': windGustMs,
+    'windDirectionDeg': windDirectionDeg,
+    'waveHeightM': waveHeightM,
+    'wavePeriodS': wavePeriodS,
+    'waveDirectionDeg': waveDirectionDeg,
+    'waterTempC': waterTempC,
+    'airTempC': airTempC,
+  };
+
+  factory HourlyMarine.fromJson(Map<String, dynamic> json) => HourlyMarine(
+    time: DateTime.parse(json['time'] as String),
+    windSpeedMs: (json['windSpeedMs'] as num).toDouble(),
+    windGustMs: (json['windGustMs'] as num).toDouble(),
+    windDirectionDeg: (json['windDirectionDeg'] as num).toDouble(),
+    waveHeightM: (json['waveHeightM'] as num).toDouble(),
+    wavePeriodS: (json['wavePeriodS'] as num).toDouble(),
+    waveDirectionDeg: (json['waveDirectionDeg'] as num).toDouble(),
+    waterTempC: (json['waterTempC'] as num).toDouble(),
+    airTempC: (json['airTempC'] as num).toDouble(),
+  );
 }
 
 /// 특정 지점의 해양 기상 예보 묶음.
@@ -46,4 +70,16 @@ class MarineForecast {
     final span = hourly.last.time.difference(hourly.first.time);
     return (span.inHours / 24).ceil();
   }
+
+  Map<String, dynamic> toJson() => {
+    'locationId': locationId,
+    'hourly': hourly.map((h) => h.toJson()).toList(),
+  };
+
+  factory MarineForecast.fromJson(Map<String, dynamic> json) => MarineForecast(
+    locationId: json['locationId'] as String,
+    hourly: (json['hourly'] as List)
+        .map((h) => HourlyMarine.fromJson(h as Map<String, dynamic>))
+        .toList(),
+  );
 }

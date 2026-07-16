@@ -121,14 +121,27 @@ API 키(KHOA)는 `--dart-define=KHOA_API_KEY=...` 로 주입한다 (`core/config
 - 전환 방법: `tideRepositoryProvider` / `marineWeatherRepositoryProvider` 에서
   구현체만 교체한다. UI 코드는 변경 없음. 테스트는 provider override로 목을 주입한다.
 
-### 캐싱·오프라인 설계 (FR-11, NFR-03, v0.3)
+### 캐싱·오프라인 설계 (FR-11, NFR-03)  [구현됨]
 
 ```
-Repository 구현 내부에 2계층 캐시:
-  1) 메모리: Riverpod FutureProvider 캐시 (현재 동작)
-  2) 디스크: (지역 id, 날짜) 키로 JSON 저장 — shared_preferences 또는 경량 파일 캐시
-네트워크 실패 시: 디스크 캐시 → 없으면 오류 카드 표시 (한국어 메시지)
+core/storage/cache_store.dart — CacheStore
+  SharedPreferences 위에 JSON 문자열로 저장/조회하는 얇은 래퍼.
+  키: "cache_v1_{feature}_{locationId}_{...}" (조석은 날짜, 낚시지수는 오늘 날짜 포함)
+
+Caching{Tide,MarineWeather,Fishing}Repository — 데코레이터 패턴
+  fetch 성공 → 즉시 CacheStore에 JSON 저장 후 반환
+  fetch 실패(오프라인 등) → 같은 키로 캐시 조회, 있으면 그 값을 반환
+  캐시도 없으면 원래 예외를 다시 던진다 (범위 초과 DataRangeException은
+  캐시로 가리지 않고 그대로 전파 — 오프라인 문제가 아니므로).
+
+배치: 실API → Caching 래퍼 → (실패 시) 캐시 → (그래도 없으면) 폴백 체인의
+  outer wrapper(TideRepository/FishingRepository.withFallback,
+  FallbackMarineWeatherRepository)가 합성 데이터로 최종 이어받는다.
+  즉 "실데이터 → 오늘자 캐시 → 마지막 성공 캐시 → 합성 데이터" 순.
 ```
+
+모델(TideDay/TideExtreme, MarineForecast/HourlyMarine, FishingForecast/
+FishingIndex)에 `toJson`/`fromJson`을 추가해 캐시 직렬화에 사용한다.
 
 ### 오류 처리 정책 (NFR-03)
 

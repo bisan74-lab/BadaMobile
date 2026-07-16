@@ -11,6 +11,18 @@ class TideExtreme {
 
   /// true = 만조, false = 간조
   final bool isHigh;
+
+  Map<String, dynamic> toJson() => {
+    'time': time.toIso8601String(),
+    'heightCm': heightCm,
+    'isHigh': isHigh,
+  };
+
+  factory TideExtreme.fromJson(Map<String, dynamic> json) => TideExtreme(
+    time: DateTime.parse(json['time'] as String),
+    heightCm: (json['heightCm'] as num).toDouble(),
+    isHigh: json['isHigh'] as bool,
+  );
 }
 
 /// 하루치 조석 정보.
@@ -38,4 +50,22 @@ class TideDay {
     }
     return null;
   }
+
+  Map<String, dynamic> toJson() => {
+    'date': date.toIso8601String(),
+    'locationId': locationId,
+    'extremes': extremes.map((e) => e.toJson()).toList(),
+    'hourlyHeightsCm': hourlyHeightsCm,
+  };
+
+  factory TideDay.fromJson(Map<String, dynamic> json) => TideDay(
+    date: DateTime.parse(json['date'] as String),
+    locationId: json['locationId'] as String,
+    extremes: (json['extremes'] as List)
+        .map((e) => TideExtreme.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    hourlyHeightsCm: (json['hourlyHeightsCm'] as List)
+        .map((e) => (e as num).toDouble())
+        .toList(),
+  );
 }

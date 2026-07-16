@@ -51,6 +51,28 @@ class FishingIndex {
   final String? tidePhase;
   final double? waveHeightM;
   final double? waterTempC;
+
+  Map<String, dynamic> toJson() => {
+    'date': date.toIso8601String(),
+    'timeSlot': timeSlot,
+    'grade': grade.name,
+    'species': species,
+    'pointName': pointName,
+    'tidePhase': tidePhase,
+    'waveHeightM': waveHeightM,
+    'waterTempC': waterTempC,
+  };
+
+  factory FishingIndex.fromJson(Map<String, dynamic> json) => FishingIndex(
+    date: DateTime.parse(json['date'] as String),
+    timeSlot: json['timeSlot'] as String,
+    grade: FishingGrade.values.byName(json['grade'] as String),
+    species: json['species'] as String?,
+    pointName: json['pointName'] as String?,
+    tidePhase: json['tidePhase'] as String?,
+    waveHeightM: (json['waveHeightM'] as num?)?.toDouble(),
+    waterTempC: (json['waterTempC'] as num?)?.toDouble(),
+  );
 }
 
 /// 지점별 낚시지수 예보 묶음.
@@ -85,4 +107,17 @@ class FishingForecast {
     }
     return bySpecies[preferredSpecies] ?? bySpecies.values.first;
   }
+
+  Map<String, dynamic> toJson() => {
+    'locationId': locationId,
+    'indices': indices.map((i) => i.toJson()).toList(),
+  };
+
+  factory FishingForecast.fromJson(Map<String, dynamic> json) =>
+      FishingForecast(
+        locationId: json['locationId'] as String,
+        indices: (json['indices'] as List)
+            .map((i) => FishingIndex.fromJson(i as Map<String, dynamic>))
+            .toList(),
+      );
 }
