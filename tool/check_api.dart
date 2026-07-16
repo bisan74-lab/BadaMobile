@@ -1,11 +1,15 @@
-// 공공데이터포털(KHOA 미러) API 연결 진단 스크립트.
+// 공공데이터포털(KHOA) API 연결 진단 스크립트.
 //
 // 사용법:
 //   dart run tool/check_api.dart <서비스키>
 //
-// 조석예보(고저조)·바다낚시지수 API를 파라미터 표기 조합별로 호출해
-// 상태코드와 응답 앞부분을 출력한다. 어떤 조합이 성공하는지 확인해
-// 리포지토리 구현의 파라미터를 확정하는 용도.
+// 확정된 요청 규격으로 조석예보(고저조)·바다낚시지수 API를 호출해
+// 상태코드와 응답 앞부분을 출력한다.
+//
+// 판정 기준:
+//   resultCode 00 (NORMAL_SERVICE) → 키·규격 모두 정상, 응답 필드 확인 가능
+//   resultCode 03 (NODATA_ERROR)   → 키는 정상, 해당 조건에 데이터가 없음
+//   Unauthorized / 30번대 코드     → 키 미동기화 또는 잘못된 키
 //
 // ignore_for_file: avoid_print
 import 'dart:convert';
@@ -24,41 +28,42 @@ Future<void> main(List<String> args) async {
       '${today.day.toString().padLeft(2, '0')}';
 
   final cases = <String, Uri>{
-    '조석예보 serviceKey(소문자)': Uri.https(
+    '조석예보(고저조) 인천 오늘': Uri.https(
       'apis.data.go.kr',
       '/1192136/tideFcstHghLw/GetTideFcstHghLwApiService',
       {
         'serviceKey': key,
-        'ObsCode': 'DT_0001',
-        'Date': ymd,
-        'ResultType': 'json',
+        'obsCode': 'DT_0001',
+        'reqDate': ymd,
+        'type': 'json',
+        'pageNo': '1',
+        'numOfRows': '10',
       },
     ),
-    '조석예보 ServiceKey(대문자)': Uri.https(
-      'apis.data.go.kr',
-      '/1192136/tideFcstHghLw/GetTideFcstHghLwApiService',
-      {
-        'ServiceKey': key,
-        'ObsCode': 'DT_0001',
-        'Date': ymd,
-        'ResultType': 'json',
-      },
-    ),
-    '조석예보 오퍼레이션 없이': Uri.https('apis.data.go.kr', '/1192136/tideFcstHghLw', {
-      'serviceKey': key,
-      'ObsCode': 'DT_0001',
-      'Date': ymd,
-      'ResultType': 'json',
-    }),
-    '낚시지수 serviceKey(소문자)': Uri.https(
+    '바다낚시지수 오늘 갯바위': Uri.https(
       'apis.data.go.kr',
       '/1192136/fcstFishingv2/GetFcstFishingApiService',
-      {'serviceKey': key, 'ResultType': 'json'},
+      {
+        'serviceKey': key,
+        'type': 'json',
+        'reqDate': ymd,
+        'gubun': '갯바위',
+        'pageNo': '1',
+        'numOfRows': '10',
+      },
     ),
-    '낚시지수 오퍼레이션 없이': Uri.https('apis.data.go.kr', '/1192136/fcstFishingv2', {
-      'serviceKey': key,
-      'ResultType': 'json',
-    }),
+    '바다낚시지수 오늘 선상': Uri.https(
+      'apis.data.go.kr',
+      '/1192136/fcstFishingv2/GetFcstFishingApiService',
+      {
+        'serviceKey': key,
+        'type': 'json',
+        'reqDate': ymd,
+        'gubun': '선상',
+        'pageNo': '1',
+        'numOfRows': '10',
+      },
+    ),
   };
 
   final client = HttpClient();
@@ -70,7 +75,14 @@ Future<void> main(List<String> args) async {
       final head = body.replaceAll('\n', ' ');
       print('--- ${entry.key}');
       print('    HTTP ${res.statusCode}');
-      print('    ${head.substring(0, head.length > 400 ? 400 : head.length)}');
+      print('    ${head.substring(0, head.length > 800 ? 800 : head.length)}');
+      if (body.contains('NORMAL_SERVICE')) {
+        print('    ✅ 정상 — 위 응답 전체를 개발 세션에 붙여넣으면 필드 매핑을 확정할 수 있습니다.');
+      } else if (body.contains('NODATA_ERROR')) {
+        print('    ⚠️ 키는 정상, 이 조건에는 데이터가 없습니다.');
+      } else if (body.contains('Unauthorized')) {
+        print('    ❌ 키 미동기화 또는 잘못된 키입니다.');
+      }
     } catch (e) {
       print('--- ${entry.key}');
       print('    오류: $e');
@@ -78,5 +90,4 @@ Future<void> main(List<String> args) async {
     print('');
   }
   client.close();
-  print('성공한 조합의 전체 응답을 개발 담당(Claude 세션)에 붙여넣어 주세요.');
 }
