@@ -22,13 +22,15 @@ enum FishingGrade {
   );
 }
 
-/// 특정 지점·날짜·시간대의 바다낚시지수.
+/// 특정 지점·날짜·시간대·어종의 바다낚시지수.
 class FishingIndex {
   const FishingIndex({
     required this.date,
     required this.timeSlot,
     required this.grade,
     this.species,
+    this.pointName,
+    this.tidePhase,
     this.waveHeightM,
     this.waterTempC,
   });
@@ -39,8 +41,14 @@ class FishingIndex {
   final String timeSlot;
   final FishingGrade grade;
 
-  /// 대상 어종 (API가 어종별 지수를 제공).
+  /// 대상 어종 (감성돔, 참돔, 농어 등 — API가 어종별 지수를 제공).
   final String? species;
+
+  /// 낚시 포인트 이름 (예: 가거도).
+  final String? pointName;
+
+  /// 물때 구분 (대조기/중조기/소조기 등).
+  final String? tidePhase;
   final double? waveHeightM;
   final double? waterTempC;
 }
@@ -54,7 +62,7 @@ class FishingForecast {
   /// 날짜·시간대 순.
   final List<FishingIndex> indices;
 
-  /// [date]와 같은 날짜의 지수들.
+  /// [date]와 같은 날짜의 지수들 (모든 어종).
   List<FishingIndex> forDate(DateTime date) => indices
       .where(
         (i) =>
@@ -63,4 +71,18 @@ class FishingForecast {
             i.date.day == date.day,
       )
       .toList();
+
+  /// [date]의 대표 어종 지수 (기본 감성돔, 없으면 첫 어종).
+  List<FishingIndex> representativeForDate(
+    DateTime date, {
+    String preferredSpecies = '감성돔',
+  }) {
+    final day = forDate(date);
+    if (day.isEmpty) return day;
+    final bySpecies = <String?, List<FishingIndex>>{};
+    for (final i in day) {
+      bySpecies.putIfAbsent(i.species, () => []).add(i);
+    }
+    return bySpecies[preferredSpecies] ?? bySpecies.values.first;
+  }
 }

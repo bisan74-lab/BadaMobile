@@ -1,18 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/env.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../data/models/fishing_index.dart';
+import '../data/repositories/data_go_kr_fishing_repository.dart';
 import '../data/repositories/fishing_repository.dart';
 import '../data/repositories/mock_fishing_repository.dart';
 
 /// 낚시지수 리포지토리 주입 지점.
 ///
-/// 공공데이터포털 API(바다낚시지수) 활용신청은 승인되었으나 응답 필드 매핑을
-/// 확정하기 전까지는 목 구현을 사용한다. 확정 후 DataGoKrFishingRepository로
-/// 교체한다 (실패 시 목 폴백 래퍼 포함 예정).
-final fishingRepositoryProvider = Provider<FishingRepository>(
-  (ref) => MockFishingRepository(),
-);
+/// data.go.kr 인증키가 주입되면 실데이터(가장 가까운 포인트의 어종별 지수)를
+/// 사용하고, 실패 시 합성 데이터로 폴백한다. 키가 없으면 합성 데이터 사용.
+final fishingRepositoryProvider = Provider<FishingRepository>((ref) {
+  final mock = MockFishingRepository();
+  if (Env.dataGoKrApiKey.isEmpty) return mock;
+  return FishingRepository.withFallback(
+    primary: DataGoKrFishingRepository(),
+    fallback: mock,
+  );
+});
 
 final fishingForecastProvider =
     FutureProvider.family<FishingForecast, SeaLocation>((ref, location) {

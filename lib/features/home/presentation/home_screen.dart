@@ -113,8 +113,14 @@ class HomeScreen extends ConsumerWidget {
                 loading: () => const _LoadingCard(),
                 error: (e, _) => _ErrorCard(message: '낚시지수 오류: $e'),
                 data: (fishing) {
-                  final todayIndices = fishing.forDate(now);
+                  final todayIndices = fishing.representativeForDate(now);
                   if (todayIndices.isEmpty) return const SizedBox.shrink();
+                  final first = todayIndices.first;
+                  final details = [
+                    if (first.pointName != null) '${first.pointName} 포인트',
+                    if (first.species != null) '기준 어종 ${first.species}',
+                    if (first.tidePhase != null) first.tidePhase!,
+                  ].join(' · ');
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.phishing),
@@ -122,12 +128,8 @@ class HomeScreen extends ConsumerWidget {
                         '오늘의 바다낚시지수: '
                         '${todayIndices.map((i) => '${i.timeSlot} ${i.grade.label}').join(' · ')}',
                       ),
-                      subtitle: todayIndices.first.species == null
-                          ? null
-                          : Text('기준 어종: ${todayIndices.first.species}'),
-                      trailing: _GradeDots(
-                        score: todayIndices.first.grade.score,
-                      ),
+                      subtitle: details.isEmpty ? null : Text(details),
+                      trailing: _GradeDots(score: first.grade.score),
                     ),
                   );
                 },

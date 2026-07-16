@@ -2,9 +2,41 @@ import 'dart:convert';
 
 import 'package:bada_mobile/core/network/data_go_kr.dart';
 import 'package:bada_mobile/features/fishing/data/models/fishing_index.dart';
+import 'package:bada_mobile/features/fishing/data/repositories/data_go_kr_fishing_repository.dart';
 import 'package:bada_mobile/features/fishing/data/repositories/mock_fishing_repository.dart';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+/// 2026-07-16 실제 응답의 item 형식 그대로.
+Map<String, dynamic> realItem({
+  String point = '가거도',
+  double lat = 34.07308,
+  double lot = 125.08805,
+  String slot = '오전',
+  String species = '감성돔',
+  String index = '좋음',
+}) => {
+  'seafsPstnNm': point,
+  'lat': lat,
+  'lot': lot,
+  'predcYmd': '2026-07-16',
+  'predcNoonSeCd': slot,
+  'seafsTgfshNm': species,
+  'tdlvHrCn': '대조기',
+  'minWvhgt': 0.9,
+  'maxWvhgt': 0.9,
+  'minWtem': 25.30,
+  'maxWtem': 25.40,
+  'minArtmp': 25.6,
+  'maxArtmp': 25.9,
+  'minCrsp': 0.20,
+  'maxCrsp': 0.60,
+  'minWspd': 1.7,
+  'maxWspd': 4.1,
+  'totalIndex': index,
+};
 
 void main() {
   group('FishingGrade', () {
@@ -94,6 +126,79 @@ void main() {
         'header': {'resultCode': '03', 'resultMsg': 'NODATA_ERROR'},
       });
       expect(parseDataGoKrItems(body), isEmpty);
+    });
+  });
+
+  group('mapFishingItem (실측 필드)', () {
+    test('실제 응답 형식을 FishingIndex로 변환한다', () {
+      final index = mapFishingItem(realItem());
+      expect(index.date, DateTime(2026, 7, 16));
+      expect(index.timeSlot, '오전');
+      expect(index.grade, FishingGrade.good);
+      expect(index.species, '감성돔');
+      expect(index.pointName, '가거도');
+      expect(index.tidePhase, '대조기');
+      expect(index.waveHeightM, closeTo(0.9, 0.001));
+      expect(index.waterTempC, closeTo(25.35, 0.001));
+    });
+  });
+
+  group('DataGoKrFishingRepository', () {
+    test('가장 가까운 포인트를 골라 어종별 지수를 돌려준다', () async {
+      final client = MockClient((request) async {
+        expect(
+          request.url.path,
+          '/1192136/fcstFishingv2/GetFcstFishingApiServicev2',
+        );
+        expect(request.url.queryParameters['gubun'], '갯바위');
+        expect(request.url.queryParameters['type'], 'json');
+        return http.Response(
+          jsonEncode({
+            'header': {'resultCode': '00', 'resultMsg': 'NORMAL_SERVICE'},
+            'body': {
+              'items': {
+                'item': [
+                  // 제주에서 먼 포인트(가거도)와 가까운 포인트(김녕).
+                  realItem(),
+                  realItem(slot: '오후', index: '보통'),
+                  realItem(point: '김녕', lat: 33.558, lot: 126.758),
+                  realItem(
+                    point: '김녕',
+                    lat: 33.558,
+                    lot: 126.758,
+                    slot: '오후',
+                    index: '매우좋음',
+                  ),
+                  realItem(
+                    point: '김녕',
+                    lat: 33.558,
+                    lot: 126.758,
+                    species: '참돔',
+                  ),
+                ],
+              },
+              'totalCount': 5,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final jeju = sampleLocations.firstWhere((l) => l.id == 'jeju');
+      final repo = DataGoKrFishingRepository(
+        client: client,
+        serviceKey: 'test-key',
+      );
+      final forecast = await repo.fetchForecast(jeju);
+
+      expect(forecast.indices, hasLength(3)); // 김녕 3건만
+      expect(forecast.indices.every((i) => i.pointName == '김녕'), isTrue);
+
+      final rep = forecast.representativeForDate(DateTime(2026, 7, 16));
+      expect(rep, hasLength(2)); // 감성돔 오전/오후
+      expect(rep.first.timeSlot, '오전');
+      expect(rep.last.grade, FishingGrade.veryGood);
     });
   });
 }
