@@ -122,6 +122,27 @@ class FishingForecast {
     return bySpecies.values.first;
   }
 
+  /// [date]의 어종별 지수를 [preferredSpecies] 우선순위 중 데이터가 있는
+  /// 것만 모아 그 순서대로 돌려준다(홈 화면에서 어종 여러 개를 한 번에
+  /// 보여줄 때 쓴다). 우선순위 어종이 하나도 없으면 그 날짜의 첫 어종만
+  /// 담은 목록을 돌려준다.
+  List<List<FishingIndex>> speciesGroupsForDate(
+    DateTime date, {
+    List<String> preferredSpecies = const ['감성돔'],
+  }) {
+    final day = forDate(date);
+    if (day.isEmpty) return const [];
+    final bySpecies = <String?, List<FishingIndex>>{};
+    for (final i in day) {
+      bySpecies.putIfAbsent(i.species, () => []).add(i);
+    }
+    final matched = [
+      for (final species in preferredSpecies)
+        if (bySpecies[species] != null) bySpecies[species]!,
+    ];
+    return matched.isNotEmpty ? matched : [bySpecies.values.first];
+  }
+
   Map<String, dynamic> toJson() => {
     'locationId': locationId,
     'indices': indices.map((i) => i.toJson()).toList(),

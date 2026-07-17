@@ -238,9 +238,16 @@ class _TideGraphicBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            TideTimeline(
-              extremes: tide.extremes,
-              now: isToday ? DateTime.now() : null,
+            Text('상세 조위 그래프', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                child: TideChart(
+                  hourlyHeightsCm: tide.hourlyHeightsCm,
+                  now: isToday ? DateTime.now() : null,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -260,17 +267,12 @@ class _TideGraphicBody extends ConsumerWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Text('만조·간조 타임라인', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text('상세 조위 그래프', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-                child: TideChart(
-                  hourlyHeightsCm: tide.hourlyHeightsCm,
-                  now: isToday ? DateTime.now() : null,
-                ),
-              ),
+            TideTimeline(
+              extremes: tide.extremes,
+              now: isToday ? DateTime.now() : null,
             ),
           ],
         );

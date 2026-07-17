@@ -18,7 +18,9 @@ class MockFishingRepository implements FishingRepository {
   @override
   Future<FishingForecast> fetchForecast(SeaLocation location) async {
     final seed = (location.latitude * 11 + location.longitude * 3) % 5;
-    final species = preferredSpeciesForRegion(location.region).first;
+    // 해역별 기준 어종을 전부 생성해 홈 화면에서 여러 어종을 함께 볼 수
+    // 있게 한다(어종마다 시드를 조금씩 달리해 값이 겹치지 않게 한다).
+    final speciesList = preferredSpeciesForRegion(location.region);
     final today = DateTime.now();
     final start = DateTime(
       today.year,
@@ -35,24 +37,30 @@ class MockFishingRepository implements FishingRepository {
       );
       // 중간 물때(3~10물)에서 높고, 사리·조금 극단에서 낮은 점수.
       final base = mulTtae.isSari || mulTtae.isJogeum ? 2.4 : 3.6;
-      for (final (slotIndex, slot) in const ['오전', '오후'].indexed) {
-        final wobble = math.sin(date.day * 1.7 + slotIndex * 2.1 + seed) * 1.2;
-        final score = (base + wobble).round().clamp(1, 5);
-        indices.add(
-          FishingIndex(
-            date: date,
-            timeSlot: slot,
-            grade: FishingGrade.fromScore(score),
-            species: species,
-            waveHeightM: double.parse(
-              (0.4 + 0.5 * math.sin(date.day + slotIndex + seed).abs())
-                  .toStringAsFixed(1),
+      for (final (speciesIndex, species) in speciesList.indexed) {
+        final speciesSeed = seed + speciesIndex * 1.7;
+        for (final (slotIndex, slot) in const ['오전', '오후'].indexed) {
+          final wobble =
+              math.sin(date.day * 1.7 + slotIndex * 2.1 + speciesSeed) * 1.2;
+          final score = (base + wobble).round().clamp(1, 5);
+          indices.add(
+            FishingIndex(
+              date: date,
+              timeSlot: slot,
+              grade: FishingGrade.fromScore(score),
+              species: species,
+              waveHeightM: double.parse(
+                (0.4 + 0.5 * math.sin(date.day + slotIndex + speciesSeed).abs())
+                    .toStringAsFixed(1),
+              ),
+              waterTempC: double.parse(
+                (20 + 3 * math.sin(date.day / 5 + speciesSeed)).toStringAsFixed(
+                  1,
+                ),
+              ),
             ),
-            waterTempC: double.parse(
-              (20 + 3 * math.sin(date.day / 5 + seed)).toStringAsFixed(1),
-            ),
-          ),
-        );
+          );
+        }
       }
     }
     return FishingForecast(locationId: location.id, indices: indices);

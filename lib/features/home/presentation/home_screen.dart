@@ -214,20 +214,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   loading: () => const _LoadingCard(),
                   error: (e, _) => _ErrorCard(message: '낚시지수 오류: $e'),
                   data: (fishing) {
-                    final indices = fishing.representativeForDate(
+                    final groups = fishing.speciesGroupsForDate(
                       _date,
                       preferredSpecies: preferredSpeciesForRegion(
                         location.region,
                       ),
                     );
-                    if (indices.isEmpty) {
+                    if (groups.isEmpty) {
                       return const _InfoCard(
                         color: Color(0xFF4C9BC9),
                         icon: Icons.phishing,
                         title: Text('선택한 날짜의 낚시지수 정보가 없습니다'),
                       );
                     }
-                    final species = indices.first.species;
                     return Card(
                       child: Padding(
                         padding: const EdgeInsets.all(12),
@@ -235,23 +234,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              species == null
-                                  ? '바다낚시지수'
-                                  : '바다낚시지수 · 기준 어종 $species',
+                              '바다낚시지수',
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                for (final index in indices) ...[
-                                  FishingLevelBadge(
-                                    timeSlot: index.timeSlot,
-                                    grade: index.grade,
-                                  ),
-                                  const SizedBox(width: 8),
+                            for (final indices in groups) ...[
+                              const SizedBox(height: 8),
+                              if (indices.first.species != null)
+                                Text(
+                                  '기준 어종 ${indices.first.species}',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  for (final index in indices) ...[
+                                    FishingLevelBadge(
+                                      timeSlot: index.timeSlot,
+                                      grade: index.grade,
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
                                 ],
-                              ],
-                            ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

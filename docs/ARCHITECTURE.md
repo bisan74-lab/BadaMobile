@@ -50,14 +50,14 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
   - `_TideGraphicBody`(`tide_screen.dart`): 바다색 그라디언트 카드 위에
     날짜·음력일·물때 배지·`MoonPhaseIcon`(월령 기반 달 위상)·
     `TideCurrentStrengthBar`(하루 조위 변화폭 기준 정성적 조류세기)를 얹고,
-    그 아래 `TideTimeline`을 붙인다. 상세 조위 곡선(`TideChart`)은
-    `ExpansionTile`로 접어 두어 필요할 때만 펼친다.
+    그 아래 **상세 조위 그래프(`TideChart`) → 날짜 이동 버튼 → 만조/간조
+    타임라인(`TideTimeline`)** 순서로 배치한다(그래프를 먼저 보고 싶다는
+    피드백으로 순서 변경). 그래프는 접었다 펴는 구조가 아니라 항상 펼쳐진
+    채로 보인다.
   - `TideTimeline`(`widgets/tide_timeline.dart`): 0~24시 세로 축을 화면 중앙에
     두고, 만조는 축 왼쪽·간조는 축 오른쪽에 카드를 배치해 좌우 공간을 고르게
     쓴다(초기 버전은 전부 왼쪽에만 배치해 오른쪽이 비어 보인다는 피드백으로
     개편). 이전 극값 대비 조위 증감(▲▼) 표시, 오늘이면 현재 시각선을 그린다.
-  - 상세 조위 그래프(`TideChart`)는 접었다 펴는 `ExpansionTile`이 아니라 항상
-    펼쳐진 채로 보인다(탭해야 열리는 구조가 불편하다는 피드백으로 변경).
   - `MoonPhaseIcon`(`widgets/moon_phase_icon.dart`): `lunarAgeDays()`로 구한
     월령을 0~1 위상으로 정규화해 초승~보름~그믐 형태를 `CustomPainter`로 그린다
     (장식용 지표, 정밀 천문 계산 아님).
@@ -88,20 +88,24 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
     - `MapProjection`/`LatLonBounds`(`widgets/map_projection.dart`): 지도의
       모든 레이어(해안선·히트맵·마커·지명)가 공유하는 위경도→캔버스 좌표
       변환. 지도 기본 화면뷰(`mapViewBounds`, 23~42°N·116~134°E — 윈디 기본
-      줌 수준 참고)는 바람장 격자(한반도 주변 해역, 8×10)보다 넓어서, 바람
-      히트맵/파티클은 그 안의 일부 사각형(`rectFor`)에만 그려진다.
+      줌 수준 참고)와 바람장 격자 범위를 **동일하게** 맞춰(v0.5 후반 개편)
+      지도 전체에 바람 히트맵이 채워지도록 했다 — Open-Meteo는 위경도만
+      주면 전 세계 어디든 응답하므로, 별도의 "글로벌 기상 API" 연동 없이
+      기존 리포지토리의 격자 범위(`OpenMeteoWindFieldRepository.minLat` 등)만
+      넓히면 된다(현재 10×12=120 격자점).
     - `MapCityLabelLayer`(`widgets/map_city_labels.dart`): 서울·부산 등
       주요 도시 이름을 지도 위에 표시(윈디의 도시 라벨 참고).
-    - 지도 영역은 `Column`에서 `Expanded(flex: 3)`로 화면 대부분을 차지하고
-      (예전엔 고정 240px), 시간별 상세 목록은 `Expanded(flex: 2)`로 아래에
-      붙는다.
+    - 지도 영역은 뷰포트 높이 전체를 채우고(`LayoutBuilder`의
+      `constraints.maxHeight`), 그 아래 범례·시간 스크러버·상세 정보는
+      `CustomScrollView`(`SliverToBoxAdapter`)로 이어붙여 아래로 스크롤해야
+      보인다(예전엔 지도가 고정 240px에 나머지가 항상 보이는 구조였음).
   - 중단: 시간 스크러버(`Slider`) — 좌우로 밀면 지도의 바람장(히트맵·파티클)과
-    하단 상세 정보가 그 시각 기준으로 함께 바뀐다("지금"부터 2주,
-    `windFieldSeriesHours`).
+    하단 상세 정보가 그 시각 기준으로 함께 바뀐다(2주치, `windFieldSeriesHours`).
+    라벨은 "지금"이라는 상대 표현 대신 항상 실제 날짜·시간을 표시한다.
   - 하단: 선택 지역의 스크러버 시각 기준 요약(풍향·파고·수온) + 시간별
     예보 목록(탭하면 그 시각으로 스크러버 이동).
-  - `WindField`: 위경도 격자(8×10)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형 보간으로
-    임의 좌표의 바람 벡터를 조회 (`features/weather/data/models`).
+  - `WindField`: 위경도 격자(10×12)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형
+    보간으로 임의 좌표의 바람 벡터를 조회 (`features/weather/data/models`).
   - `WindFieldSeries`: 같은 격자의 시간별 `WindField` 목록 — 시간 스크러버가
     가리키는 인덱스로 `.at(offset)` 조회.
   - `OpenMeteoWindFieldRepository`: `fetchField()`(현재 시점, `current` 파라미터)와
@@ -140,7 +144,9 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
   바다낚시지수(`FishingLevelBadge` — 등급색 배지 + 채움 막대. 예전 노란
   점 5개 표기가 스와이프 인디케이터처럼 보인다는 피드백으로 교체).
   - 기준 어종은 해역별 우선순위(`preferredSpeciesForRegion`)를 따른다:
-    서해 = 쭈꾸미·갑오징어, 남해/동해 = 문어·광어·우럭.
+    서해 = 쭈꾸미·갑오징어, 남해/동해 = 문어·광어·우럭. 데이터에 우선순위
+    어종이 여러 종 있으면(`FishingForecast.speciesGroupsForDate`) 그 종을
+    모두 카드에 나란히 표시한다(하나만 보여주던 것을 개편).
 - `homeMarineForecastProvider`: 홈 전용 4주 예보(과거 14일 포함,
   Open-Meteo `past_days` 파라미터 사용). 날씨 탭의 `marineForecastProvider`
   (과거 데이터 없음, 기본 16일)와는 별도 provider라 서로 영향 없음.

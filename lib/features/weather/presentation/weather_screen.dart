@@ -125,33 +125,43 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
         data: (series) {
           _ensureSeeded(series);
           final field = series.at(_hourOffset);
-          return Column(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _WindMapArea(
-                  field: field,
-                  particles: _particles,
-                  selected: selected,
-                  onLocationTap: (loc) =>
-                      ref.read(selectedLocationProvider.notifier).select(loc),
-                ),
-              ),
-              const WindSpeedLegend(),
-              _TimeScrubber(
-                times: series.hourly.map((f) => f.time).toList(),
-                value: _hourOffset,
-                onChanged: (v) => setState(() => _hourOffset = v),
-              ),
-              Expanded(
-                flex: 2,
-                child: _DetailPanel(
-                  location: selected,
-                  hourOffset: _hourOffset,
-                  onHourTap: (v) => setState(() => _hourOffset = v),
-                ),
-              ),
-            ],
+          // 지도가 화면을 가득 채우고, 그 아래 범례·시간 스크러버·상세
+          // 정보는 화면을 아래로 내려야 보이는 구조(윈디 스타일).
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: constraints.maxHeight,
+                      child: _WindMapArea(
+                        field: field,
+                        particles: _particles,
+                        selected: selected,
+                        onLocationTap: (loc) => ref
+                            .read(selectedLocationProvider.notifier)
+                            .select(loc),
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: WindSpeedLegend()),
+                  SliverToBoxAdapter(
+                    child: _TimeScrubber(
+                      times: series.hourly.map((f) => f.time).toList(),
+                      value: _hourOffset,
+                      onChanged: (v) => setState(() => _hourOffset = v),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _DetailPanel(
+                      location: selected,
+                      hourOffset: _hourOffset,
+                      onHourTap: (v) => setState(() => _hourOffset = v),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),
@@ -373,7 +383,6 @@ class _TimeScrubber extends StatelessWidget {
   Widget build(BuildContext context) {
     if (times.isEmpty) return const SizedBox.shrink();
     final t = times[value.clamp(0, times.length - 1)];
-    final isNow = value == 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -385,11 +394,9 @@ class _TimeScrubber extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           SizedBox(
-            width: 96,
+            width: 128,
             child: Text(
-              isNow
-                  ? '지금 (${formatHm(t)})'
-                  : '${formatMonthDay(t)} ${formatHm(t)}',
+              '${formatMonthDay(t)} ${formatHm(t)}',
               style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
@@ -424,52 +431,64 @@ class _DetailPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final forecastAsync = ref.watch(marineForecastProvider(location));
     return forecastAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('예보를 불러오지 못했습니다: $e')),
+      loading: () => const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => SizedBox(
+        height: 120,
+        child: Center(child: Text('예보를 불러오지 못했습니다: $e')),
+      ),
       data: (forecast) {
         final index = hourOffset.clamp(0, forecast.hourly.length - 1);
         final at = forecast.hourly[index];
-        return ListView(
+        return Padding(
           padding: const EdgeInsets.all(16),
-          children: [
-            Text(location.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _SummaryItem(
-                      icon: WindArrow(
-                        directionDeg: at.windDirectionDeg,
-                        size: 28,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                location.name,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _SummaryItem(
+                        icon: WindArrow(
+                          directionDeg: at.windDirectionDeg,
+                          size: 28,
+                        ),
+                        value: formatWind(at.windSpeedMs),
+                        label:
+                            '${compassKo(at.windDirectionDeg)}풍 · '
+                            '돌풍 ${formatWind(at.windGustMs)}',
                       ),
-                      value: formatWind(at.windSpeedMs),
-                      label:
-                          '${compassKo(at.windDirectionDeg)}풍 · '
-                          '돌풍 ${formatWind(at.windGustMs)}',
-                    ),
-                    _SummaryItem(
-                      icon: const Icon(Icons.waves, size: 28),
-                      value:
-                          '${formatWave(at.waveHeightM)} ${formatPeriod(at.wavePeriodS)}',
-                      label: '파고 · 주기 (${compassKo(at.waveDirectionDeg)}향)',
-                    ),
-                    _SummaryItem(
-                      icon: const Icon(Icons.thermostat, size: 28),
-                      value: '${at.waterTempC.toStringAsFixed(1)}°',
-                      label: '수온',
-                    ),
-                  ],
+                      _SummaryItem(
+                        icon: const Icon(Icons.waves, size: 28),
+                        value:
+                            '${formatWave(at.waveHeightM)} ${formatPeriod(at.wavePeriodS)}',
+                        label: '파고 · 주기 (${compassKo(at.waveDirectionDeg)}향)',
+                      ),
+                      _SummaryItem(
+                        icon: const Icon(Icons.thermostat, size: 28),
+                        value: '${at.waterTempC.toStringAsFixed(1)}°',
+                        label: '수온',
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text('시간별 예보', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            ..._hourlyItems(forecast, index, context),
-          ],
+              const SizedBox(height: 12),
+              Text('시간별 예보', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              ..._hourlyItems(forecast, index, context),
+            ],
+          ),
         );
       },
     );

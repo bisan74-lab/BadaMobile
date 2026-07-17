@@ -36,8 +36,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
 
     expect(find.byType(CustomPaint), findsWidgets);
+
+    // 지도가 화면을 가득 채우므로 시간 스크러버·상세 정보는 아래로
+    // 스크롤해야 보인다.
+    await tester.scrollUntilVisible(
+      find.byType(Slider),
+      300,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
     expect(find.byType(Slider), findsOneWidget);
-    expect(find.textContaining('지금'), findsOneWidget);
+    // "지금"이 아니라 실제 날짜·시간이 표시되어야 한다.
+    expect(find.textContaining(':'), findsWidgets);
   });
 
   testWidgets('지도 마커를 탭하면 선택 지역이 바뀐다', (tester) async {
