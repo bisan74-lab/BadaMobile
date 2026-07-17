@@ -14,6 +14,8 @@ import '../data/models/wind_field.dart';
 import 'providers.dart';
 import 'wind_field_providers.dart';
 import 'widgets/coastline_painter.dart';
+import 'widgets/map_city_labels.dart';
+import 'widgets/map_projection.dart';
 import 'widgets/wind_arrow.dart';
 import 'widgets/wind_heatmap.dart';
 import 'widgets/wind_map_painter.dart';
@@ -233,6 +235,18 @@ class _WindMapAreaState extends State<_WindMapArea> {
         builder: (context, constraints) {
           final size = constraints.biggest;
           final heatmap = _heatmap;
+          // 지도 뷰(mapViewBounds)는 바람장 격자보다 넓다(한반도 주변국까지
+          // 보이는 기본 화면뷰). 모든 레이어가 같은 투영을 공유해 서로
+          // 어긋나지 않게 한다.
+          final projection = MapProjection(mapViewBounds, size);
+          final fieldRect = projection.rectFor(
+            LatLonBounds(
+              minLat: field.minLat,
+              maxLat: field.maxLat,
+              minLon: field.minLon,
+              maxLon: field.maxLon,
+            ),
+          );
           return InteractiveViewer(
             minScale: 1,
             maxScale: 6,
@@ -244,42 +258,35 @@ class _WindMapAreaState extends State<_WindMapArea> {
                 children: [
                   if (heatmap != null)
                     CustomPaint(
-                      painter: WindHeatmapPainter(image: heatmap),
+                      painter: WindHeatmapPainter(
+                        image: heatmap,
+                        dstRect: fieldRect,
+                      ),
                       size: size,
                     ),
                   CustomPaint(
-                    painter: CoastlinePainter(
-                      minLat: field.minLat,
-                      maxLat: field.maxLat,
-                      minLon: field.minLon,
-                      maxLon: field.maxLon,
-                    ),
+                    painter: CoastlinePainter(projection: projection),
                     size: size,
                   ),
-                  CustomPaint(
-                    painter: WindMapPainter(
-                      particles: widget.particles,
-                      color: Colors.white,
+                  Positioned.fromRect(
+                    rect: fieldRect,
+                    child: CustomPaint(
+                      painter: WindMapPainter(
+                        particles: widget.particles,
+                        color: Colors.white,
+                      ),
+                      size: fieldRect.size,
                     ),
-                    size: size,
                   ),
+                  MapCityLabelLayer(projection: projection),
                   for (final loc in sampleLocations)
                     if (field.contains(loc.latitude, loc.longitude))
                       _LocationMarker(
                         location: loc,
                         highlighted: loc.id == widget.selected.id,
                         onTap: () => widget.onLocationTap(loc),
-                        left:
-                            (loc.longitude - field.minLon) /
-                                (field.maxLon - field.minLon) *
-                                size.width -
-                            10,
-                        top:
-                            (1 -
-                                    (loc.latitude - field.minLat) /
-                                        (field.maxLat - field.minLat)) *
-                                size.height -
-                            10,
+                        left: projection.x(loc.longitude) - 10,
+                        top: projection.y(loc.latitude) - 10,
                       ),
                 ],
               ),

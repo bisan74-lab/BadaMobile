@@ -79,9 +79,19 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
       확대해 그린다 — 매 파티클 프레임(60fps)이 아니라 시간 스크러버로 필드가
       바뀔 때만 다시 굽는다(`_WindMapAreaState._rebuildHeatmap`).
     - `WindSpeedLegend`: 지도 아래 0~30+ m/s 색상 범례 바.
-    - `CoastlinePainter`(`widgets/coastline_painter.dart`): 한반도·제주도
-      해안선 간이 근사 좌표(측량 데이터 아님, 시각 참고용)를 히트맵 위에
-      선으로 그려 위치 감을 준다.
+    - `CoastlinePainter`(`widgets/coastline_painter.dart`): 실제 국경·해안선을
+      그린다. 좌표 출처는 Natural Earth 1:50m Admin 0 Countries(공개
+      도메인, https://github.com/nvkelso/natural-earth-vector) — 한국·
+      북한·중국·일본·대만 지오메트리만 추출해 화면 크기에 맞게 단순화한 뒤
+      `country_borders_data.dart`에 정적 데이터로 박아 넣었다(런타임에 지도
+      타일을 받아오지 않음, 앱이 별도 지도 서비스에 의존하지 않는다).
+    - `MapProjection`/`LatLonBounds`(`widgets/map_projection.dart`): 지도의
+      모든 레이어(해안선·히트맵·마커·지명)가 공유하는 위경도→캔버스 좌표
+      변환. 지도 기본 화면뷰(`mapViewBounds`, 23~42°N·116~134°E — 윈디 기본
+      줌 수준 참고)는 바람장 격자(한반도 주변 해역, 8×10)보다 넓어서, 바람
+      히트맵/파티클은 그 안의 일부 사각형(`rectFor`)에만 그려진다.
+    - `MapCityLabelLayer`(`widgets/map_city_labels.dart`): 서울·부산 등
+      주요 도시 이름을 지도 위에 표시(윈디의 도시 라벨 참고).
     - 지도 영역은 `Column`에서 `Expanded(flex: 3)`로 화면 대부분을 차지하고
       (예전엔 고정 240px), 시간별 상세 목록은 `Expanded(flex: 2)`로 아래에
       붙는다.

@@ -77,11 +77,14 @@ Future<ui.Image> buildWindHeatmapImage(
   return completer.future;
 }
 
-/// 미리 구운 풍속 색상 래스터를 캔버스 전체에 확대해 그린다.
+/// 미리 구운 풍속 색상 래스터를 [dstRect] 영역에 맞춰 확대해 그린다.
+/// [dstRect]는 지도 전체 투영 위에서 바람장 격자가 차지하는 위치다
+/// (지도 뷰가 바람장보다 넓을 수 있어 전체 캔버스를 채우지 않을 수 있다).
 class WindHeatmapPainter extends CustomPainter {
-  WindHeatmapPainter({required this.image});
+  WindHeatmapPainter({required this.image, required this.dstRect});
 
   final ui.Image image;
+  final Rect dstRect;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -91,18 +94,17 @@ class WindHeatmapPainter extends CustomPainter {
       image.width.toDouble(),
       image.height.toDouble(),
     );
-    final dst = Rect.fromLTWH(0, 0, size.width, size.height);
     canvas.drawImageRect(
       image,
       src,
-      dst,
+      dstRect,
       Paint()..filterQuality = FilterQuality.high,
     );
   }
 
   @override
   bool shouldRepaint(covariant WindHeatmapPainter oldDelegate) =>
-      oldDelegate.image != image;
+      oldDelegate.image != image || oldDelegate.dstRect != dstRect;
 }
 
 /// 지도 아래 붙는 풍속 색상 범례(0~30+ m/s), 윈디 하단 스케일바 스타일.
