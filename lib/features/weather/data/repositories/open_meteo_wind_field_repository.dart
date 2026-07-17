@@ -20,12 +20,12 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   final http.Client _client;
 
   // 지도 기본 화면뷰(features/weather/presentation/widgets/map_projection.dart의
-  // mapViewBounds)와 같은 범위 — 한반도 주변국까지 포함한 지도 전체에 바람
-  // 히트맵이 채워지도록 격자를 그만큼 넓게 잡는다. Open-Meteo는 위경도만
-  // 주면 전 세계 어디든 응답하므로(별도 글로벌 API 연동 불필요) 범위만
-  // 넓히면 된다.
-  static const double minLat = 23.0, maxLat = 42.0;
-  static const double minLon = 116.0, maxLon = 134.0;
+  // mapViewBounds)와 같은 범위 — 대한민국이 중심에 오고 중국 동해안·일본까지
+  // 포함한 지도 전체에 바람 히트맵이 채워지도록 격자를 그만큼 넓게 잡는다.
+  // Open-Meteo는 위경도만 주면 전 세계 어디든 응답하므로(별도 글로벌 API
+  // 연동 불필요) 범위만 넓히면 된다.
+  static const double minLat = 26.5, maxLat = 45.5;
+  static const double minLon = 118.5, maxLon = 136.5;
   static const int latSteps = 10, lonSteps = 12;
 
   List<double> _latGrid() {

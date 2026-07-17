@@ -12,13 +12,14 @@ class LatLonBounds {
   final double minLat, maxLat, minLon, maxLon;
 }
 
-/// 바람 지도의 기본 화면뷰 범위 — 한반도 중심으로 중국 동해안·일본·대만
-/// 일부까지 보이는 정도(윈디 기본 줌 수준 참고).
+/// 바람 지도의 기본 화면뷰 범위 — 대한민국이 화면 중심에 오도록 하고,
+/// 중국 동해안·일본까지 주변 맥락이 보이는 정도로 잡는다(축소했을 때도
+/// 한국이 중앙에 오도록 좌우·상하 여백을 대칭으로 둠).
 const mapViewBounds = LatLonBounds(
-  minLat: 23.0,
-  maxLat: 42.0,
-  minLon: 116.0,
-  maxLon: 134.0,
+  minLat: 26.5,
+  maxLat: 45.5,
+  minLon: 118.5,
+  maxLon: 136.5,
 );
 
 /// [bounds] 안의 위경도를 [size] 크기의 캔버스 좌표로 변환한다.
