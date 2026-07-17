@@ -6,6 +6,9 @@ const _weekdaysKo = ['월', '화', '수', '목', '금', '토', '일'];
 
 String formatHm(DateTime t) => _hm.format(t);
 
+/// 요일 한 글자 (월/화/수/목/금/토/일).
+String weekdayKo(DateTime t) => _weekdaysKo[t.weekday - 1];
+
 /// 예: "7월 15일 (수)". intl 로케일 초기화 없이 동작하도록 직접 조합한다.
 String formatMonthDay(DateTime t) =>
     '${t.month}월 ${t.day}일 (${_weekdaysKo[t.weekday - 1]})';

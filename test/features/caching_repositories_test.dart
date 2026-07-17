@@ -37,6 +37,7 @@ class _FlakyWeatherRepository implements MarineWeatherRepository {
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
+    int pastDays = 0,
   }) async {
     final r = results[calls++];
     if (r is Exception) throw r;

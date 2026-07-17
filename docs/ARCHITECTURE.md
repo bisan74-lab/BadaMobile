@@ -52,9 +52,12 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
     `TideCurrentStrengthBar`(하루 조위 변화폭 기준 정성적 조류세기)를 얹고,
     그 아래 `TideTimeline`을 붙인다. 상세 조위 곡선(`TideChart`)은
     `ExpansionTile`로 접어 두어 필요할 때만 펼친다.
-  - `TideTimeline`(`widgets/tide_timeline.dart`): 0~24시 세로 축 위에 만조(붉은)/
-    간조(파란) 카드를 시각 비례 위치에 배치하고, 이전 극값 대비 조위 증감(▲▼)을
-    함께 표시한다. 오늘이면 현재 시각선을 그린다.
+  - `TideTimeline`(`widgets/tide_timeline.dart`): 0~24시 세로 축을 화면 중앙에
+    두고, 만조는 축 왼쪽·간조는 축 오른쪽에 카드를 배치해 좌우 공간을 고르게
+    쓴다(초기 버전은 전부 왼쪽에만 배치해 오른쪽이 비어 보인다는 피드백으로
+    개편). 이전 극값 대비 조위 증감(▲▼) 표시, 오늘이면 현재 시각선을 그린다.
+  - 상세 조위 그래프(`TideChart`)는 접었다 펴는 `ExpansionTile`이 아니라 항상
+    펼쳐진 채로 보인다(탭해야 열리는 구조가 불편하다는 피드백으로 변경).
   - `MoonPhaseIcon`(`widgets/moon_phase_icon.dart`): `lunarAgeDays()`로 구한
     월령을 0~1 위상으로 정규화해 초승~보름~그믐 형태를 `CustomPainter`로 그린다
     (장식용 지표, 정밀 천문 계산 아님).
@@ -76,8 +79,15 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
       확대해 그린다 — 매 파티클 프레임(60fps)이 아니라 시간 스크러버로 필드가
       바뀔 때만 다시 굽는다(`_WindMapAreaState._rebuildHeatmap`).
     - `WindSpeedLegend`: 지도 아래 0~30+ m/s 색상 범례 바.
+    - `CoastlinePainter`(`widgets/coastline_painter.dart`): 한반도·제주도
+      해안선 간이 근사 좌표(측량 데이터 아님, 시각 참고용)를 히트맵 위에
+      선으로 그려 위치 감을 준다.
+    - 지도 영역은 `Column`에서 `Expanded(flex: 3)`로 화면 대부분을 차지하고
+      (예전엔 고정 240px), 시간별 상세 목록은 `Expanded(flex: 2)`로 아래에
+      붙는다.
   - 중단: 시간 스크러버(`Slider`) — 좌우로 밀면 지도의 바람장(히트맵·파티클)과
-    하단 상세 정보가 그 시각 기준으로 함께 바뀐다("지금"부터 48시간).
+    하단 상세 정보가 그 시각 기준으로 함께 바뀐다("지금"부터 2주,
+    `windFieldSeriesHours`).
   - 하단: 선택 지역의 스크러버 시각 기준 요약(풍향·파고·수온) + 시간별
     예보 목록(탭하면 그 시각으로 스크러버 이동).
   - `WindField`: 위경도 격자(8×10)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형 보간으로
@@ -107,8 +117,23 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
   지연 렌더링.
 - 선택된 지역은 앱 전역 상태(`selectedLocationProvider`)로 공유되어 tide/weather 화면이 반응
 
-### features/home — 홈 대시보드
-- 선택 지역의 "오늘": 물때, 다음 만조/간조, 현재 바람·파고 요약
+### features/home — 홈 대시보드 (v0.5 그래픽 개편)
+- 상단 바다색 그라디언트 헤더: 지역명 + 우측 상단 지역 선택 버튼
+  (`showLocationPickerSheet` — 검색 가능한 바텀시트, `LocationsScreen`과
+  별개의 가벼운 진입점), 물때 요약, `HomeDateStrip`(좌우 스크롤 날짜 띠).
+  - `HomeDateStrip`(`widgets/home_date_strip.dart`): 과거 2주~미래 2주
+    (총 4주, `homeForecastPastDays`/`homeForecastFutureDays`)를 가로로
+    넘기며 날짜를 고른다. 선택 시 자동으로 중앙 스크롤.
+- 날짜별 요약 3종(색상 아이콘 카드): 물때(다음 만조/간조, 오늘이 아니면
+  그 날짜의 첫 만조/간조 + 만조/간조 횟수), 해양 날씨(선택 날짜에 가장
+  가까운 시간대 값 — 오늘은 지금 시각, 그 외엔 정오 기준),
+  바다낚시지수(`FishingLevelBadge` — 등급색 배지 + 채움 막대. 예전 노란
+  점 5개 표기가 스와이프 인디케이터처럼 보인다는 피드백으로 교체).
+  - 기준 어종은 해역별 우선순위(`preferredSpeciesForRegion`)를 따른다:
+    서해 = 쭈꾸미·갑오징어, 남해/동해 = 문어·광어·우럭.
+- `homeMarineForecastProvider`: 홈 전용 4주 예보(과거 14일 포함,
+  Open-Meteo `past_days` 파라미터 사용). 날씨 탭의 `marineForecastProvider`
+  (과거 데이터 없음, 기본 16일)와는 별도 provider라 서로 영향 없음.
 
 ## 데이터 소스 연동 설계 (FR-08, FR-09)
 

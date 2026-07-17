@@ -30,3 +30,18 @@ final marineForecastProvider =
     FutureProvider.family<MarineForecast, SeaLocation>((ref, location) {
       return ref.watch(marineWeatherRepositoryProvider).fetchForecast(location);
     });
+
+/// 홈 화면의 4주(과거 2주~미래 2주) 날짜 이동용 예보.
+const int homeForecastPastDays = 14;
+const int homeForecastFutureDays = 14;
+
+final homeMarineForecastProvider =
+    FutureProvider.family<MarineForecast, SeaLocation>((ref, location) {
+      return ref
+          .watch(marineWeatherRepositoryProvider)
+          .fetchForecast(
+            location,
+            hours: (homeForecastPastDays + homeForecastFutureDays) * 24,
+            pastDays: homeForecastPastDays,
+          );
+    });

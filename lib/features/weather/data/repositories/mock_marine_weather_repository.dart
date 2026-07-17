@@ -14,9 +14,10 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
+    int pastDays = 0,
   }) async {
     final seed = (location.latitude * 7 + location.longitude * 13) % 10;
-    final start = DateTime.now();
+    final start = DateTime.now().subtract(Duration(days: pastDays));
     final startHour = DateTime(start.year, start.month, start.day, start.hour);
 
     final hourly = List<HourlyMarine>.generate(hours, (i) {

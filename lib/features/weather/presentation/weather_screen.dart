@@ -13,6 +13,7 @@ import '../data/models/marine_weather.dart';
 import '../data/models/wind_field.dart';
 import 'providers.dart';
 import 'wind_field_providers.dart';
+import 'widgets/coastline_painter.dart';
 import 'widgets/wind_arrow.dart';
 import 'widgets/wind_heatmap.dart';
 import 'widgets/wind_map_painter.dart';
@@ -124,8 +125,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
           final field = series.at(_hourOffset);
           return Column(
             children: [
-              SizedBox(
-                height: 240,
+              Expanded(
+                flex: 3,
                 child: _WindMapArea(
                   field: field,
                   particles: _particles,
@@ -141,6 +142,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                 onChanged: (v) => setState(() => _hourOffset = v),
               ),
               Expanded(
+                flex: 2,
                 child: _DetailPanel(
                   location: selected,
                   hourOffset: _hourOffset,
@@ -245,6 +247,15 @@ class _WindMapAreaState extends State<_WindMapArea> {
                       painter: WindHeatmapPainter(image: heatmap),
                       size: size,
                     ),
+                  CustomPaint(
+                    painter: CoastlinePainter(
+                      minLat: field.minLat,
+                      maxLat: field.maxLat,
+                      minLon: field.minLon,
+                      maxLon: field.maxLon,
+                    ),
+                    size: size,
+                  ),
                   CustomPaint(
                     painter: WindMapPainter(
                       particles: widget.particles,

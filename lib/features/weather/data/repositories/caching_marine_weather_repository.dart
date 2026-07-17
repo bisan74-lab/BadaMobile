@@ -11,20 +11,25 @@ class CachingMarineWeatherRepository implements MarineWeatherRepository {
   final MarineWeatherRepository inner;
   final CacheStore cache;
 
-  static String _key(SeaLocation location, int hours) =>
-      'weather_${location.id}_$hours';
+  static String _key(SeaLocation location, int hours, int pastDays) =>
+      'weather_${location.id}_${hours}_$pastDays';
 
   @override
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
+    int pastDays = 0,
   }) async {
     try {
-      final result = await inner.fetchForecast(location, hours: hours);
-      await cache.writeJson(_key(location, hours), result.toJson());
+      final result = await inner.fetchForecast(
+        location,
+        hours: hours,
+        pastDays: pastDays,
+      );
+      await cache.writeJson(_key(location, hours, pastDays), result.toJson());
       return result;
     } catch (_) {
-      final cached = cache.readJson(_key(location, hours));
+      final cached = cache.readJson(_key(location, hours, pastDays));
       if (cached != null) return MarineForecast.fromJson(cached);
       rethrow;
     }

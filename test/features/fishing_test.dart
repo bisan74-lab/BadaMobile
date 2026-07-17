@@ -52,9 +52,9 @@ void main() {
   group('MockFishingRepository', () {
     final repo = MockFishingRepository();
 
-    test('7일 × 오전/오후 지수를 반환한다', () async {
+    test('28일(과거 2주~미래 2주) × 오전/오후 지수를 반환한다', () async {
       final forecast = await repo.fetchForecast(sampleLocations.first);
-      expect(forecast.indices, hasLength(7 * 2));
+      expect(forecast.indices, hasLength(28 * 2));
       expect(forecast.forDate(DateTime.now()), hasLength(2));
       for (final i in forecast.indices) {
         expect(i.grade.score, inInclusiveRange(1, 5));

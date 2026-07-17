@@ -13,7 +13,10 @@ class TideTimeline extends StatelessWidget {
   final DateTime? now;
 
   static const double _height = 460;
-  static const double _axisFraction = 0.4;
+
+  /// 만조는 축 왼쪽, 간조는 축 오른쪽에 배치해 양쪽 공간을 고르게 쓴다.
+  static const double _axisFraction = 0.5;
+  static const double _cardGap = 12;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +35,7 @@ class TideTimeline extends StatelessWidget {
         builder: (context, constraints) {
           final size = constraints.biggest;
           final axisX = size.width * _axisFraction;
+          final cardWidth = axisX - 12 - _cardGap;
           const top = 24.0;
           final bottom = size.height - 24.0;
           final trackHeight = bottom - top;
@@ -56,14 +60,24 @@ class TideTimeline extends StatelessWidget {
               ),
               for (final h in const [0, 6, 12, 18, 24])
                 Positioned(
-                  left: axisX + 10,
-                  top: yForMinutes(h * 60) - 8,
-                  child: Text(
-                    '$h시',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  left: axisX - 14,
+                  top: yForMinutes(h * 60) - 9,
+                  child: Container(
+                    width: 28,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0E3454),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      '$h시',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -108,14 +122,15 @@ class TideTimeline extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  left: 12,
+                  left: extremes[i].isHigh ? 12 : axisX + _cardGap,
                   top: yFor(extremes[i].time) - 26,
-                  width: axisX - 24,
+                  width: cardWidth,
                   child: _ExtremeCard(
                     extreme: extremes[i],
                     deltaCm: i == 0
                         ? null
                         : extremes[i].heightCm - extremes[i - 1].heightCm,
+                    alignEnd: extremes[i].isHigh,
                   ),
                 ),
               ],
@@ -128,23 +143,34 @@ class TideTimeline extends StatelessWidget {
 }
 
 class _ExtremeCard extends StatelessWidget {
-  const _ExtremeCard({required this.extreme, required this.deltaCm});
+  const _ExtremeCard({
+    required this.extreme,
+    required this.deltaCm,
+    required this.alignEnd,
+  });
 
   final TideExtreme extreme;
   final double? deltaCm;
+
+  /// true면 축 왼쪽(만조) 카드 — 내용을 오른쪽(축 방향)으로 정렬한다.
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
     final isHigh = extreme.isHigh;
     final bg = isHigh ? const Color(0xFFB0334A) : const Color(0xFF29508C);
+    final crossAlign = alignEnd
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start;
     return Container(
+      alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: crossAlign,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(

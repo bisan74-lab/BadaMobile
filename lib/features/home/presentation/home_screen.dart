@@ -7,137 +7,264 @@ import '../../fishing/data/models/fishing_index.dart';
 import '../../fishing/presentation/providers.dart';
 import '../../locations/presentation/providers.dart';
 import '../../tide/presentation/providers.dart';
+import '../../weather/data/models/marine_weather.dart';
 import '../../weather/presentation/providers.dart';
 import '../../weather/presentation/widgets/wind_arrow.dart';
+import 'widgets/fishing_level_badge.dart';
+import 'widgets/home_date_strip.dart';
+import 'widgets/location_picker_sheet.dart';
 
-/// 홈 대시보드: 선택 지역의 오늘 물때 + 다음 만조/간조 + 현재 해양 날씨 요약.
-class HomeScreen extends ConsumerWidget {
+/// 홈 대시보드: 선택 지역의 물때 + 만조/간조 + 해양 날씨 + 낚시지수 요약.
+/// 상단 날짜 띠로 과거 2주~미래 2주(4주) 범위를 좌우로 넘기며 볼 수 있다.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  DateTime _date = DateUtils.dateOnly(DateTime.now());
+
+  DateTime get _today => DateUtils.dateOnly(DateTime.now());
+  DateTime get _minDate =>
+      _today.subtract(const Duration(days: homeForecastPastDays));
+  DateTime get _maxDate =>
+      _today.add(const Duration(days: homeForecastFutureDays - 1));
+
+  /// [forecast]에서 [date]를 대표할 시간별 값을 고른다.
+  /// 오늘이면 지금 시각에 가장 가까운 값, 아니면 그날 정오에 가장 가까운 값.
+  HourlyMarine? _representativeHourly(MarineForecast forecast, DateTime date) {
+    final target = DateUtils.isSameDay(date, DateTime.now())
+        ? DateTime.now()
+        : DateTime(date.year, date.month, date.day, 12);
+    HourlyMarine? best;
+    Duration? bestDiff;
+    for (final h in forecast.hourly) {
+      if (!DateUtils.isSameDay(h.time, date)) continue;
+      final diff = h.time.difference(target).abs();
+      if (bestDiff == null || diff < bestDiff) {
+        bestDiff = diff;
+        best = h;
+      }
+    }
+    return best;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final location = ref.watch(selectedLocationProvider);
-    final now = DateTime.now();
-    // provider family 키는 값이 매 빌드 동일해야 하므로 날짜 단위로 정규화한다.
-    final today = DateUtils.dateOnly(now);
-    final tideAsync = ref.watch(
-      tideDayProvider((location: location, date: today)),
-    );
-    final forecastAsync = ref.watch(marineForecastProvider(location));
+    final isToday = DateUtils.isSameDay(_date, DateTime.now());
     final mulTtae = mulTtaeFor(
-      now,
+      _date,
       system: mulTtaeSystemForRegion(location.region),
     );
+    final tideAsync = ref.watch(
+      tideDayProvider((location: location, date: _date)),
+    );
+    final forecastAsync = ref.watch(homeMarineForecastProvider(location));
+    final fishingAsync = ref.watch(fishingForecastProvider(location));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('바다윈디')),
+      appBar: AppBar(
+        title: const Text('바다윈디'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_location_alt_outlined),
+            tooltip: '지역 선택',
+            onPressed: () => showLocationPickerSheet(context),
+          ),
+        ],
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.zero,
         children: [
-          Text(
-            '${location.name} · ${formatMonthDay(now)}',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '오늘은 ${mulTtae.label}입니다 (음력 ${mulTtae.lunarDay}일'
-            '${mulTtae.isSari
-                ? ' · 사리'
-                : mulTtae.isJogeum
-                ? ' · 소조기'
-                : ''})',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          tideAsync.when(
-            loading: () => const _LoadingCard(),
-            error: (e, _) => _ErrorCard(message: '조석 정보 오류: $e'),
-            data: (tide) {
-              final next = tide.nextExtremeAfter(now);
-              return Card(
-                child: ListTile(
-                  leading: Icon(
-                    next == null
-                        ? Icons.nightlight_outlined
-                        : next.isHigh
-                        ? Icons.arrow_upward
-                        : Icons.arrow_downward,
-                    color: next?.isHigh == true
-                        ? Colors.redAccent
-                        : Colors.blueAccent,
-                  ),
-                  title: Text(
-                    next == null
-                        ? '오늘 남은 만조/간조가 없습니다'
-                        : '다음 ${next.isHigh ? '만조' : '간조'}',
-                  ),
-                  subtitle: next == null
-                      ? null
-                      : Text(
-                          '${formatHm(next.time)} · ${formatTideHeight(next.heightCm)}',
-                        ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          forecastAsync.when(
-            loading: () => const _LoadingCard(),
-            error: (e, _) => _ErrorCard(message: '날씨 정보 오류: $e'),
-            data: (forecast) {
-              final current = forecast.current;
-              return Card(
-                child: ListTile(
-                  leading: WindArrow(
-                    directionDeg: current.windDirectionDeg,
-                    size: 24,
-                  ),
-                  title: Text(
-                    '${compassKo(current.windDirectionDeg)}풍 '
-                    '${formatWind(current.windSpeedMs)} · '
-                    '파고 ${formatWave(current.waveHeightM)} '
-                    '(${formatPeriod(current.wavePeriodS)})',
-                  ),
-                  subtitle: Text(
-                    '수온 ${current.waterTempC.toStringAsFixed(1)}° · '
-                    '기온 ${current.airTempC.toStringAsFixed(1)}°',
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          ref
-              .watch(fishingForecastProvider(location))
-              .when(
-                loading: () => const _LoadingCard(),
-                error: (e, _) => _ErrorCard(message: '낚시지수 오류: $e'),
-                data: (fishing) {
-                  final todayIndices = fishing.representativeForDate(now);
-                  if (todayIndices.isEmpty) return const SizedBox.shrink();
-                  final first = todayIndices.first;
-                  final details = [
-                    if (first.pointName != null) '${first.pointName} 포인트',
-                    if (first.species != null) '기준 어종 ${first.species}',
-                    if (first.tidePhase != null) first.tidePhase!,
-                  ].join(' · ');
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.phishing),
-                      title: Text(
-                        '오늘의 바다낚시지수: '
-                        '${todayIndices.map((i) => '${i.timeSlot} ${i.grade.label}').join(' · ')}',
-                      ),
-                      subtitle: details.isEmpty ? null : Text(details),
-                      trailing: _GradeDots(score: first.grade.score),
-                    ),
-                  );
-                },
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF1E5C8A), Color(0xFF0E3454)],
               ),
-          const SizedBox(height: 16),
-          Text(
-            '하단 탭에서 상세 물때표와 시간별 해양 날씨를 확인하세요.',
-            style: Theme.of(context).textTheme.bodySmall,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.place, color: Colors.white70, size: 18),
+                    const SizedBox(width: 4),
+                    Text(
+                      location.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      isToday ? '오늘' : formatMonthDay(_date),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${isToday ? '오늘' : '${formatMonthDay(_date)}은'}은 '
+                  '${mulTtae.label}입니다 (음력 ${mulTtae.lunarDay}일'
+                  '${mulTtae.isSari
+                      ? ' · 사리'
+                      : mulTtae.isJogeum
+                      ? ' · 소조기'
+                      : ''})',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                HomeDateStrip(
+                  date: _date,
+                  minDate: _minDate,
+                  maxDate: _maxDate,
+                  onChanged: (d) => setState(() => _date = d),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                tideAsync.when(
+                  loading: () => const _LoadingCard(),
+                  error: (e, _) => _ErrorCard(message: '조석 정보 오류: $e'),
+                  data: (tide) {
+                    final extreme = isToday
+                        ? tide.nextExtremeAfter(DateTime.now())
+                        : (tide.extremes.isEmpty ? null : tide.extremes.first);
+                    final highCount = tide.extremes
+                        .where((e) => e.isHigh)
+                        .length;
+                    final lowCount = tide.extremes.length - highCount;
+                    return _InfoCard(
+                      color: extreme?.isHigh == true
+                          ? const Color(0xFFB0334A)
+                          : const Color(0xFF29508C),
+                      icon: extreme == null
+                          ? Icons.nightlight_outlined
+                          : extreme.isHigh
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward,
+                      title: Text(
+                        extreme == null
+                            ? (isToday ? '오늘 남은 만조/간조가 없습니다' : '만조/간조 정보가 없습니다')
+                            : isToday
+                            ? '다음 ${extreme.isHigh ? '만조' : '간조'}'
+                            : '${formatMonthDay(_date)} 첫 ${extreme.isHigh ? '만조' : '간조'}',
+                      ),
+                      subtitle: extreme == null
+                          ? null
+                          : Text(
+                              '${formatHm(extreme.time)} · ${formatTideHeight(extreme.heightCm)}'
+                              ' · 만조 $highCount회 · 간조 $lowCount회',
+                            ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                forecastAsync.when(
+                  loading: () => const _LoadingCard(),
+                  error: (e, _) => _ErrorCard(message: '날씨 정보 오류: $e'),
+                  data: (forecast) {
+                    final at = _representativeHourly(forecast, _date);
+                    if (at == null) {
+                      return const _InfoCard(
+                        color: Color(0xFF2C7A9C),
+                        icon: Icons.cloud_off_outlined,
+                        title: Text('선택한 날짜의 날씨 정보가 없습니다'),
+                      );
+                    }
+                    return _InfoCard(
+                      color: const Color(0xFF2C7A9C),
+                      leading: WindArrow(
+                        directionDeg: at.windDirectionDeg,
+                        size: 24,
+                        color: Colors.white,
+                      ),
+                      title: Text(
+                        '${compassKo(at.windDirectionDeg)}풍 '
+                        '${formatWind(at.windSpeedMs)} · '
+                        '파고 ${formatWave(at.waveHeightM)} '
+                        '(${formatPeriod(at.wavePeriodS)})',
+                      ),
+                      subtitle: Text(
+                        '수온 ${at.waterTempC.toStringAsFixed(1)}° · '
+                        '기온 ${at.airTempC.toStringAsFixed(1)}°'
+                        '${isToday ? '' : ' · ${formatHm(at.time)} 기준'}',
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                fishingAsync.when(
+                  loading: () => const _LoadingCard(),
+                  error: (e, _) => _ErrorCard(message: '낚시지수 오류: $e'),
+                  data: (fishing) {
+                    final indices = fishing.representativeForDate(
+                      _date,
+                      preferredSpecies: preferredSpeciesForRegion(
+                        location.region,
+                      ),
+                    );
+                    if (indices.isEmpty) {
+                      return const _InfoCard(
+                        color: Color(0xFF4C9BC9),
+                        icon: Icons.phishing,
+                        title: Text('선택한 날짜의 낚시지수 정보가 없습니다'),
+                      );
+                    }
+                    final species = indices.first.species;
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              species == null
+                                  ? '바다낚시지수'
+                                  : '바다낚시지수 · 기준 어종 $species',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                for (final index in indices) ...[
+                                  FishingLevelBadge(
+                                    timeSlot: index.timeSlot,
+                                    grade: index.grade,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '하단 탭에서 상세 물때표와 시간별 해양 날씨를 확인하세요.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -145,33 +272,32 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// 1~5점 낚시지수를 점 5개로 표시.
-class _GradeDots extends StatelessWidget {
-  const _GradeDots({required this.score});
+/// 색상 아이콘 + 제목/부제를 가진 요약 카드 (물때/날씨 공용).
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.color,
+    this.icon,
+    this.leading,
+    required this.title,
+    this.subtitle,
+  }) : assert(icon != null || leading != null);
 
-  final int score;
+  final Color color;
+  final IconData? icon;
+  final Widget? leading;
+  final Widget title;
+  final Widget? subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final active = score >= 4
-        ? Colors.green
-        : score >= 3
-        ? Colors.amber
-        : Colors.redAccent;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(
-        FishingGrade.values.length,
-        (i) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 1.5),
-          child: Icon(
-            Icons.circle,
-            size: 8,
-            color: i < score
-                ? active
-                : Theme.of(context).colorScheme.surfaceContainerHighest,
-          ),
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color,
+          child: leading ?? Icon(icon, color: Colors.white),
         ),
+        title: title,
+        subtitle: subtitle,
       ),
     );
   }

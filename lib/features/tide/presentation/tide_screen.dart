@@ -190,12 +190,10 @@ class _TideGraphicBody extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
               decoration: BoxDecoration(
                 color: const Color(0xFF0E3454),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,18 +234,13 @@ class _TideGraphicBody extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
                   TideCurrentStrengthBar(fraction: fraction, label: label),
-                  const SizedBox(height: 8),
                 ],
               ),
             ),
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(20),
-              ),
-              child: TideTimeline(
-                extremes: tide.extremes,
-                now: isToday ? DateTime.now() : null,
-              ),
+            const SizedBox(height: 12),
+            TideTimeline(
+              extremes: tide.extremes,
+              now: isToday ? DateTime.now() : null,
             ),
             const SizedBox(height: 10),
             Row(
@@ -268,25 +261,15 @@ class _TideGraphicBody extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Theme(
-              data: Theme.of(
-                context,
-              ).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: const Text('상세 조위 그래프'),
-                childrenPadding: const EdgeInsets.only(bottom: 8),
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-                      child: TideChart(
-                        hourlyHeightsCm: tide.hourlyHeightsCm,
-                        now: isToday ? DateTime.now() : null,
-                      ),
-                    ),
-                  ),
-                ],
+            Text('상세 조위 그래프', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                child: TideChart(
+                  hourlyHeightsCm: tide.hourlyHeightsCm,
+                  now: isToday ? DateTime.now() : null,
+                ),
               ),
             ),
           ],

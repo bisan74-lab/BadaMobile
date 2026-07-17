@@ -1,3 +1,12 @@
+/// 해역별 기준 어종 우선순위. 서해는 쭈꾸미·갑오징어, 남해는 문어,
+/// 동해는 문어·광어·우럭 순으로 대표 지수를 고른다.
+List<String> preferredSpeciesForRegion(String region) => switch (region) {
+  '서해' => const ['쭈꾸미', '갑오징어'],
+  '남해' => const ['문어', '광어', '우럭'],
+  '동해' => const ['문어', '광어', '우럭'],
+  _ => const ['문어', '광어', '우럭'],
+};
+
 /// 바다낚시지수 등급 (국립해양조사원 5단계).
 enum FishingGrade {
   veryBad('매우나쁨', 1),
@@ -94,10 +103,11 @@ class FishingForecast {
       )
       .toList();
 
-  /// [date]의 대표 어종 지수 (기본 감성돔, 없으면 첫 어종).
+  /// [date]의 대표 어종 지수. [preferredSpecies] 우선순위대로 찾고,
+  /// 하나도 없으면 그 날짜에 있는 첫 어종으로 대체한다.
   List<FishingIndex> representativeForDate(
     DateTime date, {
-    String preferredSpecies = '감성돔',
+    List<String> preferredSpecies = const ['감성돔'],
   }) {
     final day = forDate(date);
     if (day.isEmpty) return day;
@@ -105,7 +115,11 @@ class FishingForecast {
     for (final i in day) {
       bySpecies.putIfAbsent(i.species, () => []).add(i);
     }
-    return bySpecies[preferredSpecies] ?? bySpecies.values.first;
+    for (final species in preferredSpecies) {
+      final match = bySpecies[species];
+      if (match != null) return match;
+    }
+    return bySpecies.values.first;
   }
 
   Map<String, dynamic> toJson() => {

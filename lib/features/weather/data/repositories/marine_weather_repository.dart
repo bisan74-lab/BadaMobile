@@ -11,10 +11,12 @@ const int defaultForecastHours = 16 * 24;
 /// - [MockMarineWeatherRepository] — 합성 데이터 (오프라인/테스트)
 /// - [FallbackMarineWeatherRepository] — 실데이터 실패 시 목으로 폴백
 abstract class MarineWeatherRepository {
-  /// [hours]시간 분량의 시간별 예보를 반환한다.
+  /// [hours]시간 분량의 시간별 예보를 반환한다. [pastDays]를 주면 그만큼
+  /// 과거 데이터를 앞에 붙여서 반환한다(홈 화면의 과거 2주 이동용, 기본 0).
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
+    int pastDays = 0,
   });
 }
 
@@ -32,11 +34,16 @@ class FallbackMarineWeatherRepository implements MarineWeatherRepository {
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
+    int pastDays = 0,
   }) async {
     try {
-      return await primary.fetchForecast(location, hours: hours);
+      return await primary.fetchForecast(
+        location,
+        hours: hours,
+        pastDays: pastDays,
+      );
     } catch (_) {
-      return fallback.fetchForecast(location, hours: hours);
+      return fallback.fetchForecast(location, hours: hours, pastDays: pastDays);
     }
   }
 }

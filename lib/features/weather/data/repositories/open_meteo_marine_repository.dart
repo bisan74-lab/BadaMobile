@@ -26,13 +26,15 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
+    int pastDays = 0,
   }) async {
-    final days = (hours / 24).ceil().clamp(1, 16);
+    final days = ((hours - pastDays * 24) / 24).ceil().clamp(1, 16);
     final common = {
       'latitude': location.latitude.toString(),
       'longitude': location.longitude.toString(),
       'timezone': 'Asia/Seoul',
       'forecast_days': days.toString(),
+      if (pastDays > 0) 'past_days': pastDays.clamp(0, 92).toString(),
     };
 
     final marineUri = Uri.https(_marineHost, '/v1/marine', {
