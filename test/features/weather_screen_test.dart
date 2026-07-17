@@ -36,16 +36,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
 
     expect(find.byType(CustomPaint), findsWidgets);
-
-    // 지도가 화면을 가득 채우므로 시간 스크러버·상세 정보는 아래로
-    // 스크롤해야 보인다.
-    await tester.scrollUntilVisible(
-      find.byType(Slider),
-      300,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.pump(const Duration(milliseconds: 16));
-
+    // 지도가 화면 전체를 채우고 그 위에 하단 정보 바가 겹쳐 뜨므로
+    // 스크롤 없이 바로 스크러버가 보여야 한다.
     expect(find.byType(Slider), findsOneWidget);
     // "지금"이 아니라 실제 날짜·시간이 표시되어야 한다.
     expect(find.textContaining(':'), findsWidgets);

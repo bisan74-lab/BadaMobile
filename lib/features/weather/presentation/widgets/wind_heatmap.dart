@@ -38,8 +38,8 @@ Color windSpeedColor(double speedMs) {
 /// 매 프레임이 아니라 필드(시간대)가 바뀔 때만 호출해야 한다.
 Future<ui.Image> buildWindHeatmapImage(
   WindField field, {
-  int width = 96,
-  int height = 72,
+  int width = 144,
+  int height = 108,
 }) {
   final buffer = Uint8List(width * height * 4);
   var idx = 0;

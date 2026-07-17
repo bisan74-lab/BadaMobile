@@ -22,9 +22,10 @@ import 'widgets/wind_map_painter.dart';
 
 /// 바람·해양 날씨 화면 (윈디 영역).
 ///
-/// 첫 화면이 바로 바람 지도다: 지역을 탭하면 그 지역이 선택되고,
-/// 지도 아래 시간 스크러버로 시간대를 옮기면 바람 흐름과 하단 상세 정보가
-/// 함께 그 시각 기준으로 바뀐다.
+/// 지도가 화면 전체를 채우고 항상 확대/축소·이동할 수 있다(핀치 줌).
+/// 지도를 탭하면 가장 가까운 지점이 선택되고, 그 지점의 바람·파고 요약이
+/// 하단 바에 뜬다 — 요약을 탭하면 시간별 상세 목록이 바텀시트로 펼쳐진다
+/// (윈디 앱의 지도 탭 → 하단 정보 패널 구조를 참고했다).
 class WeatherScreen extends ConsumerStatefulWidget {
   const WeatherScreen({super.key});
 
@@ -42,8 +43,13 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   int _hourOffset = 0;
 
   static const _particleCount = 220;
-  static const _maxTrail = 8;
   static const _maxAgeSeconds = 10.0;
+
+  /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
+  /// 짧은 선 → 조금 긴 선 → 아주 긴 선으로 보이게 한다.
+  static const _minTrail = 3;
+  static const _maxTrailCap = 24;
+  static const _trailSpeedFactor = 1.6;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안에서 흐름이 보이도록 과장한
   /// 시각적 배율이며, 실제 지리적 이동 속도가 아니다.
@@ -96,6 +102,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
         continue;
       }
       final (u, v) = uv;
+      final speed = math.sqrt(u * u + v * v);
       p.lat += v * _degreesPerMps * dt;
       p.lon += u * _degreesPerMps * dt;
       p.age += dt;
@@ -103,7 +110,12 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
       final nx = (p.lon - field.minLon) / (field.maxLon - field.minLon);
       final ny = 1 - (p.lat - field.minLat) / (field.maxLat - field.minLat);
       p.trail.add(Offset(nx, ny));
-      if (p.trail.length > _maxTrail) p.trail.removeAt(0);
+      final maxTrail = (_minTrail + speed * _trailSpeedFactor)
+          .clamp(_minTrail, _maxTrailCap)
+          .round();
+      while (p.trail.length > maxTrail) {
+        p.trail.removeAt(0);
+      }
 
       if (p.age > _maxAgeSeconds || !field.contains(p.lat, p.lon)) {
         _particles[i] = _spawnParticle(field);
@@ -125,43 +137,30 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
         data: (series) {
           _ensureSeeded(series);
           final field = series.at(_hourOffset);
-          // 지도가 화면을 가득 채우고, 그 아래 범례·시간 스크러버·상세
-          // 정보는 화면을 아래로 내려야 보이는 구조(윈디 스타일).
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              return CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: constraints.maxHeight,
-                      child: _WindMapArea(
-                        field: field,
-                        particles: _particles,
-                        selected: selected,
-                        onLocationTap: (loc) => ref
-                            .read(selectedLocationProvider.notifier)
-                            .select(loc),
-                      ),
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: WindSpeedLegend()),
-                  SliverToBoxAdapter(
-                    child: _TimeScrubber(
-                      times: series.hourly.map((f) => f.time).toList(),
-                      value: _hourOffset,
-                      onChanged: (v) => setState(() => _hourOffset = v),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: _DetailPanel(
-                      location: selected,
-                      hourOffset: _hourOffset,
-                      onHourTap: (v) => setState(() => _hourOffset = v),
-                    ),
-                  ),
-                ],
-              );
-            },
+          final times = series.hourly.map((f) => f.time).toList();
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: _WindMapArea(
+                  field: field,
+                  particles: _particles,
+                  selected: selected,
+                  onLocationTap: (loc) =>
+                      ref.read(selectedLocationProvider.notifier).select(loc),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _BottomInfoBar(
+                  selected: selected,
+                  times: times,
+                  hourOffset: _hourOffset,
+                  onHourChanged: (v) => setState(() => _hourOffset = v),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -170,7 +169,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
 }
 
 /// 지도 영역: 풍속 색상 히트맵 + 파티클 흐름 + 지역 마커.
-/// 마커를 탭하면 해당 지역이 선택되고, 손가락으로 확대/축소·이동할 수 있다.
+/// 아무 곳이나 탭하면 가장 가까운 지점이 선택되고, 손가락으로
+/// 확대/축소·이동할 수 있다. 확대할수록 지점 이름이 더 많이 보인다.
 class _WindMapArea extends StatefulWidget {
   const _WindMapArea({
     required this.field,
@@ -191,11 +191,22 @@ class _WindMapArea extends StatefulWidget {
 class _WindMapAreaState extends State<_WindMapArea> {
   ui.Image? _heatmap;
   DateTime? _heatmapTime;
+  final TransformationController _transformController =
+      TransformationController();
+  double _scale = 1.0;
 
   @override
   void initState() {
     super.initState();
     _rebuildHeatmap();
+    _transformController.addListener(_onTransformChanged);
+  }
+
+  void _onTransformChanged() {
+    final newScale = _transformController.value.getMaxScaleOnAxis();
+    if ((newScale - _scale).abs() > 0.02) {
+      setState(() => _scale = newScale);
+    }
   }
 
   @override
@@ -223,31 +234,46 @@ class _WindMapAreaState extends State<_WindMapArea> {
 
   @override
   void dispose() {
+    _transformController.removeListener(_onTransformChanged);
+    _transformController.dispose();
     _heatmap?.dispose();
     super.dispose();
+  }
+
+  SeaLocation _nearestLocation(double lat, double lon) {
+    var best = sampleLocations.first;
+    var bestDist = double.infinity;
+    for (final loc in sampleLocations) {
+      final dLat = loc.latitude - lat;
+      final dLon = loc.longitude - lon;
+      final dist = dLat * dLat + dLon * dLon;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = loc;
+      }
+    }
+    return best;
   }
 
   @override
   Widget build(BuildContext context) {
     final field = widget.field;
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [Color(0xFF0B2A4A), Color(0xFF08182B)],
         ),
-        borderRadius: BorderRadius.circular(16),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
           final heatmap = _heatmap;
-          // 지도 뷰(mapViewBounds)는 바람장 격자보다 넓다(한반도 주변국까지
-          // 보이는 기본 화면뷰). 모든 레이어가 같은 투영을 공유해 서로
-          // 어긋나지 않게 한다.
+          // 지도 뷰(mapViewBounds)는 바람장 격자와 같은 범위를 쓴다 —
+          // 히트맵이 지도 전체를 채운다. 모든 레이어가 같은 투영을 공유해
+          // 서로 어긋나지 않게 한다.
           final projection = MapProjection(mapViewBounds, size);
           final fieldRect = projection.rectFor(
             LatLonBounds(
@@ -257,48 +283,61 @@ class _WindMapAreaState extends State<_WindMapArea> {
               maxLon: field.maxLon,
             ),
           );
+          // 어느 정도 확대했을 때만 나머지 지점 이름을 보여준다(기본 화면
+          // 에서는 선택된 지점 이름만 표시해 지도를 깔끔하게 유지한다).
+          final showAllLabels = _scale > 1.8;
           return InteractiveViewer(
+            transformationController: _transformController,
             minScale: 1,
             maxScale: 6,
             boundaryMargin: const EdgeInsets.all(double.infinity),
-            child: SizedBox(
-              width: size.width,
-              height: size.height,
-              child: Stack(
-                children: [
-                  if (heatmap != null)
-                    CustomPaint(
-                      painter: WindHeatmapPainter(
-                        image: heatmap,
-                        dstRect: fieldRect,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                final lat = projection.latFor(details.localPosition.dy);
+                final lon = projection.lonFor(details.localPosition.dx);
+                widget.onLocationTap(_nearestLocation(lat, lon));
+              },
+              child: SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Stack(
+                  children: [
+                    if (heatmap != null)
+                      CustomPaint(
+                        painter: WindHeatmapPainter(
+                          image: heatmap,
+                          dstRect: fieldRect,
+                        ),
+                        size: size,
                       ),
+                    CustomPaint(
+                      painter: CoastlinePainter(projection: projection),
                       size: size,
                     ),
-                  CustomPaint(
-                    painter: CoastlinePainter(projection: projection),
-                    size: size,
-                  ),
-                  Positioned.fromRect(
-                    rect: fieldRect,
-                    child: CustomPaint(
-                      painter: WindMapPainter(
-                        particles: widget.particles,
-                        color: Colors.white,
+                    Positioned.fromRect(
+                      rect: fieldRect,
+                      child: CustomPaint(
+                        painter: WindMapPainter(
+                          particles: widget.particles,
+                          color: Colors.white,
+                        ),
+                        size: fieldRect.size,
                       ),
-                      size: fieldRect.size,
                     ),
-                  ),
-                  MapCityLabelLayer(projection: projection),
-                  for (final loc in sampleLocations)
-                    if (field.contains(loc.latitude, loc.longitude))
-                      _LocationMarker(
-                        location: loc,
-                        highlighted: loc.id == widget.selected.id,
-                        onTap: () => widget.onLocationTap(loc),
-                        left: projection.x(loc.longitude) - 10,
-                        top: projection.y(loc.latitude) - 10,
-                      ),
-                ],
+                    MapCityLabelLayer(projection: projection),
+                    for (final loc in sampleLocations)
+                      if (field.contains(loc.latitude, loc.longitude))
+                        _LocationMarker(
+                          location: loc,
+                          highlighted: loc.id == widget.selected.id,
+                          showLabel:
+                              loc.id == widget.selected.id || showAllLabels,
+                          left: projection.x(loc.longitude) - 10,
+                          top: projection.y(loc.latitude) - 10,
+                        ),
+                  ],
+                ),
               ),
             ),
           );
@@ -308,62 +347,349 @@ class _WindMapAreaState extends State<_WindMapArea> {
   }
 }
 
+/// 지도 위 지점 표시. 탭 처리는 지도 전체 [GestureDetector]가 맡으므로
+/// 여기서는 순수하게 점 + (조건부) 이름만 그린다.
 class _LocationMarker extends StatelessWidget {
   const _LocationMarker({
     required this.location,
     required this.highlighted,
-    required this.onTap,
+    required this.showLabel,
     required this.left,
     required this.top,
   });
 
   final SeaLocation location;
   final bool highlighted;
-  final VoidCallback onTap;
+  final bool showLabel;
   final double left;
   final double top;
 
   @override
   Widget build(BuildContext context) {
-    final dotSize = highlighted ? 12.0 : 8.0;
+    final dotSize = highlighted ? 12.0 : 6.0;
     return Positioned(
       left: left,
       top: top,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: dotSize,
-                height: dotSize,
-                decoration: BoxDecoration(
-                  color: highlighted ? Colors.amberAccent : Colors.white70,
-                  shape: BoxShape.circle,
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black45, blurRadius: 2),
-                  ],
+      child: IgnorePointer(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: dotSize,
+              height: dotSize,
+              decoration: BoxDecoration(
+                color: highlighted ? Colors.amberAccent : Colors.white70,
+                shape: BoxShape.circle,
+                boxShadow: const [
+                  BoxShadow(color: Colors.black45, blurRadius: 2),
+                ],
+              ),
+            ),
+            if (showLabel) ...[
+              const SizedBox(width: 4),
+              Text(
+                location.name,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
                 ),
               ),
-              if (highlighted) ...[
-                const SizedBox(width: 4),
-                Text(
-                  location.name,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
-                  ),
-                ),
-              ],
             ],
-          ),
+          ],
         ),
       ),
     );
+  }
+}
+
+/// 지도 위에 겹쳐 뜨는 하단 바: 풍속 범례 + 시간 스크러버 + 선택 지점
+/// 요약. 요약을 탭하면 시간별 상세 목록이 바텀시트로 펼쳐진다.
+class _BottomInfoBar extends ConsumerWidget {
+  const _BottomInfoBar({
+    required this.selected,
+    required this.times,
+    required this.hourOffset,
+    required this.onHourChanged,
+  });
+
+  final SeaLocation selected;
+  final List<DateTime> times;
+  final int hourOffset;
+  final ValueChanged<int> onHourChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final forecastAsync = ref.watch(marineForecastProvider(selected));
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 16)],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const WindSpeedLegend(),
+            _TimeScrubber(
+              times: times,
+              value: hourOffset,
+              onChanged: onHourChanged,
+            ),
+            InkWell(
+              onTap: () => _openDetailSheet(
+                context,
+                location: selected,
+                hourOffset: hourOffset,
+                onHourTap: onHourChanged,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
+                child: forecastAsync.when(
+                  loading: () => const SizedBox(
+                    height: 40,
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                  error: (e, _) => Text(
+                    '예보를 불러오지 못했습니다',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  data: (forecast) {
+                    final index = hourOffset.clamp(
+                      0,
+                      forecast.hourly.length - 1,
+                    );
+                    final at = forecast.hourly[index];
+                    return Row(
+                      children: [
+                        WindArrow(directionDeg: at.windDirectionDeg, size: 22),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                selected.name,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${compassKo(at.windDirectionDeg)}풍 '
+                                '${formatWind(at.windSpeedMs)} · 파고 '
+                                '${formatWave(at.waveHeightM)} '
+                                '(${formatPeriod(at.wavePeriodS)})',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_up),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void _openDetailSheet(
+  BuildContext context, {
+  required SeaLocation location,
+  required int hourOffset,
+  required ValueChanged<int> onHourTap,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) => _DetailSheetContent(
+        location: location,
+        hourOffset: hourOffset,
+        onHourTap: onHourTap,
+        scrollController: scrollController,
+      ),
+    ),
+  );
+}
+
+/// 지도 아래 상세 정보 바텀시트: 스크러버 시각 기준 요약 + 시간별 예보
+/// 목록(윈디처럼 지점을 탭하면 뜨는 상세 패널). 목록에서 시각을 고르면
+/// 지도의 시간 스크러버에 반영되고 시트가 닫힌다.
+class _DetailSheetContent extends ConsumerWidget {
+  const _DetailSheetContent({
+    required this.location,
+    required this.hourOffset,
+    required this.onHourTap,
+    required this.scrollController,
+  });
+
+  final SeaLocation location;
+  final int hourOffset;
+  final ValueChanged<int> onHourTap;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final forecastAsync = ref.watch(marineForecastProvider(location));
+    return forecastAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('예보를 불러오지 못했습니다: $e')),
+      data: (forecast) {
+        final index = hourOffset.clamp(0, forecast.hourly.length - 1);
+        final at = forecast.hourly[index];
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(location.name, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _SummaryItem(
+                      icon: WindArrow(
+                        directionDeg: at.windDirectionDeg,
+                        size: 28,
+                      ),
+                      value: formatWind(at.windSpeedMs),
+                      label:
+                          '${compassKo(at.windDirectionDeg)}풍 · '
+                          '돌풍 ${formatWind(at.windGustMs)}',
+                    ),
+                    _SummaryItem(
+                      icon: const Icon(Icons.waves, size: 28),
+                      value:
+                          '${formatWave(at.waveHeightM)} ${formatPeriod(at.wavePeriodS)}',
+                      label: '파고 · 주기 (${compassKo(at.waveDirectionDeg)}향)',
+                    ),
+                    _SummaryItem(
+                      icon: const Icon(Icons.thermostat, size: 28),
+                      value: '${at.waterTempC.toStringAsFixed(1)}°',
+                      label: '수온',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('시간별 예보', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            ..._hourlyItems(forecast, index, context),
+          ],
+        );
+      },
+    );
+  }
+
+  List<Widget> _hourlyItems(
+    MarineForecast forecast,
+    int selectedIndex,
+    BuildContext context,
+  ) {
+    DateTime? currentDay;
+    final widgets = <Widget>[];
+    for (var i = 0; i < forecast.hourly.length; i++) {
+      final h = forecast.hourly[i];
+      final day = DateUtils.dateOnly(h.time);
+      if (currentDay == null || day != currentDay) {
+        currentDay = day;
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Text(
+              formatMonthDay(day),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        );
+      }
+      final hoursFromStart = h.time.difference(forecast.hourly.first.time);
+      final show =
+          hoursFromStart <= const Duration(hours: 48) || h.time.hour % 3 == 0;
+      if (!show) continue;
+
+      final isSelected = i == selectedIndex;
+      widgets.add(
+        Material(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () {
+              onHourTap(i);
+              Navigator.of(context).pop();
+            },
+            child: ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              leading: SizedBox(width: 44, child: Text(formatHm(h.time))),
+              title: Row(
+                children: [
+                  WindArrow(directionDeg: h.windDirectionDeg, size: 16),
+                  const SizedBox(width: 4),
+                  SizedBox(width: 64, child: Text(formatWind(h.windSpeedMs))),
+                  Icon(
+                    Icons.waves,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${formatWave(h.waveHeightM)} ${formatPeriod(h.wavePeriodS)}',
+                  ),
+                ],
+              ),
+              trailing: Text('${h.airTempC.toStringAsFixed(0)}°'),
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
   }
 }
 
@@ -412,154 +738,6 @@ class _TimeScrubber extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-/// 지도 아래 상세 정보: 스크러버 시각 기준 요약 + 시간별 예보 목록.
-class _DetailPanel extends ConsumerWidget {
-  const _DetailPanel({
-    required this.location,
-    required this.hourOffset,
-    required this.onHourTap,
-  });
-
-  final SeaLocation location;
-  final int hourOffset;
-  final ValueChanged<int> onHourTap;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final forecastAsync = ref.watch(marineForecastProvider(location));
-    return forecastAsync.when(
-      loading: () => const SizedBox(
-        height: 200,
-        child: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, _) => SizedBox(
-        height: 120,
-        child: Center(child: Text('예보를 불러오지 못했습니다: $e')),
-      ),
-      data: (forecast) {
-        final index = hourOffset.clamp(0, forecast.hourly.length - 1);
-        final at = forecast.hourly[index];
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                location.name,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _SummaryItem(
-                        icon: WindArrow(
-                          directionDeg: at.windDirectionDeg,
-                          size: 28,
-                        ),
-                        value: formatWind(at.windSpeedMs),
-                        label:
-                            '${compassKo(at.windDirectionDeg)}풍 · '
-                            '돌풍 ${formatWind(at.windGustMs)}',
-                      ),
-                      _SummaryItem(
-                        icon: const Icon(Icons.waves, size: 28),
-                        value:
-                            '${formatWave(at.waveHeightM)} ${formatPeriod(at.wavePeriodS)}',
-                        label: '파고 · 주기 (${compassKo(at.waveDirectionDeg)}향)',
-                      ),
-                      _SummaryItem(
-                        icon: const Icon(Icons.thermostat, size: 28),
-                        value: '${at.waterTempC.toStringAsFixed(1)}°',
-                        label: '수온',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text('시간별 예보', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              ..._hourlyItems(forecast, index, context),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  List<Widget> _hourlyItems(
-    MarineForecast forecast,
-    int selectedIndex,
-    BuildContext context,
-  ) {
-    DateTime? currentDay;
-    final widgets = <Widget>[];
-    for (var i = 0; i < forecast.hourly.length; i++) {
-      final h = forecast.hourly[i];
-      final day = DateUtils.dateOnly(h.time);
-      if (currentDay == null || day != currentDay) {
-        currentDay = day;
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Text(
-              formatMonthDay(day),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-        );
-      }
-      final hoursFromStart = h.time.difference(forecast.hourly.first.time);
-      final show =
-          hoursFromStart <= const Duration(hours: 48) || h.time.hour % 3 == 0;
-      if (!show) continue;
-
-      final isSelected = i == selectedIndex;
-      widgets.add(
-        Material(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => onHourTap(i),
-            child: ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-              leading: SizedBox(width: 44, child: Text(formatHm(h.time))),
-              title: Row(
-                children: [
-                  WindArrow(directionDeg: h.windDirectionDeg, size: 16),
-                  const SizedBox(width: 4),
-                  SizedBox(width: 64, child: Text(formatWind(h.windSpeedMs))),
-                  Icon(
-                    Icons.waves,
-                    size: 14,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${formatWave(h.waveHeightM)} ${formatPeriod(h.wavePeriodS)}',
-                  ),
-                ],
-              ),
-              trailing: Text('${h.airTempC.toStringAsFixed(0)}°'),
-            ),
-          ),
-        ),
-      );
-    }
-    return widgets;
   }
 }
 

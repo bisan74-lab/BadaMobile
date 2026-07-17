@@ -69,16 +69,28 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
 - `MarineWeatherRepository`: 시간별 풍향·풍속·돌풍·파고·수온 예보 제공
 - **`WeatherScreen`이 곧 윈디 스타일 지도다** (v0.5 개편) — 별도 라우팅 없이
   탭 진입 즉시 지도가 첫 화면으로 뜬다.
-  - 상단: 바람 지도(풍속 색상 히트맵 + 파티클 흐름) — 전체 관측 지점이 마커로
-    표시되고, 탭하면 `selectedLocationProvider`가 그 지역으로 바뀐다.
-    `InteractiveViewer`로 감싸 손가락 확대/축소·이동이 가능하다.
+- 화면 구조는 `Stack`이다(스크롤 페이지가 아니다): 지도가 화면 전체를
+  차지하고(`Positioned.fill`), 그 위에 하단 정보 바가 겹쳐 뜬다
+  (`Positioned(bottom: 0, ...)`). 처음엔 지도를 `CustomScrollView`로 감싸
+  "아래로 스크롤하면 정보가 보이는" 구조였는데, 그러면 지도의 핀치 줌/팬
+  제스처가 페이지 스크롤과 경쟁해 확대가 잘 안 먹는 문제가 있어 윈디처럼
+  지도는 항상 전체화면 + 항상 조작 가능, 상세 정보는 지도 위에 겹치는
+  바텀시트로 바꿨다.
+  - 지도(`_WindMapArea`, `InteractiveViewer`로 항상 감쌈): 풍속 색상
+    히트맵 + 파티클 흐름 + 해안선 + 지점 표시. **아무 곳이나 탭하면**
+    가장 가까운 지점이 선택된다(`_nearestLocation`, 위경도 유클리드 거리
+    최근접) — 개별 마커를 정확히 눌러야 하던 것에서 개편.
     - `windSpeedColor()`/`windSpeedRgb()`(`widgets/wind_heatmap.dart`): 윈디
       스타일 m/s→색상 스케일(파랑→청록→초록→노랑→주황→빨강→자주, 태풍급
-      강풍을 자주/보라로 표현). `buildWindHeatmapImage()`가 격자를 96×72
+      강풍을 자주/보라로 표현). `buildWindHeatmapImage()`가 격자를 144×108
       래스터로 구워 `ui.Image`를 만들고, `WindHeatmapPainter`가 이를 캔버스에
       확대해 그린다 — 매 파티클 프레임(60fps)이 아니라 시간 스크러버로 필드가
-      바뀔 때만 다시 굽는다(`_WindMapAreaState._rebuildHeatmap`).
-    - `WindSpeedLegend`: 지도 아래 0~30+ m/s 색상 범례 바.
+      바뀔 때만 다시 굽는다(`_WindMapAreaState._rebuildHeatmap`). 히트맵은
+      지도와 같은 `InteractiveViewer` 자식이라 확대/축소해도 색상이 그대로
+      유지된다.
+    - 파티클(흰 점) 궤적 길이는 그 지점의 순간 풍속에 비례한다
+      (`_WeatherScreenState._onTick`의 `maxTrail` 계산) — 약한 바람은 짧은
+      점, 강한 바람은 길게 늘어진 흐름선으로 보인다.
     - `CoastlinePainter`(`widgets/coastline_painter.dart`): 실제 국경·해안선을
       그린다. 좌표 출처는 Natural Earth 1:50m Admin 0 Countries(공개
       도메인, https://github.com/nvkelso/natural-earth-vector) — 한국·
@@ -86,24 +98,29 @@ data (repository 구현: mock → 추후 KHOA / Open-Meteo API)
       `country_borders_data.dart`에 정적 데이터로 박아 넣었다(런타임에 지도
       타일을 받아오지 않음, 앱이 별도 지도 서비스에 의존하지 않는다).
     - `MapProjection`/`LatLonBounds`(`widgets/map_projection.dart`): 지도의
-      모든 레이어(해안선·히트맵·마커·지명)가 공유하는 위경도→캔버스 좌표
-      변환. 지도 기본 화면뷰(`mapViewBounds`, 23~42°N·116~134°E — 윈디 기본
-      줌 수준 참고)와 바람장 격자 범위를 **동일하게** 맞춰(v0.5 후반 개편)
-      지도 전체에 바람 히트맵이 채워지도록 했다 — Open-Meteo는 위경도만
-      주면 전 세계 어디든 응답하므로, 별도의 "글로벌 기상 API" 연동 없이
-      기존 리포지토리의 격자 범위(`OpenMeteoWindFieldRepository.minLat` 등)만
-      넓히면 된다(현재 10×12=120 격자점).
+      모든 레이어(해안선·히트맵·마커·지명)가 공유하는 위경도↔캔버스 좌표
+      변환(정방향 `project`/`x`/`y`, 역방향 `latFor`/`lonFor` — 탭한 화면
+      좌표를 위경도로 되돌릴 때 쓴다). 지도 기본 화면뷰(`mapViewBounds`,
+      23~42°N·116~134°E — 윈디 기본 줌 수준 참고)와 바람장 격자 범위를
+      **동일하게** 맞춰 지도 전체에 바람 히트맵이 채워지도록 했다 —
+      Open-Meteo는 위경도만 주면 전 세계 어디든 응답하므로, 별도의
+      "글로벌 기상 API" 연동 없이 기존 리포지토리의 격자 범위
+      (`OpenMeteoWindFieldRepository.minLat` 등)만 넓히면 된다(현재
+      10×12=120 격자점).
     - `MapCityLabelLayer`(`widgets/map_city_labels.dart`): 서울·부산 등
-      주요 도시 이름을 지도 위에 표시(윈디의 도시 라벨 참고).
-    - 지도 영역은 뷰포트 높이 전체를 채우고(`LayoutBuilder`의
-      `constraints.maxHeight`), 그 아래 범례·시간 스크러버·상세 정보는
-      `CustomScrollView`(`SliverToBoxAdapter`)로 이어붙여 아래로 스크롤해야
-      보인다(예전엔 지도가 고정 240px에 나머지가 항상 보이는 구조였음).
-  - 중단: 시간 스크러버(`Slider`) — 좌우로 밀면 지도의 바람장(히트맵·파티클)과
-    하단 상세 정보가 그 시각 기준으로 함께 바뀐다(2주치, `windFieldSeriesHours`).
-    라벨은 "지금"이라는 상대 표현 대신 항상 실제 날짜·시간을 표시한다.
-  - 하단: 선택 지역의 스크러버 시각 기준 요약(풍향·파고·수온) + 시간별
-    예보 목록(탭하면 그 시각으로 스크러버 이동).
+      주요 도시 이름을 항상 표시(윈디의 도시 라벨 참고). 41개 지점(군산·
+      태안 등) 마커의 이름은 평소엔 선택된 지점만 보이고, `InteractiveViewer`의
+      `TransformationController` 스케일이 일정 값(1.8배) 이상으로 확대됐을
+      때만 전부 표시한다 — 기본 화면을 깔끔하게 유지하면서 확대하면
+      지역명이 드러나게 한다.
+  - 지도 위에 겹치는 하단 바(`_BottomInfoBar`): 풍속 범례 + 시간
+    스크러버(`Slider`, 2주치 `windFieldSeriesHours`) + 선택 지점의 현재
+    스크러버 시각 기준 요약(풍향·풍속·파고·파주기 한 줄). 라벨은 "지금"이
+    아니라 항상 실제 날짜·시간을 표시한다. 요약 줄을 탭하면
+    `showModalBottomSheet` + `DraggableScrollableSheet`로 시간별 상세
+    목록(`_DetailSheetContent`)이 위로 펼쳐진다(윈디에서 지점을 탭하면
+    아래에 뜨는 예보 패널과 동일한 구조) — 목록에서 시각을 고르면 그
+    시각으로 스크러버가 이동하고 시트가 닫힌다.
   - `WindField`: 위경도 격자(10×12)에 동서/남북 성분(u/v, m/s)을 저장, 쌍선형
     보간으로 임의 좌표의 바람 벡터를 조회 (`features/weather/data/models`).
   - `WindFieldSeries`: 같은 격자의 시간별 `WindField` 목록 — 시간 스크러버가

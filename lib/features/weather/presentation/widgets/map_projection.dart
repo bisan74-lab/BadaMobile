@@ -42,4 +42,11 @@ class MapProjection {
   /// [b] 범위가 이 투영 위에서 차지하는 사각형(예: 바람장 격자의 위치).
   Rect rectFor(LatLonBounds b) =>
       Rect.fromLTRB(x(b.minLon), y(b.maxLat), x(b.maxLon), y(b.minLat));
+
+  /// 캔버스 좌표 → 위경도 역변환(지도 탭 지점을 찾을 때 쓴다).
+  double lonFor(double x) =>
+      bounds.minLon + x / size.width * (bounds.maxLon - bounds.minLon);
+
+  double latFor(double y) =>
+      bounds.maxLat - y / size.height * (bounds.maxLat - bounds.minLat);
 }
