@@ -11,7 +11,7 @@ Flutter 앱. 바다타임(물때·조석)과 윈디(바람·해양 날씨 지도
 
 ```bash
 flutter analyze          # 커밋 전 필수, 이슈 0이어야 함
-flutter test              # 전체 테스트(현재 81개)
+flutter test              # 전체 테스트(현재 87개)
 dart format lib test       # 커밋 전 포맷
 ```
 
@@ -33,6 +33,14 @@ dart format lib test       # 커밋 전 포맷
   지도 전체를 못 채운다. 바꾸면 `country_borders_data.dart`(해안선)도 같은
   범위로 재추출해야 한다(Natural Earth 50m geojson을 bbox로 클리핑 후 포인트
   밀도를 줄이는 방식, 공개 도메인 데이터).
+- **강제 업데이트 게이트**(`core/remote_config/`): `remote_config/app_gate.json`의
+  `forceUpgrade`를 true로 바꾸면(앱 재배포 없이) 이미 설치된 모든 기기에서
+  앱 실행이 막히고 업데이트 안내 화면(`ForceUpgradeScreen`)만 뜬다 — 무료
+  버전을 나중에 광고 버전으로 전환할 때 쓴다. 배포 전 `Env.forceUpgradeConfigUrl`
+  기본값(지금은 이 브랜치의 GitHub raw 경로)을 실제로 유지할 위치로 바꿔야
+  하고, `app_gate.json`의 `storeUrl`도 실제 스토어 링크로 채워야 한다. 설정을
+  못 받아오면(오프라인 등) 항상 앱을 정상 실행한다 — 이 폴백 규칙은 절대
+  건드리지 않는다.
 
 ## 릴리스 APK 빌드/전달
 

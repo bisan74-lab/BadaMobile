@@ -1,10 +1,14 @@
 import 'package:bada_mobile/app/app.dart';
+import 'package:bada_mobile/core/remote_config/app_gate_repository.dart';
+import 'package:bada_mobile/core/remote_config/app_gate_provider.dart';
 import 'package:bada_mobile/core/storage/prefs.dart';
 import 'package:bada_mobile/features/weather/data/repositories/mock_marine_weather_repository.dart';
 import 'package:bada_mobile/features/weather/presentation/providers.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 테스트에서는 실 API 대신 목 리포지토리와 인메모리 prefs를 주입한다.
@@ -16,6 +20,12 @@ Future<Widget> buildApp() async {
       sharedPreferencesProvider.overrideWithValue(prefs),
       marineWeatherRepositoryProvider.overrideWithValue(
         MockMarineWeatherRepository(),
+      ),
+      // 실 네트워크 호출 없이 항상 "강제 업데이트 아님"으로 응답하게 한다.
+      appGateRepositoryProvider.overrideWithValue(
+        AppGateRepository(
+          client: MockClient((_) async => http.Response('{}', 200)),
+        ),
       ),
     ],
     child: const BadaMobileApp(),

@@ -1,22 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/remote_config/app_gate_provider.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/locations/presentation/locations_screen.dart';
 import '../features/tide/presentation/tide_screen.dart';
 import '../features/weather/presentation/weather_screen.dart';
+import 'force_upgrade_screen.dart';
 import 'theme.dart';
 
-class BadaMobileApp extends StatelessWidget {
+/// 앱 진입점. `appGateProvider`가 강제 업데이트 상태(`forceUpgrade: true`)를
+/// 돌려주면 [AppShell] 대신 [ForceUpgradeScreen]을 띄워 실행을 막는다 —
+/// 무료 배포본을 나중에 광고 버전으로 전환할 때, 앱 재배포 없이
+/// `remote_config/app_gate.json`의 값만 바꾸면 모든 설치 기기에 적용된다.
+/// 설정 확인이 안 되면(오프라인 등) 항상 앱을 정상 실행한다.
+class BadaMobileApp extends ConsumerWidget {
   const BadaMobileApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final gateAsync = ref.watch(appGateProvider);
     return MaterialApp(
       title: '바다윈디',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),
-      home: const AppShell(),
+      home: gateAsync.when(
+        data: (gate) => gate.forceUpgrade
+            ? ForceUpgradeScreen(config: gate)
+            : const AppShell(),
+        loading: () =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
+        error: (_, _) => const AppShell(),
+      ),
     );
   }
 }

@@ -14,6 +14,29 @@ AppShell (하단 탭, IndexedStack)
 
 - 지역 변경은 `selectedLocationProvider` 하나로 전파된다 — 화면 간 별도 네비게이션 연동 불필요.
 - 새 기능은 `features/` 아래 새 디렉터리로 추가한다.
+- `BadaMobileApp`(`app/app.dart`)은 `AppShell`을 띄우기 전에 강제 업데이트
+  게이트(`appGateProvider`)를 확인한다 — 아래 참고.
+
+## 강제 업데이트 게이트 (`core/remote_config/`)
+
+무료 버전을 배포한 뒤 나중에 광고가 붙는 버전으로 전환할 때, **앱을
+재배포하지 않고** 기존에 설치된 모든 기기의 실행을 막기 위한 장치다.
+
+- `remote_config/app_gate.json`(이 저장소에 커밋된 정적 파일, GitHub raw로
+  서빙)의 `forceUpgrade`를 `true`로 바꾸기만 하면 된다. 앱은 시작할 때마다
+  `AppGateRepository.fetch()`로 이 JSON을 받아와 `forceUpgrade`가 true면
+  `AppShell` 대신 `ForceUpgradeScreen`(업데이트 안내 + 스토어 링크 버튼)을
+  띄우고, 뒤로가기로도 빠져나갈 수 없다.
+- **실패 시 항상 앱을 정상 실행한다**(`AppGateConfig.disabled`로 폴백) —
+  오프라인이거나 설정 서버에 문제가 있다고 해서 사용자를 막으면 안 되기
+  때문이다. 5초 타임아웃, 네트워크 예외, 200이 아닌 응답, JSON 파싱 실패
+  모두 이 폴백으로 처리된다.
+- 설정 URL은 `Env.forceUpgradeConfigUrl`(`--dart-define=FORCE_UPGRADE_CONFIG_URL=...`
+  로 재정의 가능). 실제 배포 전에는 기본값(이 브랜치의 GitHub raw 경로)을
+  장기적으로 유지할 위치로 바꿔야 한다. `app_gate.json`의 `storeUrl`도
+  실제 스토어 링크로 채워야 `ForceUpgradeScreen`의 버튼이 의미가 있다.
+- 응답 바디는 서버가 charset을 명시하지 않아도 항상 UTF-8로 직접
+  디코딩한다(`utf8.decode(res.bodyBytes)`) — 한글 메시지가 깨지지 않게.
 
 ## 설계 원칙
 
