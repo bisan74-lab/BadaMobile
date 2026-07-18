@@ -10,6 +10,8 @@ class HourlyMarine {
     required this.waveDirectionDeg,
     required this.waterTempC,
     required this.airTempC,
+    this.swellHeightM = 0,
+    this.swellPeriodS = 0,
   });
 
   final DateTime time;
@@ -28,6 +30,16 @@ class HourlyMarine {
   final double waterTempC;
   final double airTempC;
 
+  /// 너울(swell) 파고 (m) — 멀리서 온 긴 주기 파도. 서핑 판단의 핵심.
+  final double swellHeightM;
+
+  /// 너울 주기 (초).
+  final double swellPeriodS;
+
+  /// 파력(Wave power, kW/m). 심해 파에너지 플럭스 근사식
+  /// P ≈ 0.49 · H² · T (H=유의파고 m, T=파주기 s)로 계산한다.
+  double get wavePowerKw => 0.49 * waveHeightM * waveHeightM * wavePeriodS;
+
   Map<String, dynamic> toJson() => {
     'time': time.toIso8601String(),
     'windSpeedMs': windSpeedMs,
@@ -38,6 +50,8 @@ class HourlyMarine {
     'waveDirectionDeg': waveDirectionDeg,
     'waterTempC': waterTempC,
     'airTempC': airTempC,
+    'swellHeightM': swellHeightM,
+    'swellPeriodS': swellPeriodS,
   };
 
   factory HourlyMarine.fromJson(Map<String, dynamic> json) => HourlyMarine(
@@ -50,6 +64,9 @@ class HourlyMarine {
     waveDirectionDeg: (json['waveDirectionDeg'] as num).toDouble(),
     waterTempC: (json['waterTempC'] as num).toDouble(),
     airTempC: (json['airTempC'] as num).toDouble(),
+    // 예전 캐시에는 없을 수 있어 기본 0으로 흡수한다.
+    swellHeightM: (json['swellHeightM'] as num?)?.toDouble() ?? 0,
+    swellPeriodS: (json['swellPeriodS'] as num?)?.toDouble() ?? 0,
   );
 }
 

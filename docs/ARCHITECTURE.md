@@ -77,7 +77,9 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
     장식용 지표(정밀 천문 계산 아님).
 
 ### features/weather — 바람·해양 날씨 (윈디 스타일 지도)
-- `MarineWeatherRepository`: 시간별 풍향·풍속·돌풍·파고·파주기·파향·수온 예보 제공.
+- `MarineWeatherRepository`: 시간별 풍향·풍속·돌풍·파고·파주기·파향·수온·너울(swell)
+  파고/주기 예보 제공. `HourlyMarine.wavePowerKw`는 파력(kW/m)을 심해 파에너지
+  근사식 `0.49·H²·T`로 계산하는 파생값이다(별도 저장 안 함).
 - `WeatherScreen`은 `Stack` 레이아웃이다(페이지 스크롤 아님): 지도(`_WindMapArea`)가
   `Positioned.fill`로 화면 전체를 차지하고, 하단 정보 바(`_BottomInfoBar`)가 그 위에
   겹쳐 뜬다. 지도를 스크롤 컨테이너 안에 두면 핀치 줌 제스처가 페이지 스크롤과
@@ -107,12 +109,16 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   동일해야** 히트맵이 지도 전체를 채운다 — 둘 중 하나만 바꾸면 어긋난다. 좌표를
   바꾸면 `country_borders_data.dart`도 같은 범위로 재추출해야 한다(재추출 스크립트는
   세션 기록 참고, Natural Earth geojson을 bbox로 클리핑 후 포인트 밀도를 줄인다).
-- 지도를 탭하면 가장 가까운 지점이 선택된다(`_nearestLocation`, 위경도 유클리드
-  거리 최근접). 하단 바(`_BottomInfoBar`)는 풍속 범례 + 시간 스크러버(2주치,
-  `windFieldSeriesHours`) + 선택 지점 요약(풍향·풍속·파고·파주기, "지금" 대신 항상
-  실제 날짜·시간 표시)을 보여준다. 요약을 탭하면 `DraggableScrollableSheet`로
-  시간별 상세 목록(`_DetailSheetContent`)이 펼쳐지고, 시각을 고르면 스크러버에
-  반영되며 시트가 닫힌다.
+- 지도를 탭하면 그 **임의 좌표**에 핀이 꽂히고 "이 지점의 예보" 말풍선(`_PointCallout`)이
+  뜬다(윈디의 forecast at this point). 말풍선을 누르면 그 좌표로 만든 즉석 `SeaLocation`
+  (`pointSeaLocation`, id를 반올림 좌표로 만들어 예보 캐시 재사용)으로 `marineForecastProvider`를
+  조회해, 윈디식 시간별 표(`_ForecastTable`: 행=기온·바람·돌풍·파도·너울·너울주기·파력,
+  열=시각, 왼쪽 항목 열 고정 + 오른쪽 가로 스크롤)를 바텀시트로 보여준다. 탭이 즐겨찾기
+  지역을 바꾸지는 않는다(지역 변경은 우측 상단 `RegionSelectorAction`).
+- 하단 바(`_BottomInfoBar`)는 풍속 범례 + 시간 스크러버(2주치, `windFieldSeriesHours`) +
+  선택 지점 요약(풍향·풍속·파고·파주기, "지금" 대신 항상 실제 날짜·시간 표시)을 보여준다.
+  요약을 탭하면 `DraggableScrollableSheet`로 시간별 상세 목록(`_DetailSheetContent`)이
+  펼쳐지고, 시각을 고르면 스크러버에 반영되며 시트가 닫힌다.
 - 데이터 모델: `WindField`(위경도 격자 10×12에 u/v 저장, 쌍선형 보간) /
   `WindFieldSeries`(시간별 스냅샷, `.at(offset)`). `OpenMeteoWindFieldRepository`가
   다중좌표 요청(콤마 구분)으로 격자를 채우고, 실패 시 `MockWindFieldRepository`

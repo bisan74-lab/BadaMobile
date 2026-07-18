@@ -33,6 +33,8 @@ void main() {
               'wave_period',
               'wave_direction',
               'sea_surface_temperature',
+              'swell_wave_height',
+              'swell_wave_period',
             ], hours),
           }),
           marineStatus,
@@ -65,6 +67,10 @@ void main() {
     expect(first.waveHeightM, 1.0);
     expect(first.wavePeriodS, 1.0);
     expect(first.waveDirectionDeg, 1.0);
+    expect(first.swellHeightM, 1.0);
+    expect(first.swellPeriodS, 1.0);
+    // 파력 = 0.49 · H² · T = 0.49 · 1 · 1
+    expect(first.wavePowerKw, closeTo(0.49, 1e-9));
   });
 
   test('marine 응답의 null 값은 직전 값으로 채운다', () {

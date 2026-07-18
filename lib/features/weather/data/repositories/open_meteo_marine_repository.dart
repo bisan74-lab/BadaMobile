@@ -40,7 +40,8 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     final marineUri = Uri.https(_marineHost, '/v1/marine', {
       ...common,
       'hourly':
-          'wave_height,wave_period,wave_direction,sea_surface_temperature',
+          'wave_height,wave_period,wave_direction,sea_surface_temperature,'
+          'swell_wave_height,swell_wave_period',
     });
     final forecastUri = Uri.https(_forecastHost, '/v1/forecast', {
       ...common,
@@ -113,6 +114,8 @@ List<HourlyMarine> mergeOpenMeteoHourly({
   final wavePeriod = nums(marine, 'wave_period');
   final waveDir = nums(marine, 'wave_direction');
   final waterTemp = nums(marine, 'sea_surface_temperature');
+  final swellHeight = nums(marine, 'swell_wave_height');
+  final swellPeriod = nums(marine, 'swell_wave_period');
 
   double last(List<double?> xs, int i, double prev) =>
       (i >= 0 && i < xs.length ? xs[i] : null) ?? prev;
@@ -120,6 +123,7 @@ List<HourlyMarine> mergeOpenMeteoHourly({
   final result = <HourlyMarine>[];
   var pWind = 0.0, pGust = 0.0, pWindDir = 0.0, pAir = 0.0;
   var pWave = 0.0, pPeriod = 0.0, pWaveDir = 0.0, pWater = 0.0;
+  var pSwell = 0.0, pSwellPeriod = 0.0;
   for (var i = 0; i < times.length && result.length < maxHours; i++) {
     final mi = marineIndex[times[i]] ?? -1;
     pWind = last(windSpeed, i, pWind);
@@ -130,6 +134,8 @@ List<HourlyMarine> mergeOpenMeteoHourly({
     pPeriod = last(wavePeriod, mi, pPeriod);
     pWaveDir = last(waveDir, mi, pWaveDir);
     pWater = last(waterTemp, mi, pWater);
+    pSwell = last(swellHeight, mi, pSwell);
+    pSwellPeriod = last(swellPeriod, mi, pSwellPeriod);
     result.add(
       HourlyMarine(
         time: times[i],
@@ -141,6 +147,8 @@ List<HourlyMarine> mergeOpenMeteoHourly({
         waveDirectionDeg: pWaveDir,
         waterTempC: pWater,
         airTempC: pAir,
+        swellHeightM: pSwell,
+        swellPeriodS: pSwellPeriod,
       ),
     );
   }

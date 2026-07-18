@@ -34,6 +34,12 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
       );
       // 파주기는 파고와 느슨하게 비례 (풍랑 4~6초, 너울 7~10초 수준).
       final period = 4.0 + 2.5 * wave + 0.8 * math.sin(x / 23);
+      // 너울은 전체 파고의 일부(멀리서 온 성분)이고 주기는 더 길다.
+      final swell = math.max(
+        0.1,
+        wave * (0.45 + 0.2 * math.sin(x / 19 + seed)),
+      );
+      final swellPeriod = period + 2.5 + 1.5 * math.sin(x / 21);
       final waveDirection = (direction + 25 * math.sin(x / 13) + 360) % 360;
       final waterTemp = 21 + 2 * math.sin(x / 30 + seed);
       final airTemp =
@@ -53,6 +59,8 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
         waveDirectionDeg: double.parse(waveDirection.toStringAsFixed(0)),
         waterTempC: double.parse(waterTemp.toStringAsFixed(1)),
         airTempC: double.parse(airTemp.toStringAsFixed(1)),
+        swellHeightM: double.parse(swell.toStringAsFixed(1)),
+        swellPeriodS: double.parse(swellPeriod.toStringAsFixed(1)),
       );
     });
 

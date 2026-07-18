@@ -49,3 +49,7 @@ String formatPeriod(double s) => '${s.toStringAsFixed(1)}s';
 
 /// 조위(cm)를 정수 문자열로.
 String formatTideHeight(double cm) => '${cm.round()}cm';
+
+/// 파력(kW/m)을 보기 좋은 문자열로 (10 미만은 소수 1자리, 이상은 정수).
+String formatWavePower(double kw) =>
+    kw < 10 ? kw.toStringAsFixed(1) : kw.round().toString();
