@@ -7,78 +7,155 @@ import '../app_info.dart';
 import 'policy_screen.dart';
 import 'providers.dart';
 
-/// 설정 화면: 두 개의 탭으로 구성.
-/// - 템플릿: 앱 스킨(색/테마) 변경
-/// - 정보: 개발자 문의·버전·광고 제거·약관
+/// 설정 화면 — 템플릿과 정보를 한 화면에 세로로 나열한다.
+/// 맨 위 "템플릿"을 펼치면 앱 테마·밝기·배경 그래픽을 고를 수 있고,
+/// 그 아래로 문의·버전·광고 제거·약관 정보가 순서대로 이어진다.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('설정'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '템플릿'),
-              Tab(text: '정보'),
-            ],
-          ),
-        ),
-        body: const TabBarView(children: [_TemplateTab(), _InfoTab()]),
+    return Scaffold(
+      appBar: AppBar(title: const Text('설정')),
+      body: ListView(
+        children: const [
+          _TemplateSection(),
+          Divider(height: 1),
+          _InfoSection(),
+        ],
       ),
     );
   }
 }
 
-/// 앱 스킨(시드 색) 선택 탭.
-class _TemplateTab extends ConsumerWidget {
-  const _TemplateTab();
+/// 템플릿(테마/그래픽) — 펼치면 옵션이 나온다. 기본으로 펼쳐 둔다.
+class _TemplateSection extends ConsumerWidget {
+  const _TemplateSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final current = ref.watch(skinProvider);
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    final skin = ref.watch(skinProvider);
+    final mode = ref.watch(themeModeProvider);
+    final backdrop = ref.watch(backdropEnabledProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    return ExpansionTile(
+      initiallyExpanded: true,
+      leading: const Icon(Icons.palette_outlined),
+      title: const Text('템플릿'),
+      subtitle: Text('앱 테마 · 밝기 · 배경 그래픽  (현재: ${skin.name})'),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       children: [
-        Text('앱 테마', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          '앱의 색상 스킨을 선택하세요. 선택은 저장되어 다음 실행에도 유지됩니다.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+        _label(context, '앱 테마'),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final s in appSkins)
+              _SkinChip(
+                skin: s,
+                selected: s.id == skin.id,
+                onTap: () => ref.read(skinProvider.notifier).select(s),
+              ),
+          ],
         ),
         const SizedBox(height: 16),
-        for (final skin in appSkins)
-          Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: CircleAvatar(backgroundColor: skin.seed),
-              title: Text(skin.name),
-              trailing: skin.id == current.id
-                  ? Icon(
-                      Icons.check_circle,
-                      color: Theme.of(context).colorScheme.primary,
-                    )
-                  : null,
-              onTap: () => ref.read(skinProvider.notifier).select(skin),
+        _label(context, '밝기 모드'),
+        SegmentedButton<ThemeMode>(
+          segments: const [
+            ButtonSegment(
+              value: ThemeMode.system,
+              label: Text('시스템'),
+              icon: Icon(Icons.brightness_auto),
             ),
-          ),
+            ButtonSegment(
+              value: ThemeMode.light,
+              label: Text('라이트'),
+              icon: Icon(Icons.light_mode),
+            ),
+            ButtonSegment(
+              value: ThemeMode.dark,
+              label: Text('다크'),
+              icon: Icon(Icons.dark_mode),
+            ),
+          ],
+          selected: {mode},
+          onSelectionChanged: (s) =>
+              ref.read(themeModeProvider.notifier).select(s.first),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(Icons.image_outlined, color: scheme.primary),
+          title: const Text('배경 그래픽'),
+          subtitle: const Text('물때 타임라인 등에 바다 일러스트 배경 표시'),
+          value: backdrop,
+          onChanged: (v) => ref.read(backdropEnabledProvider.notifier).set(v),
+        ),
       ],
+    );
+  }
+
+  Widget _label(BuildContext context, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8, top: 4),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(text, style: Theme.of(context).textTheme.titleSmall),
+    ),
+  );
+}
+
+/// 앱 테마 색상 칩(원형 색 + 이름).
+class _SkinChip extends StatelessWidget {
+  const _SkinChip({
+    required this.skin,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppSkin skin;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(radius: 10, backgroundColor: skin.seed),
+            const SizedBox(width: 8),
+            Text(skin.name),
+            if (selected) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.check_circle, size: 16, color: scheme.primary),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
 
-/// 개발자·앱 정보 탭.
-class _InfoTab extends StatelessWidget {
-  const _InfoTab();
+/// 개발자·앱 정보 — 템플릿 아래에 순서대로 나열.
+class _InfoSection extends StatelessWidget {
+  const _InfoSection();
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return Column(
       children: [
         const SizedBox(height: 8),
         ListTile(
@@ -109,9 +186,9 @@ class _InfoTab extends StatelessWidget {
           leading: const Icon(Icons.policy_outlined),
           title: const Text('정책 및 이용약관'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const PolicyScreen())),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PolicyScreen()),
+          ),
         ),
         const SizedBox(height: 24),
         Center(
@@ -169,7 +246,9 @@ class _InfoTab extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('인앱 결제는 정식 배포 후 제공될 예정입니다.')),
+                    const SnackBar(
+                      content: Text('인앱 결제는 정식 배포 후 제공될 예정입니다.'),
+                    ),
                   );
                 },
               ),

@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/sea_backdrop.dart';
 import '../../data/models/tide_data.dart';
 
 /// 만조/간조를 세로 0~24시 타임라인 위에 그래픽 카드로 배치해 보여준다.
 /// 바다타임 앱의 물때 화면(사진 참고)을 본떠, 바다색 배경 위에 시각축과
 /// 만조(붉은색)/간조(파란색) 카드, 현재 시각선을 함께 그린다.
 class TideTimeline extends StatelessWidget {
-  const TideTimeline({super.key, required this.extremes, required this.now});
+  const TideTimeline({
+    super.key,
+    required this.extremes,
+    required this.now,
+    this.showBackdrop = true,
+  });
 
   final List<TideExtreme> extremes;
   final DateTime? now;
 
-  static const double _height = 460;
+  /// 직접 그린 바다 배경 표시 여부(설정 > 템플릿 > 배경 그래픽).
+  final bool showBackdrop;
+
+  static const double _height = 512;
 
   /// 만조는 축 왼쪽, 간조는 축 오른쪽에 배치해 양쪽 공간을 고르게 쓴다.
   static const double _axisFraction = 0.5;
@@ -25,19 +34,16 @@ class TideTimeline extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1E5C8A), Color(0xFF0E3454), Color(0xFF082238)],
-        ),
+        color: const Color(0xFF082238),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
           final axisX = size.width * _axisFraction;
           final cardWidth = axisX - 12 - _cardGap;
-          const top = 24.0;
-          final bottom = size.height - 24.0;
+          const top = 28.0;
+          // 아래쪽 여백을 더 확보해 24시 라벨·마지막 카드가 잘리지 않게 한다.
+          final bottom = size.height - 48.0;
           final trackHeight = bottom - top;
 
           double yForMinutes(int minutes) =>
@@ -46,6 +52,9 @@ class TideTimeline extends StatelessWidget {
 
           return Stack(
             children: [
+              // 직접 그린 바다 배경(라이선스 없음).
+              if (showBackdrop)
+                const Positioned.fill(child: SeaBackdrop(opacity: 0.9)),
               Positioned(
                 left: axisX - 2,
                 top: top,
@@ -60,23 +69,26 @@ class TideTimeline extends StatelessWidget {
               ),
               for (final h in const [0, 6, 12, 18, 24])
                 Positioned(
-                  left: axisX - 14,
-                  top: yForMinutes(h * 60) - 9,
+                  left: axisX - 22,
+                  top: yForMinutes(h * 60) - 10,
                   child: Container(
-                    width: 28,
+                    width: 44,
                     alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0E3454),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.white24),
                     ),
                     child: Text(
                       '$h시',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.visible,
                       style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),

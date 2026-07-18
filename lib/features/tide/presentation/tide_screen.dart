@@ -5,6 +5,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
+import '../../settings/presentation/providers.dart';
 import 'providers.dart';
 import 'widgets/moon_phase_icon.dart';
 import 'widgets/tide_chart.dart';
@@ -277,6 +278,7 @@ class _TideGraphicBody extends ConsumerWidget {
             TideTimeline(
               extremes: tide.extremes,
               now: isToday ? DateTime.now() : null,
+              showBackdrop: ref.watch(backdropEnabledProvider),
             ),
           ],
         );

@@ -23,11 +23,13 @@ class BadaMobileApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final gateAsync = ref.watch(appGateProvider);
     final skin = ref.watch(skinProvider);
+    final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
       title: '바다 윈디',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(skin.seed),
       darkTheme: buildDarkTheme(skin.seed),
+      themeMode: themeMode,
       home: gateAsync.when(
         data: (gate) => gate.forceUpgrade
             ? ForceUpgradeScreen(config: gate)

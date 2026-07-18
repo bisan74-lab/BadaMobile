@@ -87,8 +87,9 @@ void main() {
     await tester.tap(find.text('설정'));
     await tester.pumpAndSettle();
 
+    // 템플릿(펼침) + 그 아래 정보 항목이 한 화면에 나열된다.
     expect(find.text('템플릿'), findsOneWidget);
-    expect(find.text('정보'), findsOneWidget);
     expect(find.text('앱 테마'), findsOneWidget);
+    expect(find.text('오류신고 및 사업제휴 문의'), findsOneWidget);
   });
 }
