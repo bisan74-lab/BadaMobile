@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../../locations/data/sample_locations.dart';
 import '../../locations/presentation/providers.dart';
+import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../data/models/marine_weather.dart';
 import '../data/models/wind_field.dart';
 import 'providers.dart';
@@ -130,7 +131,10 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     final selected = ref.watch(selectedLocationProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('해양 날씨')),
+      appBar: AppBar(
+        title: const Text('Windy(윈디)'),
+        actions: const [RegionSelectorAction()],
+      ),
       body: seriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('바람장을 불러오지 못했습니다: $e')),

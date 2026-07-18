@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'providers.dart';
+import '../providers.dart';
 
-/// 지점 검색·선택·즐겨찾기 화면.
-class LocationsScreen extends ConsumerStatefulWidget {
-  const LocationsScreen({super.key});
-
-  @override
-  ConsumerState<LocationsScreen> createState() => _LocationsScreenState();
+/// 각 탭 상단 우측 버튼([RegionSelectorAction])으로 여는 지역 선택
+/// 바텀시트. 검색 + 즐겨찾기 + 선택을 가벼운 시트 하나로 제공한다.
+Future<void> showLocationPickerSheet(BuildContext context) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => const _LocationPickerSheet(),
+  );
 }
 
-class _LocationsScreenState extends ConsumerState<LocationsScreen> {
+class _LocationPickerSheet extends ConsumerStatefulWidget {
+  const _LocationPickerSheet();
+
+  @override
+  ConsumerState<_LocationPickerSheet> createState() =>
+      _LocationPickerSheetState();
+}
+
+class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
   String _query = '';
 
   @override
@@ -36,13 +47,18 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
             return favDiff != 0 ? favDiff : a.name.compareTo(b.name);
           });
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('지역 선택')),
-      body: Column(
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.75,
+      child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('지역 선택', style: Theme.of(context).textTheme.titleLarge),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
+              autofocus: false,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
                 hintText: '지점 이름 또는 해역 검색 (예: 목포, 서해)',
@@ -56,7 +72,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
               itemCount: filtered.length,
               itemBuilder: (context, i) {
                 final loc = filtered[i];
-                final isSelected = loc == selected;
+                final isSelected = loc.id == selected.id;
                 final isFav = favorites.contains(loc.id);
                 return ListTile(
                   leading: Icon(
@@ -75,8 +91,10 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
                     onPressed: () =>
                         ref.read(favoritesProvider.notifier).toggle(loc.id),
                   ),
-                  onTap: () =>
-                      ref.read(selectedLocationProvider.notifier).select(loc),
+                  onTap: () {
+                    ref.read(selectedLocationProvider.notifier).select(loc);
+                    Navigator.of(context).pop();
+                  },
                 );
               },
             ),

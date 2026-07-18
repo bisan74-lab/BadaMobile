@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../locations/presentation/providers.dart';
+import '../../locations/presentation/widgets/region_selector_action.dart';
 import 'providers.dart';
 import 'widgets/moon_phase_icon.dart';
 import 'widgets/tide_chart.dart';
@@ -39,7 +40,10 @@ class _TideScreenState extends ConsumerState<TideScreen> {
     final isToday = DateUtils.isSameDay(_date, DateTime.now());
 
     return Scaffold(
-      appBar: AppBar(title: Text('물때 · ${location.name}')),
+      appBar: AppBar(
+        title: const Text('물때'),
+        actions: const [RegionSelectorAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

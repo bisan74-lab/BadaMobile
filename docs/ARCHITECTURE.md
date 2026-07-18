@@ -6,12 +6,15 @@
 
 ```
 AppShell (하단 탭, IndexedStack)
-├── 홈        HomeScreen        FR-07   날짜별 물때/날씨/낚시지수 요약, 지역 선택
-├── 물때      TideScreen        FR-01~04, 15~17   그래픽 물때 카드, 조위 그래프, 만조/간조 타임라인
-├── 날씨      WeatherScreen     FR-05, FR-12   화면 전체 바람 지도(윈디 스타일) + 하단 정보 바
-└── 지역      LocationsScreen   FR-06   검색, 선택, 즐겨찾기
+├── 홈        HomeScreen         FR-07   날짜별 물때/날씨/낚시지수 요약
+├── 날씨      KmaWeatherScreen   FR-20   기상청 단기예보(육상) 일자별·시간별 예보
+├── 물때      TideScreen         FR-01~04, 15~17   그래픽 물때 카드, 조위 그래프, 만조/간조 타임라인
+├── Windy     WeatherScreen      FR-05, FR-12   화면 전체 바람 지도(윈디 스타일) + 하단 정보 바
+└── 설정      SettingsScreen     FR-21   템플릿(스킨) / 정보(문의·버전·광고제거·약관)
 ```
 
+- 지역 선택은 모든 탭 AppBar 우측의 `RegionSelectorAction`(현재 지역명 + 아이콘)에서
+  공용 바텀시트(`showLocationPickerSheet`)로 연다. 지역탭은 없앴다.
 - 지역 변경은 `selectedLocationProvider` 하나로 전파된다 — 화면 간 별도 네비게이션 연동 불필요.
 - 새 기능은 `features/` 아래 새 디렉터리로 추가한다.
 - `BadaMobileApp`(`app/app.dart`)은 `AppShell`을 띄우기 전에 강제 업데이트
@@ -114,20 +117,36 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   `WindFieldSeries`(시간별 스냅샷, `.at(offset)`). `OpenMeteoWindFieldRepository`가
   다중좌표 요청(콤마 구분)으로 격자를 채우고, 실패 시 `MockWindFieldRepository`
   (소용돌이 합성 바람장, 같은 격자 범위/해상도)로 폴백.
-- ⚠️ `app/app.dart`의 `IndexedStack`은 4개 탭을 전부 마운트해 두므로, 비활성 탭에서
+- ⚠️ `app/app.dart`의 `IndexedStack`은 5개 탭을 전부 마운트해 두므로, 비활성 탭에서
   Ticker가 돌지 않도록 각 탭을 `TickerMode(enabled: 현재탭)`로 감싼다 — 빠뜨리면
   `pumpAndSettle` 기반 위젯 테스트가 다른 탭에서도 멈춘다.
+
+### features/kma_weather — 날씨(기상청 육상 단기예보)
+- Windy 탭(해양·바람 지도)과 별개로, 기온·하늘상태·강수확률 위주의 육상 예보 탭.
+- `KmaWeatherRepository` 체인: `DataGoKrKmaRepository`(공공데이터포털 단기예보
+  조회서비스, 위경도→기상청 격자 Lambert 변환) → `CachingKmaWeatherRepository`
+  → `MockKmaWeatherRepository`(합성 폴백). 실데이터는 data.go.kr에 "기상청_단기예보
+  조회서비스" 활용신청이 승인돼야 하며, 승인 후 기존 `Env.dataGoKrApiKey`를 그대로 쓴다.
+- `KmaForecast.dailySummaries`로 일자별(최저/최고 기온·최대 강수확률·정오 대표값)
+  카드를 만들고, 선택한 날의 시간별 목록을 아래에 펼친다.
+
+### features/settings — 설정
+- 두 탭: **템플릿**(앱 스킨=시드 색 선택, `skinProvider`로 `MaterialApp` 테마에
+  즉시 반영, `app_skin_id`로 영속화) / **정보**(오류신고·사업제휴 문의 메일
+  `bisan74@gmail.com`, 앱 버전·릴리즈 날짜(`app_info.dart`), "광고 제거"(정식 배포 후
+  인앱 결제 예정, 현재는 안내), "정책 및 이용약관"(`PolicyScreen`, 책임 제한 약관)).
 
 ### features/locations — 지역
 - 전국 해안·낚시 포인트 41곳(`sample_locations.dart`, 서해/남해/동해/제주).
   `khoaStationCode`가 있는 지점(9곳)만 조석 실데이터가 붙고, 나머지는 해역별 합성
   조석 곡선으로 대체된다 — 물때·해양 날씨·낚시지수는 좌표만 있으면 전부 동작한다.
-- `LocationsScreen`: 검색·선택·즐겨찾기, 목록이 길어 `ListView.builder`로 지연 렌더링.
-- 선택된 지역은 `selectedLocationProvider`로 공유되어 tide/weather/home이 함께 반응.
+- 지역탭은 없앴다. 대신 모든 탭 AppBar 우측 `RegionSelectorAction`이 공용
+  바텀시트 `showLocationPickerSheet`(검색·선택·즐겨찾기)를 연다.
+- 선택된 지역은 `selectedLocationProvider`로 공유되어 tide/weather/home/kma_weather가 함께 반응.
 
 ### features/home — 홈 대시보드
-- 상단 바다색 그라디언트 헤더: 지역명 + 지역 선택 버튼(`showLocationPickerSheet`,
-  검색 가능한 바텀시트) + 물때 요약 + `HomeDateStrip`(좌우 스크롤 날짜 띠, 과거
+- AppBar 제목 "바다 윈디" + 우측 `RegionSelectorAction`(현재 지역명 + 지역 선택).
+- 상단 바다색 그라디언트 헤더: 물때 요약 + `HomeDateStrip`(좌우 스크롤 날짜 띠, 과거
   2주~미래 2주 총 4주, 선택 시 자동 중앙 스크롤).
 - 날짜별 요약 3종(색상 아이콘 카드): 물때(다음 만조/간조, 오늘이 아니면 그 날짜의
   첫 만조/간조 + 횟수), 해양 날씨(선택 날짜에 가장 가까운 시간대 값 — 오늘은
@@ -242,11 +261,13 @@ shared/     → core/ 만
 |---|---|
 | FR-01~04, 15~17 (물때/조석) | `features/tide`, `core/utils/mul_ttae.dart` |
 | FR-05 (해양 예보) | `features/weather/data` |
-| FR-06 (지역) | `features/locations` |
+| FR-06 (지역) | `features/locations`(공용 `RegionSelectorAction`/바텀시트) |
 | FR-07 (홈 요약) | `features/home` |
 | FR-08/09 (실데이터) | 각 feature `data/repositories/` |
 | FR-12 (바람 지도) | `features/weather/presentation/` |
 | FR-18 (낚시지수) | `features/fishing` |
+| FR-20 (기상청 육상 예보) | `features/kma_weather` |
+| FR-21 (설정: 템플릿/정보) | `features/settings` |
 | NFR-06 (품질) | `analysis_options.yaml`, `test/`, `.github/workflows/ci.yml` |
 
 ## 빌드·배포

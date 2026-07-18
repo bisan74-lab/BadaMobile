@@ -6,13 +6,13 @@ import '../../../core/utils/mul_ttae.dart';
 import '../../fishing/data/models/fishing_index.dart';
 import '../../fishing/presentation/providers.dart';
 import '../../locations/presentation/providers.dart';
+import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../../tide/presentation/providers.dart';
 import '../../weather/data/models/marine_weather.dart';
 import '../../weather/presentation/providers.dart';
 import '../../weather/presentation/widgets/wind_arrow.dart';
 import 'widgets/fishing_level_badge.dart';
 import 'widgets/home_date_strip.dart';
-import 'widgets/location_picker_sheet.dart';
 
 /// 홈 대시보드: 선택 지역의 물때 + 만조/간조 + 해양 날씨 + 낚시지수 요약.
 /// 상단 날짜 띠로 과거 2주~미래 2주(4주) 범위를 좌우로 넘기며 볼 수 있다.
@@ -67,14 +67,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('바다윈디'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_location_alt_outlined),
-            tooltip: '지역 선택',
-            onPressed: () => showLocationPickerSheet(context),
-          ),
-        ],
+        title: const Text('바다 윈디'),
+        actions: const [RegionSelectorAction()],
       ),
       body: ListView(
         padding: EdgeInsets.zero,
