@@ -290,7 +290,10 @@ class _WindMapAreaState extends State<_WindMapArea> {
             transformationController: _transformController,
             minScale: 1,
             maxScale: 6,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
+            // 기본값(EdgeInsets.zero)을 그대로 써서 지도 바깥(빈 배경)이
+            // 보이는 지점까지는 이동할 수 없게 한다 — 끝까지 이동하면
+            // 지도 가장자리에서 멈춘다.
+            boundaryMargin: EdgeInsets.zero,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
@@ -325,7 +328,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         size: fieldRect.size,
                       ),
                     ),
-                    MapCityLabelLayer(projection: projection),
+                    MapCityLabelLayer(projection: projection, scale: _scale),
                     for (final loc in sampleLocations)
                       if (field.contains(loc.latitude, loc.longitude))
                         _LocationMarker(
@@ -333,6 +336,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
                           highlighted: loc.id == widget.selected.id,
                           showLabel:
                               loc.id == widget.selected.id || showAllLabels,
+                          scale: _scale,
                           left: projection.x(loc.longitude) - 10,
                           top: projection.y(loc.latitude) - 10,
                         ),
@@ -354,6 +358,7 @@ class _LocationMarker extends StatelessWidget {
     required this.location,
     required this.highlighted,
     required this.showLabel,
+    required this.scale,
     required this.left,
     required this.top,
   });
@@ -361,6 +366,10 @@ class _LocationMarker extends StatelessWidget {
   final SeaLocation location;
   final bool highlighted;
   final bool showLabel;
+
+  /// 지도의 현재 확대 배율 — 마커(점+이름)가 지도와 함께 커지지 않고
+  /// 항상 같은 화면 크기로 보이도록 반대로 축소하는 데 쓴다.
+  final double scale;
   final double left;
   final double top;
 
@@ -371,32 +380,36 @@ class _LocationMarker extends StatelessWidget {
       left: left,
       top: top,
       child: IgnorePointer(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: dotSize,
-              height: dotSize,
-              decoration: BoxDecoration(
-                color: highlighted ? Colors.amberAccent : Colors.white70,
-                shape: BoxShape.circle,
-                boxShadow: const [
-                  BoxShadow(color: Colors.black45, blurRadius: 2),
-                ],
-              ),
-            ),
-            if (showLabel) ...[
-              const SizedBox(width: 4),
-              Text(
-                location.name,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+        child: Transform.scale(
+          scale: 1 / scale,
+          alignment: Alignment.topLeft,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: dotSize,
+                height: dotSize,
+                decoration: BoxDecoration(
+                  color: highlighted ? Colors.amberAccent : Colors.white70,
+                  shape: BoxShape.circle,
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black45, blurRadius: 2),
+                  ],
                 ),
               ),
+              if (showLabel) ...[
+                const SizedBox(width: 4),
+                Text(
+                  location.name,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -21,9 +21,17 @@ const List<(String name, double lat, double lon)> mapCityLabels = [
 
 /// 지도 위에 작은 도시 이름 라벨을 찍는다.
 class MapCityLabelLayer extends StatelessWidget {
-  const MapCityLabelLayer({super.key, required this.projection});
+  const MapCityLabelLayer({
+    super.key,
+    required this.projection,
+    required this.scale,
+  });
 
   final MapProjection projection;
+
+  /// 지도의 현재 확대 배율(`InteractiveViewer`). 라벨은 지도와 함께
+  /// 확대되지 않고 항상 같은 화면 크기로 보이도록 반대로 축소해 그린다.
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -40,13 +48,17 @@ class MapCityLabelLayer extends StatelessWidget {
                 return Positioned(
                   left: o.dx + 4,
                   top: o.dy - 6,
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
+                  child: Transform.scale(
+                    scale: 1 / scale,
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
+                      ),
                     ),
                   ),
                 );

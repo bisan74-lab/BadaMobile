@@ -57,7 +57,8 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   겹쳐 뜬다. 지도를 스크롤 컨테이너 안에 두면 핀치 줌 제스처가 페이지 스크롤과
   충돌하므로 이 구조를 유지해야 한다.
 - 지도는 `InteractiveViewer`로 항상 확대/축소·이동 가능(고정 상하한 `minScale 1`~
-  `maxScale 6`). 겹치는 레이어(아래→위):
+  `maxScale 6`, `boundaryMargin`은 기본값 `EdgeInsets.zero`라 지도 바깥 빈 배경이
+  보이는 지점까지는 이동할 수 없다). 겹치는 레이어(아래→위):
   1. 풍속 색상 히트맵(`WindHeatmapPainter`, `widgets/wind_heatmap.dart`) — m/s→색상
      스케일(파랑→청록→초록→노랑→주황→빨강→자주). `buildWindHeatmapImage()`가
      144×108 래스터를 구워 시간 스크러버로 필드가 바뀔 때만 다시 굽는다(파티클
@@ -69,7 +70,10 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
      이동하며 궤적을 남긴다. 궤적 길이는 그 지점 풍속에 비례(약함=짧은 점,
      강함=긴 흐름선, `_WeatherScreenState._onTick`의 `maxTrail` 계산).
   4. 도시 이름(`MapCityLabelLayer`, 서울·부산 등 상시 표시) + 지점 마커(41곳,
-     `InteractiveViewer` 배율이 1.8배 이상일 때만 이름 표시).
+     `InteractiveViewer` 배율이 1.8배 이상일 때만 이름 표시). 도시/지점 라벨은
+     둘 다 지도 배율만큼 `Transform.scale(1/scale)`로 반대 축소해 그려서,
+     확대해도 글자 크기가 화면 기준으로 일정하게 유지된다(그대로 두면
+     지도와 같이 커져서 글자가 지나치게 확대돼 보인다).
 - `MapProjection`/`LatLonBounds`(`widgets/map_projection.dart`): 모든 레이어가
   공유하는 위경도↔캔버스 좌표 변환(역변환 `latFor`/`lonFor`은 지도 탭 좌표를
   위경도로 되돌릴 때 쓴다). 기본 화면뷰(`mapViewBounds`)는 대한민국이 중앙에 오도록
