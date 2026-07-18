@@ -43,3 +43,18 @@ ThemeData buildDarkTheme([Color seed = _defaultSeed]) {
 }
 
 const _defaultSeed = Color(0xFF0E6BA8); // 깊은 바다색
+
+/// 홈 상단·물때 카드 등 "남색 박스"에 쓰는 테마 연동 딥 컬러 2단계.
+/// 현재 스킨(시드) 색상을 따르고, 다크 모드에서는 더 어둡게 낮춘다 —
+/// 흰 글씨 대비를 유지하도록 명도를 낮게 고정한다.
+List<Color> deepThemeColors(ColorScheme scheme) {
+  final hsl = HSLColor.fromColor(scheme.primary);
+  final dark = scheme.brightness == Brightness.dark;
+  final sat = hsl.saturation.clamp(0.35, 1.0);
+  final l1 = dark ? 0.15 : 0.26;
+  final l2 = dark ? 0.09 : 0.17;
+  return [
+    hsl.withSaturation(sat).withLightness(l1).toColor(),
+    hsl.withSaturation(sat).withLightness(l2).toColor(),
+  ];
+}

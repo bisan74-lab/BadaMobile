@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../fishing/data/models/fishing_index.dart';
@@ -75,11 +76,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF1E5C8A), Color(0xFF0E3454)],
+                colors: deepThemeColors(Theme.of(context).colorScheme),
               ),
             ),
             child: Column(

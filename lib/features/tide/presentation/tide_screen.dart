@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../locations/presentation/providers.dart';
@@ -197,7 +198,11 @@ class _TideGraphicBody extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0E3454),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: deepThemeColors(Theme.of(context).colorScheme),
+                ),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Column(

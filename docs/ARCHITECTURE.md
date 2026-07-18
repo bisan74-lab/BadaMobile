@@ -111,14 +111,13 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   세션 기록 참고, Natural Earth geojson을 bbox로 클리핑 후 포인트 밀도를 줄인다).
 - 지도를 탭하면 그 **임의 좌표**에 핀이 꽂히고 "이 지점의 예보" 말풍선(`_PointCallout`)이
   뜬다(윈디의 forecast at this point). 말풍선을 누르면 그 좌표로 만든 즉석 `SeaLocation`
-  (`pointSeaLocation`, id를 반올림 좌표로 만들어 예보 캐시 재사용)으로 `marineForecastProvider`를
-  조회해, 윈디식 시간별 표(`_ForecastTable`: 행=기온·바람·돌풍·파도·너울·너울주기·파력,
-  열=시각, 왼쪽 항목 열 고정 + 오른쪽 가로 스크롤)를 바텀시트로 보여준다. 탭이 즐겨찾기
-  지역을 바꾸지는 않는다(지역 변경은 우측 상단 `RegionSelectorAction`).
-- 하단 바(`_BottomInfoBar`)는 풍속 범례 + 시간 스크러버(2주치, `windFieldSeriesHours`) +
-  선택 지점 요약(풍향·풍속·파고·파주기, "지금" 대신 항상 실제 날짜·시간 표시)을 보여준다.
-  요약을 탭하면 `DraggableScrollableSheet`로 시간별 상세 목록(`_DetailSheetContent`)이
-  펼쳐지고, 시각을 고르면 스크러버에 반영되며 시트가 닫힌다.
+  (`pointSeaLocation`)으로 `marineForecastProvider`를 조회해, 하단에 붙는 **색상
+  메테오그램 패널**(`_PointForecastPanel`/`_Meteogram`)을 띄운다. 상단에 시간 슬라이더,
+  아래에 3시간 간격·향후 2주 가로 스크롤 표(행=시간·기온·바람·돌풍·파도·너울·너울주기·
+  파력·수온). 바람은 `windSpeedColor`, 파도·너울은 `waveHeightColor`로 셀을 색칠해 세기를
+  직관적으로 보여준다(윈디 메테오그램 참고). 탭이 즐겨찾기 지역을 바꾸지는 않는다.
+- 하단 바(`_BottomInfoBar`, 일반 모드)는 풍속 범례 + 시간 스크러버(지도 애니메이션 시각) +
+  선택 지점 요약을 보여주고, 요약을 탭하면 그 지역의 메테오그램 패널로 들어간다.
 - 데이터 모델: `WindField`(위경도 격자 10×12에 u/v 저장, 쌍선형 보간) /
   `WindFieldSeries`(시간별 스냅샷, `.at(offset)`). `OpenMeteoWindFieldRepository`가
   다중좌표 요청(콤마 구분)으로 격자를 채우고, 실패 시 `MockWindFieldRepository`

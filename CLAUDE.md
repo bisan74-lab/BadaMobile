@@ -28,11 +28,12 @@ dart format lib test       # 커밋 전 포맷
   현재탭)`로 감싸야 한다** — 안 그러면 비활성 탭의 Ticker가 계속 돌아 다른
   탭 위젯 테스트가 멈춘다.
 - 날씨 지도(`features/weather/presentation/`)의 `mapViewBounds`
-  (`widgets/map_projection.dart`)와 `OpenMeteoWindFieldRepository`의 격자
-  범위(`minLat` 등)는 **항상 같은 값**이어야 한다 — 하나만 바꾸면 히트맵이
-  지도 전체를 못 채운다. 바꾸면 `country_borders_data.dart`(해안선)도 같은
-  범위로 재추출해야 한다(Natural Earth 50m geojson을 bbox로 클리핑 후 포인트
-  밀도를 줄이는 방식, 공개 도메인 데이터).
+  (`widgets/map_projection.dart`)는 **`OpenMeteoWindFieldRepository`의 격자
+  범위(`minLat` 등)의 부분집합**이어야 한다 — 뷰가 격자보다 크면(밖으로 나가면)
+  히트맵이 지도를 못 채운다. 현재 뷰는 북쪽을 잘라(maxLat 43.0) 격자
+  (26.5~45.5)의 부분집합이므로 히트맵·해안선은 그대로 뷰를 채운다. 격자 범위
+  자체를 바꾸면 `country_borders_data.dart`(해안선)도 같은 범위로 재추출해야
+  한다(Natural Earth 50m geojson을 bbox로 클리핑, 공개 도메인 데이터).
 - **강제 업데이트 게이트**(`core/remote_config/`): `remote_config/app_gate.json`의
   `forceUpgrade`를 true로 바꾸면(앱 재배포 없이) 이미 설치된 모든 기기에서
   앱 실행이 막히고 업데이트 안내 화면(`ForceUpgradeScreen`)만 뜬다 — 무료

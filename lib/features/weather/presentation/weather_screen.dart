@@ -164,7 +164,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                 right: 0,
                 bottom: 0,
                 child: _forecastPoint != null
-                    ? _PointForecastBar(
+                    ? _PointForecastPanel(
                         location: _forecastPoint!,
                         onClose: () => setState(() => _forecastPoint = null),
                       )
@@ -173,6 +173,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                         times: times,
                         hourOffset: _hourOffset,
                         onHourChanged: (v) => setState(() => _hourOffset = v),
+                        onOpenForecast: () =>
+                            setState(() => _forecastPoint = selected),
                       ),
               ),
             ],
@@ -296,7 +298,13 @@ class _WindMapAreaState extends State<_WindMapArea> {
           );
           // 어느 정도 확대했을 때만 나머지 지점 이름을 보여준다(기본 화면
           // 에서는 선택된 지점 이름만 표시해 지도를 깔끔하게 유지한다).
-          final showAllLabels = _scale > 1.8;
+          // 확대 단계별로 라벨을 순차 노출한다 — 큰 항구(rank 1)는 일찍,
+          // 작은 항구(rank 3)는 많이 확대해야 나타나 글자 겹침을 줄인다.
+          double labelThreshold(int rank) => switch (rank) {
+            1 => 1.0,
+            2 => 2.4,
+            _ => 3.6,
+          };
           return InteractiveViewer(
             transformationController: _transformController,
             minScale: 1,
@@ -345,12 +353,15 @@ class _WindMapAreaState extends State<_WindMapArea> {
                     ),
                     MapCityLabelLayer(projection: projection, scale: _scale),
                     for (final loc in sampleLocations)
-                      if (field.contains(loc.latitude, loc.longitude))
+                      // 내륙 도시는 검색·날씨용이라 바다 지도 마커에서는 뺀다.
+                      if (!loc.inland &&
+                          field.contains(loc.latitude, loc.longitude))
                         _LocationMarker(
                           location: loc,
                           highlighted: loc.id == widget.selected.id,
                           showLabel:
-                              loc.id == widget.selected.id || showAllLabels,
+                              loc.id == widget.selected.id ||
+                              _scale >= labelThreshold(loc.rank),
                           scale: _scale,
                           left: projection.x(loc.longitude) - 10,
                           top: projection.y(loc.latitude) - 10,
@@ -439,20 +450,22 @@ class _LocationMarker extends StatelessWidget {
   }
 }
 
-/// 지도 위에 겹쳐 뜨는 하단 바: 풍속 범례 + 시간 스크러버 + 선택 지점
-/// 요약. 요약을 탭하면 시간별 상세 목록이 바텀시트로 펼쳐진다.
+/// 지도 위에 겹쳐 뜨는 하단 바: 풍속 범례 + 시간 스크러버(지도 애니메이션
+/// 시각 제어) + 선택 지점 요약. 요약을 탭하면 그 지점의 2주 예보 표로 들어간다.
 class _BottomInfoBar extends ConsumerWidget {
   const _BottomInfoBar({
     required this.selected,
     required this.times,
     required this.hourOffset,
     required this.onHourChanged,
+    required this.onOpenForecast,
   });
 
   final SeaLocation selected;
   final List<DateTime> times;
   final int hourOffset;
   final ValueChanged<int> onHourChanged;
+  final VoidCallback onOpenForecast;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -484,12 +497,7 @@ class _BottomInfoBar extends ConsumerWidget {
               onChanged: onHourChanged,
             ),
             InkWell(
-              onTap: () => _openDetailSheet(
-                context,
-                location: selected,
-                hourOffset: hourOffset,
-                onHourTap: onHourChanged,
-              ),
+              onTap: onOpenForecast,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
                 child: forecastAsync.when(
@@ -536,7 +544,7 @@ class _BottomInfoBar extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        const Icon(Icons.keyboard_arrow_up),
+                        const Icon(Icons.table_rows_outlined),
                       ],
                     );
                   },
@@ -547,185 +555,6 @@ class _BottomInfoBar extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-void _openDetailSheet(
-  BuildContext context, {
-  required SeaLocation location,
-  required int hourOffset,
-  required ValueChanged<int> onHourTap,
-}) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.6,
-      minChildSize: 0.35,
-      maxChildSize: 0.92,
-      builder: (context, scrollController) => _DetailSheetContent(
-        location: location,
-        hourOffset: hourOffset,
-        onHourTap: onHourTap,
-        scrollController: scrollController,
-      ),
-    ),
-  );
-}
-
-/// 지도 아래 상세 정보 바텀시트: 스크러버 시각 기준 요약 + 시간별 예보
-/// 목록(윈디처럼 지점을 탭하면 뜨는 상세 패널). 목록에서 시각을 고르면
-/// 지도의 시간 스크러버에 반영되고 시트가 닫힌다.
-class _DetailSheetContent extends ConsumerWidget {
-  const _DetailSheetContent({
-    required this.location,
-    required this.hourOffset,
-    required this.onHourTap,
-    required this.scrollController,
-  });
-
-  final SeaLocation location;
-  final int hourOffset;
-  final ValueChanged<int> onHourTap;
-  final ScrollController scrollController;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final forecastAsync = ref.watch(marineForecastProvider(location));
-    return forecastAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('예보를 불러오지 못했습니다: $e')),
-      data: (forecast) {
-        final index = hourOffset.clamp(0, forecast.hourly.length - 1);
-        final at = forecast.hourly[index];
-        return ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.all(16),
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Text(location.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _SummaryItem(
-                      icon: WindArrow(
-                        directionDeg: at.windDirectionDeg,
-                        size: 28,
-                      ),
-                      value: formatWind(at.windSpeedMs),
-                      label:
-                          '${compassKo(at.windDirectionDeg)}풍 · '
-                          '돌풍 ${formatWind(at.windGustMs)}',
-                    ),
-                    _SummaryItem(
-                      icon: const Icon(Icons.waves, size: 28),
-                      value:
-                          '${formatWave(at.waveHeightM)} ${formatPeriod(at.wavePeriodS)}',
-                      label: '파고 · 주기 (${compassKo(at.waveDirectionDeg)}향)',
-                    ),
-                    _SummaryItem(
-                      icon: const Icon(Icons.thermostat, size: 28),
-                      value: '${at.waterTempC.toStringAsFixed(1)}°',
-                      label: '수온',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text('시간별 예보', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            ..._hourlyItems(forecast, index, context),
-          ],
-        );
-      },
-    );
-  }
-
-  List<Widget> _hourlyItems(
-    MarineForecast forecast,
-    int selectedIndex,
-    BuildContext context,
-  ) {
-    DateTime? currentDay;
-    final widgets = <Widget>[];
-    for (var i = 0; i < forecast.hourly.length; i++) {
-      final h = forecast.hourly[i];
-      final day = DateUtils.dateOnly(h.time);
-      if (currentDay == null || day != currentDay) {
-        currentDay = day;
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Text(
-              formatMonthDay(day),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-        );
-      }
-      final hoursFromStart = h.time.difference(forecast.hourly.first.time);
-      final show =
-          hoursFromStart <= const Duration(hours: 48) || h.time.hour % 3 == 0;
-      if (!show) continue;
-
-      final isSelected = i == selectedIndex;
-      widgets.add(
-        Material(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              onHourTap(i);
-              Navigator.of(context).pop();
-            },
-            child: ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-              leading: SizedBox(width: 44, child: Text(formatHm(h.time))),
-              title: Row(
-                children: [
-                  WindArrow(directionDeg: h.windDirectionDeg, size: 16),
-                  const SizedBox(width: 4),
-                  SizedBox(width: 64, child: Text(formatWind(h.windSpeedMs))),
-                  Icon(
-                    Icons.waves,
-                    size: 14,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${formatWave(h.waveHeightM)} ${formatPeriod(h.wavePeriodS)}',
-                  ),
-                ],
-              ),
-              trailing: Text('${h.airTempC.toStringAsFixed(0)}°'),
-            ),
-          ),
-        ),
-      );
-    }
-    return widgets;
   }
 }
 
@@ -770,36 +599,6 @@ class _TimeScrubber extends StatelessWidget {
               divisions: times.length > 1 ? times.length - 1 : null,
               onChanged: (v) => onChanged(v.round()),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  final Widget icon;
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          icon,
-          const SizedBox(height: 6),
-          Text(value, style: Theme.of(context).textTheme.titleMedium),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall,
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -896,20 +695,59 @@ class _PointCallout extends StatelessWidget {
   }
 }
 
-/// forecast at this point 모드의 하단 패널. 향후 2주 시간 슬라이더로 그 시각의
-/// 기온·바람·돌풍·파도·너울·너울주기를 보여주고, 표 전체도 열 수 있다.
-class _PointForecastBar extends ConsumerStatefulWidget {
-  const _PointForecastBar({required this.location, required this.onClose});
+/// 파고/너울 높이(m) → 색상. 낮음(청록) → 높음(분홍/자주)으로 이어지는
+/// 윈디식 스케일. 바람은 [windSpeedColor]를 쓰고 파도 계열은 이 함수를 쓴다.
+Color waveHeightColor(double m) {
+  final t = (m / 3.0).clamp(0.0, 1.0);
+  return HSVColor.fromAHSV(1, 200 + 130 * t, 0.55, 0.9).toColor();
+}
+
+Color _readableOn(Color bg) =>
+    bg.computeLuminance() > 0.55 ? Colors.black87 : Colors.white;
+
+/// forecast at this point 패널. "이 지점의 예보"를 누르면 바로 뜨는 2주
+/// 시간별 색상 표(윈디식 메테오그램). 상단에 시간 슬라이더를 두어 그래픽을
+/// 강화하고, 표는 하단에 붙여 3시간 간격으로 향후 2주를 가로 스크롤로 본다.
+/// 바람·돌풍·파도·너울에 색을 입혀 세기를 직관적으로 느낄 수 있게 한다.
+class _PointForecastPanel extends ConsumerStatefulWidget {
+  const _PointForecastPanel({required this.location, required this.onClose});
 
   final SeaLocation location;
   final VoidCallback onClose;
 
   @override
-  ConsumerState<_PointForecastBar> createState() => _PointForecastBarState();
+  ConsumerState<_PointForecastPanel> createState() =>
+      _PointForecastPanelState();
 }
 
-class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
+class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   int _i = 0;
+  final ScrollController _hCtrl = ScrollController();
+
+  static const double _colW = 46;
+  static const double _labelW = 62;
+  static const double _dayH = 22;
+  static const double _timeH = 20;
+  static const double _cellH = 25;
+
+  @override
+  void dispose() {
+    _hCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSelected() {
+    if (!_hCtrl.hasClients) return;
+    final target = (_i * _colW - 120).clamp(
+      0.0,
+      _hCtrl.position.maxScrollExtent,
+    );
+    _hCtrl.animateTo(
+      target,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -927,14 +765,14 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
               child: Row(
                 children: [
                   Icon(Icons.location_on, size: 18, color: scheme.primary),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '선택 지점 예보  ·  ${widget.location.name}',
+                      '이 지점의 예보  ·  ${widget.location.name}',
                       style: Theme.of(context).textTheme.titleSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -942,7 +780,7 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.close),
-                    tooltip: '예보 모드 닫기',
+                    tooltip: '지도로 돌아가기',
                     onPressed: widget.onClose,
                   ),
                 ],
@@ -950,10 +788,10 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
             ),
             forecastAsync.when(
               loading: () => const Padding(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(24),
                 child: SizedBox(
-                  width: 20,
-                  height: 20,
+                  width: 22,
+                  height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
@@ -962,19 +800,30 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
                 child: Text('예보를 불러오지 못했습니다'),
               ),
               data: (forecast) {
-                final hours = forecast.hourly;
-                final i = _i.clamp(0, hours.length - 1);
-                final at = hours[i];
+                // 3시간 간격으로 향후 2주(112스텝)를 뽑는다.
+                final steps = [
+                  for (final h in forecast.hourly)
+                    if (h.time.hour % 3 == 0) h,
+                ].take(14 * 8).toList();
+                if (steps.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('예보 데이터가 없습니다.'),
+                  );
+                }
+                final i = _i.clamp(0, steps.length - 1);
+                final at = steps[i];
                 return Column(
                   children: [
+                    // 상단 시간 슬라이더(그래픽 강화).
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Row(
                         children: [
                           Icon(Icons.schedule, size: 16, color: scheme.primary),
                           const SizedBox(width: 6),
                           SizedBox(
-                            width: 132,
+                            width: 134,
                             child: Text(
                               '${formatMonthDay(at.time)} ${formatHm(at.time)}',
                               style: Theme.of(context).textTheme.labelMedium,
@@ -984,56 +833,21 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
                             child: Slider(
                               value: i.toDouble(),
                               min: 0,
-                              max: (hours.length - 1).toDouble(),
-                              onChanged: (v) => setState(() => _i = v.round()),
+                              max: (steps.length - 1).toDouble(),
+                              onChanged: (v) {
+                                setState(() => _i = v.round());
+                                _scrollToSelected();
+                              },
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          _Metric(
-                            label: '기온',
-                            value: '${at.airTempC.round()}°',
-                          ),
-                          _Metric(
-                            label: '바람',
-                            value: formatWind(at.windSpeedMs),
-                            leading: WindArrow(
-                              directionDeg: at.windDirectionDeg,
-                              size: 16,
-                            ),
-                          ),
-                          _Metric(
-                            label: '돌풍',
-                            value: formatWind(at.windGustMs),
-                          ),
-                          _Metric(
-                            label: '파도',
-                            value: formatWave(at.waveHeightM),
-                          ),
-                          _Metric(
-                            label: '너울',
-                            value: formatWave(at.swellHeightM),
-                          ),
-                          _Metric(
-                            label: '너울주기',
-                            value: formatPeriod(at.swellPeriodS),
-                          ),
-                        ],
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () =>
-                          _openPointForecastSheet(context, widget.location),
-                      icon: const Icon(Icons.table_rows_outlined, size: 18),
-                      label: const Text('2주 시간별 표 보기'),
+                    _Meteogram(
+                      steps: steps,
+                      selected: i,
+                      controller: _hCtrl,
+                      onColumnTap: (j) => setState(() => _i = j),
                     ),
                     const SizedBox(height: 4),
                   ],
@@ -1047,38 +861,83 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
   }
 }
 
-/// 예보 모드 하단 패널의 개별 지표 칩.
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value, this.leading});
+/// 윈디식 색상 메테오그램: 왼쪽 항목 열 고정 + 오른쪽 시각 열 가로 스크롤.
+class _Meteogram extends StatelessWidget {
+  const _Meteogram({
+    required this.steps,
+    required this.selected,
+    required this.controller,
+    required this.onColumnTap,
+  });
 
-  final String label;
-  final String value;
-  final Widget? leading;
+  final List<HourlyMarine> steps;
+  final int selected;
+  final ScrollController controller;
+  final ValueChanged<int> onColumnTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    const rows = [
+      '시간',
+      '기온 °C',
+      '바람 m/s',
+      '돌풍 m/s',
+      '파도 m',
+      '너울 m',
+      '너울주기 s',
+      '파력 kW/m',
+      '수온 °C',
+    ];
+    final labelStyle = Theme.of(context).textTheme.bodySmall;
+    final totalH =
+        _PointForecastPanelState._dayH +
+        _PointForecastPanelState._timeH +
+        _PointForecastPanelState._cellH * 8;
+    return SizedBox(
+      height: totalH,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 4)],
-          Text(
-            '$label ',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          // 왼쪽 항목 라벨(맨 위 날짜 행만큼 띄운다).
+          SizedBox(
+            width: _PointForecastPanelState._labelW,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const SizedBox(height: _PointForecastPanelState._dayH),
+                for (var r = 0; r < rows.length; r++)
+                  SizedBox(
+                    height: r == 0
+                        ? _PointForecastPanelState._timeH
+                        : _PointForecastPanelState._cellH,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(rows[r], style: labelStyle),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          Expanded(
+            child: ListView.builder(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              itemCount: steps.length,
+              itemBuilder: (context, j) {
+                final isNewDay =
+                    j == 0 ||
+                    !DateUtils.isSameDay(steps[j].time, steps[j - 1].time);
+                return _MeteogramColumn(
+                  hour: steps[j],
+                  isNewDay: isNewDay,
+                  isSelected: j == selected,
+                  onTap: () => onColumnTap(j),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -1086,231 +945,93 @@ class _Metric extends StatelessWidget {
   }
 }
 
-void _openPointForecastSheet(BuildContext context, SeaLocation location) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) => _PointForecastSheet(
-        location: location,
-        scrollController: scrollController,
-      ),
-    ),
-  );
-}
-
-/// forecast at this point: 찍은 지점의 시간별 예보를 윈디식 표로 보여준다.
-/// 행 = 항목(기온·바람·돌풍·파도·너울·너울주기·파력), 열 = 시각.
-class _PointForecastSheet extends ConsumerWidget {
-  const _PointForecastSheet({
-    required this.location,
-    required this.scrollController,
+class _MeteogramColumn extends StatelessWidget {
+  const _MeteogramColumn({
+    required this.hour,
+    required this.isNewDay,
+    required this.isSelected,
+    required this.onTap,
   });
-
-  final SeaLocation location;
-  final ScrollController scrollController;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final forecastAsync = ref.watch(marineForecastProvider(location));
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        Container(
-          width: 36,
-          height: 4,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.outlineVariant,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '선택한 지점의 예보',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${location.name}  ·  Open-Meteo 해양 예보',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: forecastAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('예보를 불러오지 못했습니다: $e')),
-            data: (forecast) {
-              // 향후 2주(현재 시각부터)를 시간별로 보여준다(가로 스크롤).
-              final hours = forecast.hourly.take(24 * 14).toList();
-              return SingleChildScrollView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-                child: _ForecastTable(hours: hours),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 윈디식 시간별 예보 표. 왼쪽 항목 열은 고정, 오른쪽 시각 열은 가로 스크롤.
-class _ForecastTable extends StatelessWidget {
-  const _ForecastTable({required this.hours});
-
-  final List<HourlyMarine> hours;
-
-  static const double _timeH = 42;
-  static const double _rowH = 30;
-  static const double _colW = 54;
-  static const double _labelW = 68;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelStyle = Theme.of(context).textTheme.bodySmall;
-    Widget label(String text, double h) => SizedBox(
-      height: h,
-      width: _labelW,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Text(text, style: labelStyle),
-        ),
-      ),
-    );
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            label('시간', _timeH),
-            label('기온', _rowH),
-            label('바람 m/s', _rowH),
-            label('돌풍 m/s', _rowH),
-            label('파도 m', _rowH),
-            label('너울 m', _rowH),
-            label('너울주기 s', _rowH),
-            label('파력 kW/m', _rowH),
-          ],
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (var i = 0; i < hours.length; i++)
-                  _HourColumn(
-                    hour: hours[i],
-                    isNewDay:
-                        i == 0 ||
-                        !DateUtils.isSameDay(hours[i].time, hours[i - 1].time),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HourColumn extends StatelessWidget {
-  const _HourColumn({required this.hour, required this.isNewDay});
 
   final HourlyMarine hour;
   final bool isNewDay;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final windColor = windSpeedColor(hour.windSpeedMs);
-    // 밝은 풍속색 위에서는 검은 글씨가 잘 보이도록 명도로 대비색을 고른다.
-    final windText = windColor.computeLuminance() > 0.5
-        ? Colors.black
-        : Colors.white;
+    final windC = windSpeedColor(hour.windSpeedMs);
+    final gustC = windSpeedColor(hour.windGustMs);
+    final waveC = waveHeightColor(hour.waveHeightM);
+    final swellC = waveHeightColor(hour.swellHeightM);
 
     Widget cell(
       String text, {
       Color? bg,
-      Color? fg,
-      double h = _ForecastTable._rowH,
+      double h = _PointForecastPanelState._cellH,
     }) => Container(
-      width: _ForecastTable._colW,
+      width: _PointForecastPanelState._colW,
       height: h,
       alignment: Alignment.center,
       color: bg,
       child: Text(
         text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: bg == null ? null : _readableOn(bg),
+          fontWeight: bg == null ? FontWeight.normal : FontWeight.w600,
+        ),
       ),
     );
 
-    return Column(
-      children: [
-        // 시각(+날짜가 바뀌면 위에 날짜).
-        Container(
-          width: _ForecastTable._colW,
-          height: _ForecastTable._timeH,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border(
-              left: isNewDay
-                  ? BorderSide(color: scheme.outlineVariant)
-                  : BorderSide.none,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: isNewDay ? scheme.outline : scheme.outlineVariant,
+              width: isNewDay ? 1.2 : 0.4,
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                isNewDay ? '${hour.time.day}일(${weekdayKo(hour.time)})' : '',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                '${hour.time.hour}시',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+          color: isSelected ? scheme.primary.withValues(alpha: 0.12) : null,
         ),
-        cell('${hour.airTempC.round()}°'),
-        cell(hour.windSpeedMs.round().toString(), bg: windColor, fg: windText),
-        cell('${hour.windGustMs.round()}', fg: scheme.onSurfaceVariant),
-        cell(hour.waveHeightM.toStringAsFixed(1)),
-        cell(hour.swellHeightM.toStringAsFixed(1)),
-        cell('${hour.swellPeriodS.round()}'),
-        cell(formatWavePower(hour.wavePowerKw)),
-      ],
+        child: Column(
+          children: [
+            // 날짜(새 날에만) — 상단 행.
+            SizedBox(
+              height: _PointForecastPanelState._dayH,
+              width: _PointForecastPanelState._colW,
+              child: isNewDay
+                  ? Center(
+                      child: Text(
+                        '${hour.time.month}/${hour.time.day}',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            cell('${hour.time.hour}', h: _PointForecastPanelState._timeH),
+            cell('${hour.airTempC.round()}'),
+            cell('${hour.windSpeedMs.round()}', bg: windC),
+            cell(
+              '${hour.windGustMs.round()}',
+              bg: gustC.withValues(alpha: 0.65),
+            ),
+            cell(hour.waveHeightM.toStringAsFixed(1), bg: waveC),
+            cell(
+              hour.swellHeightM.toStringAsFixed(1),
+              bg: swellC.withValues(alpha: 0.7),
+            ),
+            cell('${hour.swellPeriodS.round()}'),
+            cell(formatWavePower(hour.wavePowerKw)),
+            cell('${hour.waterTempC.round()}'),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -25,7 +25,10 @@ class TideTimeline extends StatelessWidget {
 
   /// 만조는 축 왼쪽, 간조는 축 오른쪽에 배치해 양쪽 공간을 고르게 쓴다.
   static const double _axisFraction = 0.5;
-  static const double _cardGap = 12;
+
+  /// 축(세로선)과 카드 사이 간격 — 카드가 세로선·시각 라벨을 가리지 않도록
+  /// 넉넉히 띄운다.
+  static const double _cardGap = 26;
 
   @override
   Widget build(BuildContext context) {
@@ -67,32 +70,6 @@ class TideTimeline extends StatelessWidget {
                   ),
                 ),
               ),
-              for (final h in const [0, 6, 12, 18, 24])
-                Positioned(
-                  left: axisX - 22,
-                  top: yForMinutes(h * 60) - 10,
-                  child: Container(
-                    width: 44,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0E3454),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Text(
-                      '$h시',
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.visible,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
               if (now != null)
                 Positioned(
                   left: 16,
@@ -146,6 +123,37 @@ class TideTimeline extends StatelessWidget {
                   ),
                 ),
               ],
+              // 시각 라벨(0/6/12/18/24시)은 맨 위 레이어로 그려 카드·점에
+              // 가리지 않게 한다.
+              for (final h in const [0, 6, 12, 18, 24])
+                Positioned(
+                  left: axisX - 22,
+                  top: yForMinutes(h * 60) - 10,
+                  child: Container(
+                    width: 44,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0B2A46),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white38),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black45, blurRadius: 3),
+                      ],
+                    ),
+                    child: Text(
+                      '$h시',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.visible,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },
