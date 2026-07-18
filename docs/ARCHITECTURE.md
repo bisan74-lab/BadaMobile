@@ -155,8 +155,15 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   `khoaStationCode`가 있는 지점(9곳)만 조석 실데이터가 붙고, 나머지는 해역별 합성
   조석 곡선으로 대체된다 — 물때·해양 날씨·낚시지수는 좌표만 있으면 전부 동작한다.
 - 지역탭은 없앴다. 대신 모든 탭 AppBar 우측 `RegionSelectorAction`이 공용
-  바텀시트 `showLocationPickerSheet`(검색·선택·즐겨찾기)를 연다.
+  바텀시트 `showLocationPickerSheet`를 연다. 시트는 **현재 위치(GPS,
+  `geolocator`→`resolveCurrentLocation`)** + **지명 검색(읍/면/동 단위,
+  `GeocodingRepository`=Open-Meteo Geocoding 무료·키불필요→`geocodingSearchProvider`)**
+  + 내장 지점 + 즐겨찾기를 한 화면에 제공한다.
 - 선택된 지역은 `selectedLocationProvider`로 공유되어 tide/weather/home/kma_weather가 함께 반응.
+  선택은 **전체 정보(JSON)로 영속화**되어 검색·현재위치 등 목록에 없는 커스텀 지점도
+  재시작 후 복원된다(구버전 id-only 키 호환).
+- `SeaLocation.rank`(1=주요→3=소규모)로 Windy 지도 라벨을 확대 단계별 노출,
+  `inland=true`(내륙 도시·검색 지점)는 지도 마커에서 제외.
 
 ### features/home — 홈 대시보드
 - AppBar 제목 "바다 윈디" + 우측 `RegionSelectorAction`(현재 지역명 + 지역 선택).

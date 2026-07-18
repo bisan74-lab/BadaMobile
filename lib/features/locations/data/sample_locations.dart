@@ -109,7 +109,6 @@ const List<SeaLocation> sampleLocations = [
     latitude: 34.780,
     longitude: 126.375,
     khoaStationCode: 'DT_0007',
-    rank: 1,
   ),
   SeaLocation(
     id: 'heuksando',
@@ -155,7 +154,6 @@ const List<SeaLocation> sampleLocations = [
     latitude: 34.747,
     longitude: 127.766,
     khoaStationCode: 'DT_0041',
-    rank: 1,
   ),
   SeaLocation(
     id: 'namhae_mijo',
@@ -217,7 +215,6 @@ const List<SeaLocation> sampleLocations = [
     latitude: 36.047,
     longitude: 129.384,
     khoaStationCode: 'DT_0022',
-    rank: 1,
   ),
   SeaLocation(
     id: 'yeongdeok',
@@ -268,7 +265,6 @@ const List<SeaLocation> sampleLocations = [
     latitude: 38.207,
     longitude: 128.594,
     khoaStationCode: 'DT_0012',
-    rank: 1,
   ),
   SeaLocation(
     id: 'goseong_geojin',
@@ -346,6 +342,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.418,
     longitude: 126.499,
+    rank: 1,
   ),
   SeaLocation(
     id: 'muchangpo',
@@ -353,6 +350,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.243,
     longitude: 126.522,
+    rank: 1,
   ),
   SeaLocation(
     id: 'yeongmok',
@@ -360,6 +358,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.418,
     longitude: 126.353,
+    rank: 1,
   ),
   SeaLocation(
     id: 'geukdong',
@@ -367,7 +366,39 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.462,
     longitude: 126.339,
-    rank: 3,
+    rank: 1,
+  ),
+  SeaLocation(
+    id: 'yeongheungdo',
+    name: '영흥도(인천)',
+    region: '서해',
+    latitude: 37.245,
+    longitude: 126.489,
+    rank: 1,
+  ),
+  SeaLocation(
+    id: 'nokdong',
+    name: '녹동항(고흥)',
+    region: '남해',
+    latitude: 34.516,
+    longitude: 127.130,
+    rank: 1,
+  ),
+  SeaLocation(
+    id: 'gangneung',
+    name: '강릉항',
+    region: '동해',
+    latitude: 37.766,
+    longitude: 128.951,
+    rank: 1,
+  ),
+  SeaLocation(
+    id: 'sacheonjin',
+    name: '사천진항(강릉)',
+    region: '동해',
+    latitude: 37.836,
+    longitude: 128.877,
+    rank: 1,
   ),
   SeaLocation(
     id: 'namdang',

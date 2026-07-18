@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 조석/기상 API 호출용 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- "현재 위치로 설정"용 (선택 권한, 거부해도 앱은 정상 동작) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="바다윈디"
         android:name="${applicationName}"

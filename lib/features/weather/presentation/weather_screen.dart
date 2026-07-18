@@ -301,9 +301,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
           // 확대 단계별로 라벨을 순차 노출한다 — 큰 항구(rank 1)는 일찍,
           // 작은 항구(rank 3)는 많이 확대해야 나타나 글자 겹침을 줄인다.
           double labelThreshold(int rank) => switch (rank) {
-            1 => 1.0,
-            2 => 2.4,
-            _ => 3.6,
+            1 => 1.25,
+            2 => 2.8,
+            _ => 4.2,
           };
           return InteractiveViewer(
             transformationController: _transformController,
@@ -432,13 +432,15 @@ class _LocationMarker extends StatelessWidget {
                 ),
               ),
               if (showLabel) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: 3),
                 Text(
                   location.name,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  style: const TextStyle(
+                    fontSize: 9,
+                    height: 1.1,
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+                    fontWeight: FontWeight.w600,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 3)],
                   ),
                 ),
               ],
@@ -722,6 +724,8 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
 
 class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   int _i = 0;
+  int _stepCount = 0;
+  bool _syncingFromSlider = false;
   final ScrollController _hCtrl = ScrollController();
 
   static const double _colW = 46;
@@ -730,23 +734,48 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   static const double _timeH = 20;
   static const double _cellH = 25;
 
+  /// 슬라이더가 표를 스크롤할 때 화면 왼쪽에서 선택 열까지 띄우는 여백(px).
+  static const double _selectPad = 120;
+
+  @override
+  void initState() {
+    super.initState();
+    _hCtrl.addListener(_onScroll);
+  }
+
   @override
   void dispose() {
+    _hCtrl.removeListener(_onScroll);
     _hCtrl.dispose();
     super.dispose();
   }
 
+  /// 표를 가로로 스크롤하면 위 슬라이더도 따라오게 한다(표 → 슬라이더 연동).
+  void _onScroll() {
+    if (_syncingFromSlider || !_hCtrl.hasClients || _stepCount == 0) return;
+    final idx = ((_hCtrl.offset + _selectPad) / _colW).round().clamp(
+      0,
+      _stepCount - 1,
+    );
+    if (idx != _i) setState(() => _i = idx);
+  }
+
+  /// 슬라이더 → 표 연동. 스크롤 애니메이션 동안 [_onScroll]이 값을 되돌리지
+  /// 않도록 플래그로 막는다.
   void _scrollToSelected() {
     if (!_hCtrl.hasClients) return;
-    final target = (_i * _colW - 120).clamp(
+    final target = (_i * _colW - _selectPad).clamp(
       0.0,
       _hCtrl.position.maxScrollExtent,
     );
-    _hCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
+    _syncingFromSlider = true;
+    _hCtrl
+        .animateTo(
+          target,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        )
+        .whenComplete(() => _syncingFromSlider = false);
   }
 
   @override
@@ -811,6 +840,7 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                     child: Text('예보 데이터가 없습니다.'),
                   );
                 }
+                _stepCount = steps.length;
                 final i = _i.clamp(0, steps.length - 1);
                 final at = steps[i];
                 return Column(

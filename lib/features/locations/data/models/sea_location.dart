@@ -35,4 +35,26 @@ class SeaLocation {
 
   @override
   int get hashCode => id.hashCode;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'region': region,
+    'latitude': latitude,
+    'longitude': longitude,
+    'khoaStationCode': khoaStationCode,
+    'rank': rank,
+    'inland': inland,
+  };
+
+  factory SeaLocation.fromJson(Map<String, dynamic> j) => SeaLocation(
+    id: j['id'] as String,
+    name: j['name'] as String,
+    region: j['region'] as String,
+    latitude: (j['latitude'] as num).toDouble(),
+    longitude: (j['longitude'] as num).toDouble(),
+    khoaStationCode: j['khoaStationCode'] as String?,
+    rank: (j['rank'] as num?)?.toInt() ?? 2,
+    inland: j['inland'] as bool? ?? false,
+  );
 }
