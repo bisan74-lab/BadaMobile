@@ -186,9 +186,9 @@ class _InfoSection extends StatelessWidget {
           leading: const Icon(Icons.policy_outlined),
           title: const Text('정책 및 이용약관'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PolicyScreen()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const PolicyScreen())),
         ),
         const SizedBox(height: 24),
         Center(
@@ -246,9 +246,7 @@ class _InfoSection extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('인앱 결제는 정식 배포 후 제공될 예정입니다.'),
-                    ),
+                    const SnackBar(content: Text('인앱 결제는 정식 배포 후 제공될 예정입니다.')),
                   );
                 },
               ),

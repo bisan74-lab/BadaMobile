@@ -1010,9 +1010,18 @@ class _PointForecastBarState extends ConsumerState<_PointForecastBar> {
                               size: 16,
                             ),
                           ),
-                          _Metric(label: '돌풍', value: formatWind(at.windGustMs)),
-                          _Metric(label: '파도', value: formatWave(at.waveHeightM)),
-                          _Metric(label: '너울', value: formatWave(at.swellHeightM)),
+                          _Metric(
+                            label: '돌풍',
+                            value: formatWind(at.windGustMs),
+                          ),
+                          _Metric(
+                            label: '파도',
+                            value: formatWave(at.waveHeightM),
+                          ),
+                          _Metric(
+                            label: '너울',
+                            value: formatWave(at.swellHeightM),
+                          ),
                           _Metric(
                             label: '너울주기',
                             value: formatPeriod(at.swellPeriodS),
@@ -1061,9 +1070,9 @@ class _Metric extends StatelessWidget {
           if (leading != null) ...[leading!, const SizedBox(width: 4)],
           Text(
             '$label ',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
           Text(
             value,

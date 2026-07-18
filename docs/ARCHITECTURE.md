@@ -127,20 +127,29 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   Ticker가 돌지 않도록 각 탭을 `TickerMode(enabled: 현재탭)`로 감싼다 — 빠뜨리면
   `pumpAndSettle` 기반 위젯 테스트가 다른 탭에서도 멈춘다.
 
-### features/kma_weather — 날씨(기상청 육상 단기예보)
-- Windy 탭(해양·바람 지도)과 별개로, 기온·하늘상태·강수확률 위주의 육상 예보 탭.
-- `KmaWeatherRepository` 체인: `DataGoKrKmaRepository`(공공데이터포털 단기예보
-  조회서비스, 위경도→기상청 격자 Lambert 변환) → `CachingKmaWeatherRepository`
-  → `MockKmaWeatherRepository`(합성 폴백). 실데이터는 data.go.kr에 "기상청_단기예보
-  조회서비스" 활용신청이 승인돼야 하며, 승인 후 기존 `Env.dataGoKrApiKey`를 그대로 쓴다.
-- `KmaForecast.dailySummaries`로 일자별(최저/최고 기온·최대 강수확률·정오 대표값)
-  카드를 만들고, 선택한 날의 시간별 목록을 아래에 펼친다.
+### features/kma_weather — 날씨(육상 예보)
+- Windy 탭(해양·바람 지도)과 별개인 지역 육상 날씨 탭. 화면 구성: 현재값 헤더 →
+  오늘/내일 요약 → 2시간 강수 나우캐스트 → 24시간 예보(가로) → 7/15일 토글 목록 →
+  상세 정보(바람·돌풍/습도/자외선/가시거리/일출몰/공기질).
+- **데이터: 기상청 우선 + Open-Meteo 보조** (`weatherForecastProvider`). 뼈대는
+  `OpenMeteoLandWeatherRepository`(Forecast API 16일 일별/시간별 + `minutely_15`
+  2시간 강수 + Air-Quality API 공기질, 전 세계·키 불필요). **기상청 단기예보가
+  조회되면**(`kmaWeatherRepositoryProvider`, `Env.dataGoKrApiKey` 필요) 근일(약 3일)
+  시간별 기온·날씨를 그 값으로 덮어쓴다(`_overlayKma`, `kmaToWmo`로 SKY/PTY→WMO 환산).
+  실패 시 캐시(`CachingLandWeatherRepository`) → 합성(`MockLandWeatherRepository`) 폴백.
+- 날씨 표현은 WMO 코드(`weather_code.dart`)로 통일하고, 아이콘은 라이선스 없는
+  직접 그린 `WeatherIcon`(`CustomPainter`, 해·구름·비·눈·번개 등)으로 그린다.
+- 5분 갱신·기상특보(경보)는 무료 무키 소스가 없어 미지원(대신 2시간 강수 나우캐스트를 제공).
 
 ### features/settings — 설정
-- 두 탭: **템플릿**(앱 스킨=시드 색 선택, `skinProvider`로 `MaterialApp` 테마에
-  즉시 반영, `app_skin_id`로 영속화) / **정보**(오류신고·사업제휴 문의 메일
-  `bisan74@gmail.com`, 앱 버전·릴리즈 날짜(`app_info.dart`), "광고 제거"(정식 배포 후
-  인앱 결제 예정, 현재는 안내), "정책 및 이용약관"(`PolicyScreen`, 책임 제한 약관)).
+- **한 화면**에 세로로: 맨 위 **템플릿**(`ExpansionTile`, 기본 펼침) → 그 아래 **정보**.
+- 템플릿 옵션: 앱 스킨=시드 색(`skinProvider`, `app_skin_id`), 밝기 모드
+  시스템/라이트/다크(`themeModeProvider` → `MaterialApp.themeMode`, `theme_mode`),
+  배경 그래픽 토글(`backdropEnabledProvider`, `sea_backdrop_enabled` — 물때 타임라인의
+  `SeaBackdrop` 표시 여부). 모두 즉시 반영 + 영속화.
+- 정보: 오류신고·사업제휴 문의 메일 `bisan74@gmail.com`, 앱 버전·릴리즈 날짜
+  (`app_info.dart`), "광고 제거"(정식 배포 후 인앱 결제 예정, 현재는 안내),
+  "정책 및 이용약관"(`PolicyScreen`, 책임 제한 약관).
 
 ### features/locations — 지역
 - 전국 해안·낚시 포인트 41곳(`sample_locations.dart`, 서해/남해/동해/제주).

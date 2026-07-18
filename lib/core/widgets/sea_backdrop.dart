@@ -6,11 +6,7 @@ import 'package:flutter/material.dart';
 /// 하늘 그라디언트 + 은은한 해/달 + 잔잔한 파도 레이어를 코드로 그린다.
 /// 물때 타임라인·설정 등 여러 화면의 편안한 배경으로 재사용한다.
 class SeaBackdrop extends StatelessWidget {
-  const SeaBackdrop({
-    super.key,
-    this.sunset = false,
-    this.opacity = 1,
-  });
+  const SeaBackdrop({super.key, this.sunset = false, this.opacity = 1});
 
   /// true면 노을(주황) 톤, false면 낮 바다(파랑) 톤.
   final bool sunset;
@@ -55,9 +51,15 @@ class _SeaBackdropPainter extends CustomPainter {
       sunCenter,
       horizon * 0.7,
       Paint()
-        ..shader = RadialGradient(
-          colors: [sunColor.withValues(alpha: 0.5), sunColor.withValues(alpha: 0)],
-        ).createShader(Rect.fromCircle(center: sunCenter, radius: horizon * 0.7)),
+        ..shader =
+            RadialGradient(
+              colors: [
+                sunColor.withValues(alpha: 0.5),
+                sunColor.withValues(alpha: 0),
+              ],
+            ).createShader(
+              Rect.fromCircle(center: sunCenter, radius: horizon * 0.7),
+            ),
     );
     canvas.drawCircle(
       sunCenter,
@@ -90,7 +92,9 @@ class _SeaBackdropPainter extends CustomPainter {
     );
 
     // 잔잔한 파도 레이어(사인 곡선 3겹).
-    final waveColor = sunset ? const Color(0xFFF0B080) : const Color(0xFFAFD4EC);
+    final waveColor = sunset
+        ? const Color(0xFFF0B080)
+        : const Color(0xFFAFD4EC);
     for (var layer = 0; layer < 3; layer++) {
       final baseY = horizon + (h - horizon) * (0.25 + layer * 0.3);
       final amp = 5.0 + layer * 3;
