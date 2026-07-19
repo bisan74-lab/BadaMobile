@@ -327,6 +327,12 @@ class _WindMapAreaState extends State<_WindMapArea> {
                   _pickedLat = lat;
                   _pickedLon = lon;
                 });
+                // 이미 "이 지점의 예보" 표가 열려 있으면, 새로 찍은 지점으로
+                // 바로 예보를 갱신한다(말풍선 버튼을 다시 누를 필요 없이 실시간
+                // 이동). 닫혀 있으면 말풍선만 띄우고, 버튼을 눌러야 열린다.
+                if (widget.forecastPoint != null) {
+                  widget.onForecast(lat, lon);
+                }
               },
               child: SizedBox(
                 width: size.width,
