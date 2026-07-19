@@ -69,19 +69,17 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _initLocation());
   }
 
-  /// 앱 시작 시: 마지막 설정 위치가 있으면 그대로 두고(그 위치로 시작),
-  /// 저장된 위치가 없는 첫 실행이면 위치 권한을 요청해 현재 위치로 설정한다.
-  /// 권한 거부·실패 시엔 기본 위치를 유지한다.
+  /// 앱 시작 시 위치 처리. **현재 위치는 날씨 탭에만** 적용한다(홈/물때/Windy는
+  /// 공용 지역을 그대로 쓰며 현재 위치와 연동하지 않는다). 날씨 탭에 저장된
+  /// 위치가 있으면 그 위치로 시작하고, 없는 첫 실행이면 위치 권한을 요청해
+  /// 현재 위치로 설정한다. 권한 거부·실패 시엔 기본 위치를 유지한다.
   Future<void> _initLocation() async {
     final prefs = ref.read(sharedPreferencesProvider);
-    final hasSaved =
-        prefs.getString('selected_location') != null ||
-        prefs.getString('selected_location_id') != null;
-    if (hasSaved) return;
+    if (prefs.getString('weather_location') != null) return;
     try {
       final loc = await resolveCurrentLocation();
       if (!mounted) return;
-      ref.read(selectedLocationProvider.notifier).select(loc);
+      ref.read(weatherLocationProvider.notifier).select(loc);
     } catch (_) {
       // 권한 거부/위치 서비스 꺼짐 등 — 기본 위치로 조용히 시작한다.
     }

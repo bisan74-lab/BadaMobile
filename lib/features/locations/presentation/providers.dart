@@ -106,8 +106,9 @@ class WeatherLocationNotifier extends Notifier<SeaLocation> {
         // 손상 시 아래 폴백으로.
       }
     }
-    // 날씨 탭 최초 진입 시엔 공용 선택 지역을 초기값으로 따른다.
-    return ref.read(selectedLocationProvider);
+    // 공용 지역(홈/물때/Windy)과 완전히 분리한다 — 저장값이 없으면 기본
+    // 지점으로 시작하고, 앱 시작 시 첫 실행이면 현재 위치로 대체된다.
+    return ref.read(locationsProvider).first;
   }
 
   void select(SeaLocation location) {

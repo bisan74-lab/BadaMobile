@@ -165,8 +165,10 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   `showLocationPickerSheet(forWeather: true)`로 대상 provider를 고른다.
 - 두 provider 모두 선택을 **전체 정보(JSON)로 영속화**해 검색·현재위치 등 목록에 없는
   커스텀 지점도 재시작 후 복원된다(구버전 id-only 키 호환).
-- **앱 시작 위치**(`AppShell._initLocation`): 저장된 위치가 있으면 그 위치로 시작하고,
-  없는 첫 실행이면 위치 권한을 요청해 현재 위치로 설정한다(거부·실패 시 기본 위치 유지).
+- **현재 위치(GPS)는 날씨 탭에만** 적용한다. 홈/물때/Windy는 공용 지역을 그대로 쓰며
+  현재 위치와 연동하지 않는다. `AppShell._initLocation`은 날씨 탭 저장 위치가 없는 첫
+  실행일 때만 권한을 요청해 `weatherLocationProvider`를 현재 위치로 채운다(거부·실패
+  시 기본 지점 유지). "현재 위치로 설정" 버튼도 `forWeather` 시트에서만 노출된다.
 - `SeaLocation.rank`(1=주요→3=소규모)로 Windy 지도 라벨을 확대 단계별 노출,
   `inland=true`(내륙 도시·검색 지점)는 지도 마커에서 제외. 마커 점은 투영 좌표에
   정확히 중심을 맞춰 해안선과 정렬된다.

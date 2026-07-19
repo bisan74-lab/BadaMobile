@@ -124,20 +124,22 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
           Expanded(
             child: ListView(
               children: [
-                // 현재 위치.
-                ListTile(
-                  leading: _locating
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(Icons.my_location, color: scheme.primary),
-                  title: const Text('현재 위치로 설정'),
-                  subtitle: const Text('GPS로 지금 있는 곳의 날씨·물때를 본다'),
-                  onTap: _locating ? null : _useCurrentLocation,
-                ),
-                const Divider(height: 1),
+                // 현재 위치 — 날씨 탭에서만 제공(홈/물때/Windy는 미적용).
+                if (widget.forWeather) ...[
+                  ListTile(
+                    leading: _locating
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(Icons.my_location, color: scheme.primary),
+                    title: const Text('현재 위치로 설정'),
+                    subtitle: const Text('GPS로 지금 있는 곳의 날씨를 본다'),
+                    onTap: _locating ? null : _useCurrentLocation,
+                  ),
+                  const Divider(height: 1),
+                ],
 
                 // 내장 지점(즐겨찾기·주요 항구/지역).
                 for (final loc in filtered)
