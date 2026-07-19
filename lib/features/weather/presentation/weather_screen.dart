@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/formatters.dart';
 import '../../locations/data/models/sea_location.dart';
-import '../../locations/data/sample_locations.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../data/models/marine_weather.dart';
@@ -47,14 +46,14 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// forecast at this point로 선택한 지점. null이면 일반(선택 지역) 모드.
   SeaLocation? _forecastPoint;
 
-  static const _particleCount = 220;
-  static const _maxAgeSeconds = 10.0;
+  static const _particleCount = 340;
+  static const _maxAgeSeconds = 12.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
-  /// 짧은 선 → 조금 긴 선 → 아주 긴 선으로 보이게 한다.
-  static const _minTrail = 3;
-  static const _maxTrailCap = 24;
-  static const _trailSpeedFactor = 1.6;
+  /// 짧은 선 → 조금 긴 선 → 아주 긴 흐름선으로 보이게 한다(윈디식 잔상).
+  static const _minTrail = 5;
+  static const _maxTrailCap = 48;
+  static const _trailSpeedFactor = 2.4;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안에서 흐름이 보이도록 과장한
   /// 시각적 배율이며, 실제 지리적 이동 속도가 아니다.
@@ -152,7 +151,6 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                 child: _WindMapArea(
                   field: field,
                   particles: _particles,
-                  selected: selected,
                   forecastPoint: _forecastPoint,
                   onForecast: (lat, lon) => setState(
                     () => _forecastPoint = pointSeaLocation(lat, lon),
@@ -185,22 +183,20 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   }
 }
 
-/// 지도 영역: 풍속 색상 히트맵 + 파티클 흐름 + 지역 마커.
+/// 지도 영역: 풍속 색상 히트맵 + 파티클 흐름선 + 해안선 + 도시 라벨.
 /// 아무 곳이나 탭하면 그 지점에 핀이 꽂히고 "이 지점의 예보" 말풍선이
 /// 뜬다(윈디의 forecast at this point). 손가락으로 확대/축소·이동할 수
-/// 있고, 확대할수록 지점 이름이 더 많이 보인다.
+/// 있고, 확대할수록 도시 이름이 더 많이 보인다.
 class _WindMapArea extends StatefulWidget {
   const _WindMapArea({
     required this.field,
     required this.particles,
-    required this.selected,
     required this.forecastPoint,
     required this.onForecast,
   });
 
   final WindField field;
   final List<WindParticle> particles;
-  final SeaLocation selected;
 
   /// 현재 예보 모드로 켜진 지점(있으면 핀을 강조 표시).
   final SeaLocation? forecastPoint;
@@ -296,15 +292,6 @@ class _WindMapAreaState extends State<_WindMapArea> {
               maxLon: field.maxLon,
             ),
           );
-          // 어느 정도 확대했을 때만 나머지 지점 이름을 보여준다(기본 화면
-          // 에서는 선택된 지점 이름만 표시해 지도를 깔끔하게 유지한다).
-          // 확대 단계별로 라벨을 순차 노출한다 — 큰 항구(rank 1)는 일찍,
-          // 작은 항구(rank 3)는 많이 확대해야 나타나 글자 겹침을 줄인다.
-          double labelThreshold(int rank) => switch (rank) {
-            1 => 1.25,
-            2 => 2.8,
-            _ => 4.2,
-          };
           return InteractiveViewer(
             transformationController: _transformController,
             minScale: 1,
@@ -351,21 +338,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         size: fieldRect.size,
                       ),
                     ),
+                    // 지도 앱처럼 도시 이름만 확대 단계별로 표시(항구 점 라벨은
+                    // 제거해 깔끔하게). 지역 선택은 우측 상단 지역 선택 버튼으로 한다.
                     MapCityLabelLayer(projection: projection, scale: _scale),
-                    for (final loc in sampleLocations)
-                      // 내륙 도시는 검색·날씨용이라 바다 지도 마커에서는 뺀다.
-                      if (!loc.inland &&
-                          field.contains(loc.latitude, loc.longitude))
-                        _LocationMarker(
-                          location: loc,
-                          highlighted: loc.id == widget.selected.id,
-                          showLabel:
-                              loc.id == widget.selected.id ||
-                              _scale >= labelThreshold(loc.rank),
-                          scale: _scale,
-                          left: projection.x(loc.longitude),
-                          top: projection.y(loc.latitude),
-                        ),
                     if (_pickedLat case final plat?)
                       if (_pickedLon case final plon?)
                         _PointCallout(
@@ -380,78 +355,6 @@ class _WindMapAreaState extends State<_WindMapArea> {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// 지도 위 지점 표시. 탭 처리는 지도 전체 [GestureDetector]가 맡으므로
-/// 여기서는 순수하게 점 + (조건부) 이름만 그린다.
-class _LocationMarker extends StatelessWidget {
-  const _LocationMarker({
-    required this.location,
-    required this.highlighted,
-    required this.showLabel,
-    required this.scale,
-    required this.left,
-    required this.top,
-  });
-
-  final SeaLocation location;
-  final bool highlighted;
-  final bool showLabel;
-
-  /// 지도의 현재 확대 배율 — 마커(점+이름)가 지도와 함께 커지지 않고
-  /// 항상 같은 화면 크기로 보이도록 반대로 축소하는 데 쓴다.
-  final double scale;
-  final double left;
-  final double top;
-
-  @override
-  Widget build(BuildContext context) {
-    final dotSize = highlighted ? 12.0 : 6.0;
-    return Positioned(
-      // (left, top)은 지점의 정확한 투영 좌표. 점(dot)의 중심이 이 좌표에
-      // 오도록 점 반지름만큼 당겨, 해안선(같은 투영으로 그린)과 맞춘다.
-      left: left,
-      top: top,
-      child: IgnorePointer(
-        child: Transform.translate(
-          offset: Offset(-dotSize / 2, -dotSize / 2),
-          child: Transform.scale(
-            scale: 1 / scale,
-            alignment: Alignment.topLeft,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: dotSize,
-                  height: dotSize,
-                  decoration: BoxDecoration(
-                    color: highlighted ? Colors.amberAccent : Colors.white70,
-                    shape: BoxShape.circle,
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black45, blurRadius: 2),
-                    ],
-                  ),
-                ),
-                if (showLabel) ...[
-                  const SizedBox(width: 3),
-                  Text(
-                    location.name,
-                    style: const TextStyle(
-                      fontSize: 9,
-                      height: 1.1,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      shadows: [Shadow(color: Colors.black, blurRadius: 3)],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

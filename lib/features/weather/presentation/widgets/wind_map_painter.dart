@@ -26,14 +26,17 @@ class WindMapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 1.1
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
     for (final p in particles) {
       final trail = p.trail;
       if (trail.length < 2) continue;
+      // 궤적을 하나의 연결된 흐름선(Path)으로 그리되, 머리쪽이 밝고
+      // 꼬리쪽으로 갈수록 흐려지도록 구간별 알파를 준다.
       for (var i = 1; i < trail.length; i++) {
         final t = i / trail.length;
-        paint.color = color.withValues(alpha: t * 0.85);
+        paint.color = color.withValues(alpha: t * t * 0.9);
         canvas.drawLine(
           Offset(trail[i - 1].dx * size.width, trail[i - 1].dy * size.height),
           Offset(trail[i].dx * size.width, trail[i].dy * size.height),
