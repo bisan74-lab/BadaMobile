@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
+import '../../kma_weather/presentation/widgets/weather_icon.dart';
 import '../data/models/marine_weather.dart';
 import '../data/models/wind_field.dart';
 import 'providers.dart';
@@ -52,22 +53,20 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// forecast at this point로 선택한 지점. null이면 일반(선택 지역) 모드.
   SeaLocation? _forecastPoint;
 
-  static const _particleCount = 200;
-  static const _maxAgeSeconds = 14.0;
+  static const _particleCount = 190;
+  static const _maxAgeSeconds = 16.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
   /// 짧은 선 → 조금 긴 선 → 아주 긴 흐름선으로 보이게 한다(윈디식 잔상).
-  /// 성능을 위해 궤적 상한을 적당히 둔다(과도하게 길면 프레임당 drawLine이
-  /// 수만 건이 돼 앱이 멈춘다).
-  static const _minTrail = 12;
-  static const _maxTrailCap = 44;
-  static const _trailSpeedFactor = 3.0;
+  /// 올챙이처럼 꼬리가 길게 남도록 상한을 넉넉히 잡되, 성능(프레임당
+  /// drawLine 수 = 파티클수 × 궤적)을 고려해 파티클 수는 낮춘다.
+  static const _minTrail = 20;
+  static const _maxTrailCap = 76;
+  static const _trailSpeedFactor = 4.5;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
-  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. 너무 크면(0.34) 바람이
-  /// 실제보다 빨라 보이고, 너무 작으면(0.12) 흐름선이 거의 안 보인다 —
-  /// 그 중간으로 잡는다.
-  static const _degreesPerMps = 0.2;
+  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy에 맞춰 0.18로 둔다.
+  static const _degreesPerMps = 0.18;
 
   @override
   void initState() {
@@ -312,7 +311,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
           return InteractiveViewer(
             transformationController: _transformController,
             minScale: 1,
-            maxScale: 6,
+            // 섬 이름까지 보이도록 더 깊게 확대할 수 있게 한다.
+            maxScale: 14,
             // 기본값(EdgeInsets.zero)을 그대로 써서 지도 바깥(빈 배경)이
             // 보이는 지점까지는 이동할 수 없게 한다 — 끝까지 이동하면
             // 지도 가장자리에서 멈춘다.
@@ -341,11 +341,19 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         ),
                         size: size,
                       ),
-                    RepaintBoundary(
-                      child: CustomPaint(
-                        painter: CoastlinePainter(projection: projection),
-                        size: size,
+                    // RepaintBoundary로 감싸지 않는다 — 감싸면 base 해상도로
+                    // 래스터화된 뒤 확대되어 흐려지고, 1/scale 두께가 사라진다.
+                    // 그냥 두면 InteractiveViewer의 변환 레이어가 벡터를 확대
+                    // 배율로 다시 그려 선이 선명하고, strokeWidth=0.6/scale이
+                    // 화면상 항상 얇게 유지된다. (파티클 레이어는 자체
+                    // RepaintBoundary가 있어 이 해안선은 매 프레임 다시 그려지지
+                    // 않는다.)
+                    CustomPaint(
+                      painter: CoastlinePainter(
+                        projection: projection,
+                        scale: _scale,
                       ),
+                      size: size,
                     ),
                     Positioned.fromRect(
                       rect: fieldRect,
@@ -664,7 +672,7 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   static const double _labelW = 62;
   static const double _dayH = 22;
   static const double _timeH = 20;
-  static const double _cellH = 25;
+  static const double _cellH = 23;
 
   /// 슬라이더가 표를 스크롤할 때 화면 왼쪽에서 선택 열까지 띄우는 여백(px).
   static const double _selectPad = 120;
@@ -841,12 +849,13 @@ class _Meteogram extends StatelessWidget {
   Widget build(BuildContext context) {
     const rows = [
       '시간',
+      '날씨',
       '기온 °C',
       '바람 m/s',
       '돌풍 m/s',
-      '파도 m',
-      '너울 m',
-      '너울주기 s',
+      'WIND m',
+      'SWELL m',
+      'SWELL2 m',
       '파력 kW/m',
       '수온 °C',
     ];
@@ -854,7 +863,7 @@ class _Meteogram extends StatelessWidget {
     final totalH =
         _PointForecastPanelState._dayH +
         _PointForecastPanelState._timeH +
-        _PointForecastPanelState._cellH * 8;
+        _PointForecastPanelState._cellH * (rows.length - 1);
     return SizedBox(
       height: totalH,
       child: Row(
@@ -925,8 +934,10 @@ class _MeteogramColumn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final windC = windSpeedColor(hour.windSpeedMs);
     final gustC = windSpeedColor(hour.windGustMs);
-    final waveC = waveHeightColor(hour.waveHeightM);
+    final windWaveC = waveHeightColor(hour.windWaveHeightM);
     final swellC = waveHeightColor(hour.swellHeightM);
+    final swell2C = waveHeightColor(hour.swell2HeightM);
+    final isNight = hour.time.hour < 6 || hour.time.hour >= 19;
 
     Widget cell(
       String text, {
@@ -945,6 +956,30 @@ class _MeteogramColumn extends StatelessWidget {
         ),
       ),
     );
+
+    // 방향 화살촉 + 숫자를 한 칸에 함께 그린다(바람·WIND·SWELL·SWELL2).
+    Widget arrowCell(String text, double dirDeg, {required Color bg}) {
+      final fg = _readableOn(bg);
+      return Container(
+        width: _PointForecastPanelState._colW,
+        height: _PointForecastPanelState._cellH,
+        color: bg,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            DirectionArrow(directionDeg: dirDeg, size: 9, color: fg),
+            const SizedBox(width: 2),
+            Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return GestureDetector(
       onTap: onTap,
@@ -977,18 +1012,43 @@ class _MeteogramColumn extends StatelessWidget {
                   : null,
             ),
             cell('${hour.time.hour}', h: _PointForecastPanelState._timeH),
+            // 날씨 아이콘(맑음·구름·비·번개 등).
+            SizedBox(
+              width: _PointForecastPanelState._colW,
+              height: _PointForecastPanelState._cellH,
+              child: Center(
+                child: WeatherIcon(
+                  code: hour.weatherCode,
+                  size: _PointForecastPanelState._cellH - 4,
+                  night: isNight,
+                ),
+              ),
+            ),
             cell('${hour.airTempC.round()}'),
-            cell('${hour.windSpeedMs.round()}', bg: windC),
+            arrowCell(
+              '${hour.windSpeedMs.round()}',
+              hour.windDirectionDeg,
+              bg: windC,
+            ),
             cell(
               '${hour.windGustMs.round()}',
               bg: gustC.withValues(alpha: 0.65),
             ),
-            cell(hour.waveHeightM.toStringAsFixed(1), bg: waveC),
-            cell(
-              hour.swellHeightM.toStringAsFixed(1),
-              bg: swellC.withValues(alpha: 0.7),
+            arrowCell(
+              hour.windWaveHeightM.toStringAsFixed(1),
+              hour.windWaveDirectionDeg,
+              bg: windWaveC,
             ),
-            cell('${hour.swellPeriodS.round()}'),
+            arrowCell(
+              hour.swellHeightM.toStringAsFixed(1),
+              hour.swellDirectionDeg,
+              bg: swellC.withValues(alpha: 0.85),
+            ),
+            arrowCell(
+              hour.swell2HeightM.toStringAsFixed(1),
+              hour.swell2DirectionDeg,
+              bg: swell2C.withValues(alpha: 0.7),
+            ),
             cell(formatWavePower(hour.wavePowerKw)),
             cell('${hour.waterTempC.round()}'),
           ],

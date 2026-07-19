@@ -12,6 +12,13 @@ class HourlyMarine {
     required this.airTempC,
     this.swellHeightM = 0,
     this.swellPeriodS = 0,
+    this.windWaveHeightM = 0,
+    this.windWaveDirectionDeg = 0,
+    this.swellDirectionDeg = 0,
+    this.swell2HeightM = 0,
+    this.swell2PeriodS = 0,
+    this.swell2DirectionDeg = 0,
+    this.weatherCode = 0,
   });
 
   final DateTime time;
@@ -36,6 +43,27 @@ class HourlyMarine {
   /// 너울 주기 (초).
   final double swellPeriodS;
 
+  /// 풍파(WIND) 파고 (m) — 현지 바람이 만든 파도.
+  final double windWaveHeightM;
+
+  /// 풍파가 밀려오는 방향 (도).
+  final double windWaveDirectionDeg;
+
+  /// 1차 너울(SWELL)이 밀려오는 방향 (도).
+  final double swellDirectionDeg;
+
+  /// 2차 너울(SWELL2) 파고 (m).
+  final double swell2HeightM;
+
+  /// 2차 너울 주기 (초).
+  final double swell2PeriodS;
+
+  /// 2차 너울이 밀려오는 방향 (도).
+  final double swell2DirectionDeg;
+
+  /// WMO 날씨 코드(맑음·구름·비·번개 등 아이콘용).
+  final int weatherCode;
+
   /// 파력(Wave power, kW/m). 심해 파에너지 플럭스 근사식
   /// P ≈ 0.49 · H² · T (H=유의파고 m, T=파주기 s)로 계산한다.
   double get wavePowerKw => 0.49 * waveHeightM * waveHeightM * wavePeriodS;
@@ -52,6 +80,13 @@ class HourlyMarine {
     'airTempC': airTempC,
     'swellHeightM': swellHeightM,
     'swellPeriodS': swellPeriodS,
+    'windWaveHeightM': windWaveHeightM,
+    'windWaveDirectionDeg': windWaveDirectionDeg,
+    'swellDirectionDeg': swellDirectionDeg,
+    'swell2HeightM': swell2HeightM,
+    'swell2PeriodS': swell2PeriodS,
+    'swell2DirectionDeg': swell2DirectionDeg,
+    'weatherCode': weatherCode,
   };
 
   factory HourlyMarine.fromJson(Map<String, dynamic> json) => HourlyMarine(
@@ -67,6 +102,14 @@ class HourlyMarine {
     // 예전 캐시에는 없을 수 있어 기본 0으로 흡수한다.
     swellHeightM: (json['swellHeightM'] as num?)?.toDouble() ?? 0,
     swellPeriodS: (json['swellPeriodS'] as num?)?.toDouble() ?? 0,
+    windWaveHeightM: (json['windWaveHeightM'] as num?)?.toDouble() ?? 0,
+    windWaveDirectionDeg:
+        (json['windWaveDirectionDeg'] as num?)?.toDouble() ?? 0,
+    swellDirectionDeg: (json['swellDirectionDeg'] as num?)?.toDouble() ?? 0,
+    swell2HeightM: (json['swell2HeightM'] as num?)?.toDouble() ?? 0,
+    swell2PeriodS: (json['swell2PeriodS'] as num?)?.toDouble() ?? 0,
+    swell2DirectionDeg: (json['swell2DirectionDeg'] as num?)?.toDouble() ?? 0,
+    weatherCode: (json['weatherCode'] as num?)?.toInt() ?? 0,
   );
 }
 

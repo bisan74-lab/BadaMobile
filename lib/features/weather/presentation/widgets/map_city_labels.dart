@@ -152,7 +152,7 @@ class MapCityLabelLayer extends StatelessWidget {
                     color: c.island
                         ? const Color(0xFFA9C4D8)
                         : const Color(0xFFBCC5CE),
-                    fontSize: c.rank == 1 ? 8.5 : 7.5,
+                    fontSize: c.rank == 1 ? 10.5 : 9.5,
                     fontWeight: FontWeight.w600,
                     shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
                   ),

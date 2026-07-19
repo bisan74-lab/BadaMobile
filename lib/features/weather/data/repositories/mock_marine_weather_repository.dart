@@ -46,6 +46,13 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
           24 +
           4 * math.sin(2 * math.pi * (t.hour - 9) / 24) +
           0.5 * math.sin(x / 13);
+      // 풍파(WIND)는 현지 바람 성분, 2차 너울(SWELL2)은 약한 부성분.
+      final windWave = math.max(0.1, wave - swell);
+      final swell2 = math.max(0.05, swell * (0.4 + 0.15 * math.sin(x / 27)));
+      final swell2Dir = (waveDirection + 60 * math.sin(x / 15) + 360) % 360;
+      // 대략적인 날씨 코드(맑음↔구름↔비)를 시드로 순환시킨다.
+      const codes = [0, 1, 2, 3, 45, 51, 61, 63, 80, 95];
+      final code = codes[(x.abs().floor() + seed.floor()) % codes.length];
 
       return HourlyMarine(
         time: t,
@@ -61,6 +68,13 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
         airTempC: double.parse(airTemp.toStringAsFixed(1)),
         swellHeightM: double.parse(swell.toStringAsFixed(1)),
         swellPeriodS: double.parse(swellPeriod.toStringAsFixed(1)),
+        windWaveHeightM: double.parse(windWave.toStringAsFixed(1)),
+        windWaveDirectionDeg: double.parse(direction.toStringAsFixed(0)),
+        swellDirectionDeg: double.parse(waveDirection.toStringAsFixed(0)),
+        swell2HeightM: double.parse(swell2.toStringAsFixed(1)),
+        swell2PeriodS: double.parse((swellPeriod + 3).toStringAsFixed(1)),
+        swell2DirectionDeg: double.parse(swell2Dir.toStringAsFixed(0)),
+        weatherCode: code,
       );
     });
 

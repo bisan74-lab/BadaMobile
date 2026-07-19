@@ -41,13 +41,16 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       ...common,
       'hourly':
           'wave_height,wave_period,wave_direction,sea_surface_temperature,'
-          'swell_wave_height,swell_wave_period',
+          'wind_wave_height,wind_wave_direction,'
+          'swell_wave_height,swell_wave_period,swell_wave_direction,'
+          'secondary_swell_wave_height,secondary_swell_wave_period,'
+          'secondary_swell_wave_direction',
     });
     final forecastUri = Uri.https(_forecastHost, '/v1/forecast', {
       ...common,
       'hourly':
           'wind_speed_10m,wind_gusts_10m,wind_direction_10m,'
-          'temperature_2m',
+          'temperature_2m,weather_code',
       'wind_speed_unit': 'ms',
     });
 
@@ -110,32 +113,48 @@ List<HourlyMarine> mergeOpenMeteoHourly({
   final windGust = nums(forecast, 'wind_gusts_10m');
   final windDir = nums(forecast, 'wind_direction_10m');
   final airTemp = nums(forecast, 'temperature_2m');
+  final weatherCode = nums(forecast, 'weather_code');
   final waveHeight = nums(marine, 'wave_height');
   final wavePeriod = nums(marine, 'wave_period');
   final waveDir = nums(marine, 'wave_direction');
   final waterTemp = nums(marine, 'sea_surface_temperature');
   final swellHeight = nums(marine, 'swell_wave_height');
   final swellPeriod = nums(marine, 'swell_wave_period');
+  final swellDir = nums(marine, 'swell_wave_direction');
+  final windWaveHeight = nums(marine, 'wind_wave_height');
+  final windWaveDir = nums(marine, 'wind_wave_direction');
+  final swell2Height = nums(marine, 'secondary_swell_wave_height');
+  final swell2Period = nums(marine, 'secondary_swell_wave_period');
+  final swell2Dir = nums(marine, 'secondary_swell_wave_direction');
 
   double last(List<double?> xs, int i, double prev) =>
       (i >= 0 && i < xs.length ? xs[i] : null) ?? prev;
 
   final result = <HourlyMarine>[];
-  var pWind = 0.0, pGust = 0.0, pWindDir = 0.0, pAir = 0.0;
+  var pWind = 0.0, pGust = 0.0, pWindDir = 0.0, pAir = 0.0, pCode = 0.0;
   var pWave = 0.0, pPeriod = 0.0, pWaveDir = 0.0, pWater = 0.0;
-  var pSwell = 0.0, pSwellPeriod = 0.0;
+  var pSwell = 0.0, pSwellPeriod = 0.0, pSwellDir = 0.0;
+  var pWindWave = 0.0, pWindWaveDir = 0.0;
+  var pSwell2 = 0.0, pSwell2Period = 0.0, pSwell2Dir = 0.0;
   for (var i = 0; i < times.length && result.length < maxHours; i++) {
     final mi = marineIndex[times[i]] ?? -1;
     pWind = last(windSpeed, i, pWind);
     pGust = last(windGust, i, pGust);
     pWindDir = last(windDir, i, pWindDir);
     pAir = last(airTemp, i, pAir);
+    pCode = last(weatherCode, i, pCode);
     pWave = last(waveHeight, mi, pWave);
     pPeriod = last(wavePeriod, mi, pPeriod);
     pWaveDir = last(waveDir, mi, pWaveDir);
     pWater = last(waterTemp, mi, pWater);
     pSwell = last(swellHeight, mi, pSwell);
     pSwellPeriod = last(swellPeriod, mi, pSwellPeriod);
+    pSwellDir = last(swellDir, mi, pSwellDir);
+    pWindWave = last(windWaveHeight, mi, pWindWave);
+    pWindWaveDir = last(windWaveDir, mi, pWindWaveDir);
+    pSwell2 = last(swell2Height, mi, pSwell2);
+    pSwell2Period = last(swell2Period, mi, pSwell2Period);
+    pSwell2Dir = last(swell2Dir, mi, pSwell2Dir);
     result.add(
       HourlyMarine(
         time: times[i],
@@ -149,6 +168,13 @@ List<HourlyMarine> mergeOpenMeteoHourly({
         airTempC: pAir,
         swellHeightM: pSwell,
         swellPeriodS: pSwellPeriod,
+        windWaveHeightM: pWindWave,
+        windWaveDirectionDeg: pWindWaveDir,
+        swellDirectionDeg: pSwellDir,
+        swell2HeightM: pSwell2,
+        swell2PeriodS: pSwell2Period,
+        swell2DirectionDeg: pSwell2Dir,
+        weatherCode: pCode.round(),
       ),
     );
   }
