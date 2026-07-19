@@ -76,6 +76,25 @@ const List<CityLabel> mapCityLabels = [
   (name: '흑산도', lat: 34.6839, lon: 125.4292, rank: 3, island: true),
   (name: '홍도', lat: 34.6857, lon: 125.1988, rank: 3, island: true),
   (name: '독도', lat: 37.2429, lon: 131.8686, rank: 3, island: true),
+
+  // rank 3 — 낚시로 많이 가는 섬들(서해·남해 위주). 확대하면 드러난다.
+  (name: '외연도', lat: 36.2072, lon: 126.0808, rank: 3, island: true),
+  (name: '어청도', lat: 36.1156, lon: 125.9797, rank: 3, island: true),
+  (name: '원산도', lat: 36.3606, lon: 126.4231, rank: 3, island: true),
+  (name: '삽시도', lat: 36.2986, lon: 126.4136, rank: 3, island: true),
+  (name: '녹도', lat: 36.3283, lon: 126.3178, rank: 3, island: true),
+  (name: '호도', lat: 36.3222, lon: 126.2536, rank: 3, island: true),
+  (name: '덕적도', lat: 37.2264, lon: 126.1394, rank: 3, island: true),
+  (name: '굴업도', lat: 37.1922, lon: 125.9908, rank: 3, island: true),
+  (name: '대이작도', lat: 37.2372, lon: 126.2286, rank: 3, island: true),
+  (name: '위도', lat: 35.6208, lon: 126.3006, rank: 3, island: true),
+  (name: '가의도', lat: 36.6803, lon: 126.1058, rank: 3, island: true),
+  (name: '격렬비열도', lat: 36.5872, lon: 125.5528, rank: 3, island: true),
+  (name: '거문도', lat: 34.0281, lon: 127.3122, rank: 3, island: true),
+  (name: '청산도', lat: 34.1706, lon: 126.8556, rank: 3, island: true),
+  (name: '보길도', lat: 34.1611, lon: 126.5306, rank: 3, island: true),
+  (name: '추자도', lat: 33.9531, lon: 126.3011, rank: 3, island: true),
+  (name: '가거도', lat: 34.0736, lon: 125.1214, rank: 3, island: true),
 ];
 
 /// 지도 위에 도시 이름 라벨을 확대 단계별로 찍는다(지도 앱 스타일).
@@ -93,12 +112,22 @@ class MapCityLabelLayer extends StatelessWidget {
   final double scale;
 
   /// rank별 라벨 노출 임계 배율. 기본 배율(1.0)에서는 최상위 도시만 보이고,
-  /// 확대할수록 더 많은 지역이 단계적으로 드러난다.
-  static double _threshold(int rank) => switch (rank) {
-    1 => 1.0,
-    2 => 2.4,
-    _ => 3.8,
-  };
+  /// 확대할수록 더 많은 지역이 단계적으로 드러난다. 섬(낚시 포인트)은
+  /// 조금 더 낮은 배율에서부터 보이도록 임계값을 낮춘다.
+  static double _thresholdFor(CityLabel c) {
+    if (c.island) {
+      return switch (c.rank) {
+        1 => 1.0,
+        2 => 1.7,
+        _ => 2.6,
+      };
+    }
+    return switch (c.rank) {
+      1 => 1.0,
+      2 => 2.4,
+      _ => 3.8,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +135,7 @@ class MapCityLabelLayer extends StatelessWidget {
     return Stack(
       children: [
         for (final c in mapCityLabels)
-          if (scale >= _threshold(c.rank) &&
+          if (scale >= _thresholdFor(c) &&
               c.lon >= b.minLon &&
               c.lon <= b.maxLon &&
               c.lat >= b.minLat &&

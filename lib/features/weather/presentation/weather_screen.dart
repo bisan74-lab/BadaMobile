@@ -47,6 +47,9 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// (60fps setState는 지도·해안선·라벨까지 매 프레임 재구성해 프레임을
   /// 떨어뜨리고 ANR로 앱이 종료됐다).
   final ValueNotifier<int> _repaint = ValueNotifier(0);
+
+  /// 예보 표에서 선택 중인 시각의 해양값 — 지도 위 방향 나침반과 공유한다.
+  final ValueNotifier<HourlyMarine?> _roseHour = ValueNotifier(null);
   WindFieldSeries? _series;
   int _hourOffset = 0;
 
@@ -79,6 +82,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   void dispose() {
     _ticker.dispose();
     _repaint.dispose();
+    _roseHour.dispose();
     super.dispose();
   }
 
@@ -165,6 +169,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                   particles: _particles,
                   repaint: _repaint,
                   forecastPoint: _forecastPoint,
+                  roseHour: _roseHour,
                   onForecast: (lat, lon) => setState(
                     () => _forecastPoint = pointSeaLocation(lat, lon),
                   ),
@@ -177,7 +182,11 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                 child: _forecastPoint != null
                     ? _PointForecastPanel(
                         location: _forecastPoint!,
-                        onClose: () => setState(() => _forecastPoint = null),
+                        roseHour: _roseHour,
+                        onClose: () {
+                          _roseHour.value = null;
+                          setState(() => _forecastPoint = null);
+                        },
                       )
                     : _BottomInfoBar(
                         selected: selected,
@@ -206,6 +215,7 @@ class _WindMapArea extends StatefulWidget {
     required this.particles,
     required this.repaint,
     required this.forecastPoint,
+    required this.roseHour,
     required this.onForecast,
   });
 
@@ -215,8 +225,11 @@ class _WindMapArea extends StatefulWidget {
   /// 매 프레임 파티클 레이어만 다시 그리게 하는 리페인트 신호.
   final Listenable repaint;
 
-  /// 현재 예보 모드로 켜진 지점(있으면 핀을 강조 표시).
+  /// 현재 예보 모드로 켜진 지점(있으면 그 지점에 방향 나침반을 그린다).
   final SeaLocation? forecastPoint;
+
+  /// 방향 나침반에 표시할 현재 선택 시각의 해양값(예보 표와 공유).
+  final ValueNotifier<HourlyMarine?> roseHour;
 
   /// "이 지점의 예보" 버튼 → 해당 좌표로 예보 모드 진입.
   final void Function(double lat, double lon) onForecast;
@@ -380,7 +393,21 @@ class _WindMapAreaState extends State<_WindMapArea> {
                     // 지도 앱처럼 도시 이름만 확대 단계별로 표시(항구 점 라벨은
                     // 제거해 깔끔하게). 지역 선택은 우측 상단 지역 선택 버튼으로 한다.
                     MapCityLabelLayer(projection: projection, scale: _scale),
-                    if (_pickedLat case final plat?)
+                    // 예보 표가 열려 있으면 그 지점에 윈디식 방향 나침반(로즈)을,
+                    // 아니면 탭한 지점에 "이 지점의 예보" 말풍선을 띄운다.
+                    if (widget.forecastPoint case final fp?)
+                      ValueListenableBuilder<HourlyMarine?>(
+                        valueListenable: widget.roseHour,
+                        builder: (context, hour, _) => hour == null
+                            ? const SizedBox.shrink()
+                            : _ForecastRose(
+                                scale: _scale,
+                                left: projection.x(fp.longitude),
+                                top: projection.y(fp.latitude),
+                                hour: hour,
+                              ),
+                      )
+                    else if (_pickedLat case final plat?)
                       if (_pickedLon case final plon?)
                         _PointCallout(
                           scale: _scale,
@@ -644,6 +671,181 @@ class _PointCallout extends StatelessWidget {
   }
 }
 
+/// 선택 지점 위에 뜨는 윈디식 방향 나침반. 가운데 점을 중심으로 WIND(바람)·
+/// SWELL(너울)·SWELL2(2차 너울)가 각자 진행 방향으로 뻗는 색 막대와 값
+/// 라벨을 그린다. 지도를 확대해도 크기가 일정하도록 반대로 축소한다.
+class _ForecastRose extends StatelessWidget {
+  const _ForecastRose({
+    required this.scale,
+    required this.left,
+    required this.top,
+    required this.hour,
+  });
+
+  final double scale;
+  final double left;
+  final double top;
+  final HourlyMarine hour;
+
+  static const double _r = 44; // 막대 길이(중심→끝)
+  static const double _d = 220; // 로즈 박스 한 변(라벨 공간 포함)
+  static const Offset _c = Offset(_d / 2, _d / 2);
+
+  static const _windC = Color(0xFF4FC7E8);
+  static const _swellC = Color(0xFFF2A03D);
+  static const _swell2C = Color(0xFF8CC152);
+
+  @override
+  Widget build(BuildContext context) {
+    final bars = <({double dir, Color color, String label, String value})>[
+      (
+        dir: hour.windDirectionDeg,
+        color: _windC,
+        label: 'WIND',
+        value: '${hour.windSpeedMs.round()}m/s',
+      ),
+      (
+        dir: hour.swellDirectionDeg,
+        color: _swellC,
+        label: 'SWELL',
+        value:
+            '${hour.swellHeightM.toStringAsFixed(1)}m, ${hour.swellPeriodS.round()}s',
+      ),
+      (
+        dir: hour.swell2DirectionDeg,
+        color: _swell2C,
+        label: 'SWELL 2',
+        value:
+            '${hour.swell2HeightM.toStringAsFixed(1)}m, ${hour.swell2PeriodS.round()}s',
+      ),
+    ];
+    return Positioned(
+      left: left,
+      top: top,
+      child: FractionalTranslation(
+        translation: const Offset(-0.5, -0.5),
+        child: Transform.scale(
+          scale: 1 / scale,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: _d,
+            height: _d,
+            child: Stack(
+              children: [
+                CustomPaint(
+                  size: const Size(_d, _d),
+                  painter: _RosePainter(
+                    center: _c,
+                    radius: _r,
+                    bars: [for (final b in bars) (dir: b.dir, color: b.color)],
+                  ),
+                ),
+                for (final b in bars) _label(b.dir, b.color, b.label, b.value),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _label(double dirDeg, Color color, String label, String value) {
+    // 막대는 진행(불어가는) 방향(dir+180)으로 뻗는다.
+    final rad = (dirDeg + 180) * math.pi / 180;
+    final pos = _c + Offset(math.sin(rad), -math.cos(rad)) * (_r + 8);
+    return Positioned(
+      left: pos.dx,
+      top: pos.dy,
+      child: FractionalTranslation(
+        translation: const Offset(-0.5, -0.5),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xE6202A33),
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: color, width: 1.3),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.bold,
+                  height: 1.05,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RosePainter extends CustomPainter {
+  _RosePainter({
+    required this.center,
+    required this.radius,
+    required this.bars,
+  });
+
+  final Offset center;
+  final double radius;
+  final List<({double dir, Color color})> bars;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 반투명 원.
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+    // 각 막대(진행 방향으로 뻗는 두꺼운 캡슐).
+    for (final b in bars) {
+      final rad = (b.dir + 180) * math.pi / 180;
+      final end = center + Offset(math.sin(rad), -math.cos(rad)) * radius;
+      canvas.drawLine(
+        center,
+        end,
+        Paint()
+          ..color = b.color
+          ..strokeWidth = 8
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    // 중심 점.
+    canvas.drawCircle(center, 5, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      center,
+      5,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RosePainter old) =>
+      old.center != center || old.radius != radius || old.bars != bars;
+}
+
 /// 파고/너울 높이(m) → 색상. 낮음(청록) → 높음(분홍/자주)으로 이어지는
 /// 윈디식 스케일. 바람은 [windSpeedColor]를 쓰고 파도 계열은 이 함수를 쓴다.
 Color waveHeightColor(double m) {
@@ -659,9 +861,16 @@ Color _readableOn(Color bg) =>
 /// 강화하고, 표는 하단에 붙여 3시간 간격으로 향후 2주를 가로 스크롤로 본다.
 /// 바람·돌풍·파도·너울에 색을 입혀 세기를 직관적으로 느낄 수 있게 한다.
 class _PointForecastPanel extends ConsumerStatefulWidget {
-  const _PointForecastPanel({required this.location, required this.onClose});
+  const _PointForecastPanel({
+    required this.location,
+    required this.roseHour,
+    required this.onClose,
+  });
 
   final SeaLocation location;
+
+  /// 선택 중인 시각의 해양값을 지도 위 방향 나침반에 전달하는 통로.
+  final ValueNotifier<HourlyMarine?> roseHour;
   final VoidCallback onClose;
 
   @override
@@ -816,6 +1025,10 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                 final i = _i.clamp(0, steps.length - 1);
                 final at = steps[i];
                 final atIsNow = i == nowIdx;
+                // 지도 위 방향 나침반이 이 선택 시각을 반영하도록 전달한다.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) widget.roseHour.value = at;
+                });
                 return Column(
                   children: [
                     // 상단 시간 슬라이더(그래픽 강화). 선택 시각을 크게 강조하고,
@@ -909,9 +1122,9 @@ class _Meteogram extends StatelessWidget {
       '기온 °C',
       '바람 m/s',
       '돌풍 m/s',
-      'WIND m',
-      'SWELL m',
-      'SWELL2 m',
+      '풍파 m',
+      '너울 m',
+      '너울2 m',
       '파력 kW/m',
       '수온 °C',
     ];
