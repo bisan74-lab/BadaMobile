@@ -53,16 +53,17 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// forecast at this point로 선택한 지점. null이면 일반(선택 지역) 모드.
   SeaLocation? _forecastPoint;
 
-  static const _particleCount = 190;
-  static const _maxAgeSeconds = 16.0;
+  static const _particleCount = 170;
+  static const _maxAgeSeconds = 18.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
   /// 짧은 선 → 조금 긴 선 → 아주 긴 흐름선으로 보이게 한다(윈디식 잔상).
-  /// 올챙이처럼 꼬리가 길게 남도록 상한을 넉넉히 잡되, 성능(프레임당
-  /// drawLine 수 = 파티클수 × 궤적)을 고려해 파티클 수는 낮춘다.
-  static const _minTrail = 20;
-  static const _maxTrailCap = 76;
-  static const _trailSpeedFactor = 4.5;
+  /// 올챙이처럼 꼬리가 길게 남도록 상한을 넉넉히 잡되, 풍속 비례 계수를
+  /// 키워 센 바람일수록 확실히 더 길어지게 한다. 성능(프레임당 drawLine 수
+  /// = 파티클수 × 궤적)을 위해 파티클 수는 낮춘다.
+  static const _minTrail = 22;
+  static const _maxTrailCap = 112;
+  static const _trailSpeedFactor = 7.0;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
   /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy에 맞춰 0.18로 둔다.
@@ -672,7 +673,23 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   int _i = 0;
   int _stepCount = 0;
   bool _syncingFromSlider = false;
+  bool _initialized = false;
   final ScrollController _hCtrl = ScrollController();
+
+  /// [steps] 중 현재 시각과 가장 가까운 칸의 인덱스.
+  int _closestToNow(List<HourlyMarine> steps) {
+    final now = DateTime.now();
+    var best = 0;
+    var bestDiff = const Duration(days: 999);
+    for (var k = 0; k < steps.length; k++) {
+      final d = steps[k].time.difference(now).abs();
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = k;
+      }
+    }
+    return best;
+  }
 
   static const double _colW = 46;
   static const double _labelW = 62;
@@ -787,24 +804,54 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                   );
                 }
                 _stepCount = steps.length;
+                final nowIdx = _closestToNow(steps);
+                // 진입 시 현재 시각과 가장 가까운 칸에 위치시키고 그리로 스크롤.
+                if (!_initialized) {
+                  _initialized = true;
+                  _i = nowIdx;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _scrollToSelected();
+                  });
+                }
                 final i = _i.clamp(0, steps.length - 1);
                 final at = steps[i];
+                final atIsNow = i == nowIdx;
                 return Column(
                   children: [
-                    // 상단 시간 슬라이더(그래픽 강화).
+                    // 상단 시간 슬라이더(그래픽 강화). 선택 시각을 크게 강조하고,
+                    // 현재 시각이면 "지금" 배지를 붙여 잘 보이게 한다.
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Row(
                         children: [
-                          Icon(Icons.schedule, size: 16, color: scheme.primary),
+                          Icon(Icons.schedule, size: 18, color: scheme.primary),
                           const SizedBox(width: 6),
-                          SizedBox(
-                            width: 134,
-                            child: Text(
-                              '${formatMonthDay(at.time)} ${formatHm(at.time)}',
-                              style: Theme.of(context).textTheme.labelMedium,
+                          if (atIsNow)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '지금',
+                                style: TextStyle(
+                                  color: scheme.onPrimary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
+                          Text(
+                            '${formatMonthDay(at.time)} ${formatHm(at.time)}',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Slider(
                               value: i.toDouble(),
@@ -822,6 +869,7 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                     _Meteogram(
                       steps: steps,
                       selected: i,
+                      nowIndex: nowIdx,
                       controller: _hCtrl,
                       onColumnTap: (j) => setState(() => _i = j),
                     ),
@@ -842,12 +890,14 @@ class _Meteogram extends StatelessWidget {
   const _Meteogram({
     required this.steps,
     required this.selected,
+    required this.nowIndex,
     required this.controller,
     required this.onColumnTap,
   });
 
   final List<HourlyMarine> steps;
   final int selected;
+  final int nowIndex;
   final ScrollController controller;
   final ValueChanged<int> onColumnTap;
 
@@ -911,6 +961,7 @@ class _Meteogram extends StatelessWidget {
                   hour: steps[j],
                   isNewDay: isNewDay,
                   isSelected: j == selected,
+                  isNow: j == nowIndex,
                   onTap: () => onColumnTap(j),
                 );
               },
@@ -927,12 +978,14 @@ class _MeteogramColumn extends StatelessWidget {
     required this.hour,
     required this.isNewDay,
     required this.isSelected,
+    required this.isNow,
     required this.onTap,
   });
 
   final HourlyMarine hour;
   final bool isNewDay;
   final bool isSelected;
+  final bool isNow;
   final VoidCallback onTap;
 
   @override
@@ -992,30 +1045,57 @@ class _MeteogramColumn extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           border: Border(
+            // 현재 시각 칸은 왼쪽 테두리를 굵은 강조색으로.
             left: BorderSide(
-              color: isNewDay ? scheme.outline : scheme.outlineVariant,
-              width: isNewDay ? 1.2 : 0.4,
+              color: isNow
+                  ? scheme.primary
+                  : (isNewDay ? scheme.outline : scheme.outlineVariant),
+              width: isNow ? 2.4 : (isNewDay ? 1.2 : 0.4),
             ),
           ),
-          color: isSelected ? scheme.primary.withValues(alpha: 0.12) : null,
+          color: isSelected
+              ? scheme.primary.withValues(alpha: 0.14)
+              : (isNow ? scheme.primary.withValues(alpha: 0.06) : null),
         ),
         child: Column(
           children: [
-            // 날짜(새 날에만) — 상단 행.
+            // 상단 행: 현재 시각이면 "지금" 배지, 아니면 새 날짜.
             SizedBox(
               height: _PointForecastPanelState._dayH,
               width: _PointForecastPanelState._colW,
-              child: isNewDay
+              child: isNow
                   ? Center(
-                      child: Text(
-                        '${hour.time.month}/${hour.time.day}',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
                           color: scheme.primary,
-                          fontWeight: FontWeight.bold,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Text(
+                          '지금',
+                          style: TextStyle(
+                            color: scheme.onPrimary,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     )
-                  : null,
+                  : (isNewDay
+                        ? Center(
+                            child: Text(
+                              '${hour.time.month}/${hour.time.day}',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          )
+                        : null),
             ),
             cell('${hour.time.hour}', h: _PointForecastPanelState._timeH),
             // 날씨 아이콘(맑음·구름·비·번개 등).
