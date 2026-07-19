@@ -34,9 +34,13 @@ dart format lib test       # 커밋 전 포맷
   (26.5~45.5)의 부분집합이므로 히트맵·해안선은 그대로 뷰를 채운다. 격자 범위
   자체를 바꾸면 `country_borders_data.dart`(해안선)도 같은 범위로 재추출해야
   한다(Natural Earth 50m geojson을 bbox로 클리핑, 공개 도메인 데이터).
-- 해안선(`CoastlinePainter`)은 내장 데이터가 실제보다 약간 동쪽이라 `_lonShift`
-  (현재 -0.5°)로 서쪽으로 당겨 그린다 — 지도에 항구 점은 없애고 도시 라벨
-  (`MapCityLabelLayer`, rank별 확대 단계 노출)만 지도 앱처럼 표시한다.
+- 해안선(`CoastlinePainter`)은 내장 데이터가 실제보다 약간 동쪽이라
+  `kMapLonShift`(`map_projection.dart`, 현재 -0.5°)로 서쪽으로 당겨 그린다.
+  **도시 라벨(`MapCityLabelLayer`)도 반드시 같은 `kMapLonShift`를 적용**해야
+  지명이 바다로 밀려나지 않고 해안선(육지) 위에 얹힌다 — 한쪽만 보정하면
+  라벨이 어긋난다. 지도에 항구 점은 없애고 라벨(rank별 확대 단계 노출)만
+  지도 앱처럼 표시하며, `island:true` 항목(제주·울릉도·강화도·백령도 등)은
+  하늘색 마름모로 구분해 확대 시 바다 위 섬 이름도 드러난다.
 - **강제 업데이트 게이트**(`core/remote_config/`): `remote_config/app_gate.json`의
   `forceUpgrade`를 true로 바꾸면(앱 재배포 없이) 이미 설치된 모든 기기에서
   앱 실행이 막히고 업데이트 안내 화면(`ForceUpgradeScreen`)만 뜬다 — 무료

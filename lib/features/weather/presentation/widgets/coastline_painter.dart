@@ -12,9 +12,8 @@ class CoastlinePainter extends CustomPainter {
 
   final MapProjection projection;
 
-  /// 내장 해안선 데이터가 실제 해안보다 약간 동쪽으로 치우쳐 있어(항구 점 대비),
-  /// 경도를 서쪽으로 살짝 당겨 항구 위치와 맞춘다.
-  static const double _lonShift = -0.5;
+  /// 지명 라벨과 동일한 보정값을 공유한다([kMapLonShift]).
+  static const double _lonShift = kMapLonShift;
 
   @override
   void paint(Canvas canvas, Size size) {

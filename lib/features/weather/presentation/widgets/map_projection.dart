@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+/// 내장 해안선(Natural Earth) 데이터가 실제 해안보다 약간 동쪽으로 치우쳐
+/// 있어, 지도 위 모든 지리 레이어(해안선·지명 라벨)를 이 값만큼 서쪽으로
+/// 함께 당겨 그린다. 해안선과 라벨이 **같은 보정값**을 써야 지명이 바다로
+/// 밀려나지 않고 육지 위에 얹힌다.
+const double kMapLonShift = -0.5;
+
 /// 위경도 사각 범위.
 class LatLonBounds {
   const LatLonBounds({
