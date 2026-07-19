@@ -18,7 +18,7 @@ class WindParticle {
 
 /// [particles]의 궤적을 오래된 구간일수록 흐리게 그린다 (윈디 스타일 흐름선).
 class WindMapPainter extends CustomPainter {
-  WindMapPainter({required this.particles, required this.color});
+  WindMapPainter({required this.particles, required this.color, super.repaint});
 
   final List<WindParticle> particles;
   final Color color;
@@ -39,8 +39,8 @@ class WindMapPainter extends CustomPainter {
       for (var i = 1; i < n; i++) {
         final t = i / (n - 1); // 0(꼬리) ~ 1(머리)
         paint
-          ..color = color.withValues(alpha: t * t * 0.5)
-          ..strokeWidth = 0.4 + t * 0.7;
+          ..color = color.withValues(alpha: t * t * 0.62)
+          ..strokeWidth = 0.5 + t * 0.9;
         canvas.drawLine(
           Offset(trail[i - 1].dx * size.width, trail[i - 1].dy * size.height),
           Offset(trail[i].dx * size.width, trail[i].dy * size.height),

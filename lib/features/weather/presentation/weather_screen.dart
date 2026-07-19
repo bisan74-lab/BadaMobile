@@ -40,27 +40,34 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   Duration _lastElapsed = Duration.zero;
   final _random = math.Random();
   final List<WindParticle> _particles = [];
+
+  /// 파티클 애니메이션 전용 리페인트 신호. 매 프레임 이 값만 올려
+  /// **바람 레이어만** 다시 그리고, 위젯 트리 전체를 rebuild하지 않는다
+  /// (60fps setState는 지도·해안선·라벨까지 매 프레임 재구성해 프레임을
+  /// 떨어뜨리고 ANR로 앱이 종료됐다).
+  final ValueNotifier<int> _repaint = ValueNotifier(0);
   WindFieldSeries? _series;
   int _hourOffset = 0;
 
   /// forecast at this point로 선택한 지점. null이면 일반(선택 지역) 모드.
   SeaLocation? _forecastPoint;
 
-  static const _particleCount = 300;
-  static const _maxAgeSeconds = 16.0;
+  static const _particleCount = 200;
+  static const _maxAgeSeconds = 14.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
   /// 짧은 선 → 조금 긴 선 → 아주 긴 흐름선으로 보이게 한다(윈디식 잔상).
-  /// 이동속도를 낮춘 대신 궤적을 길게 잡아 흐름선 길이는 유지한다.
-  static const _minTrail = 22;
-  static const _maxTrailCap = 120;
-  static const _trailSpeedFactor = 6.0;
+  /// 성능을 위해 궤적 상한을 적당히 둔다(과도하게 길면 프레임당 drawLine이
+  /// 수만 건이 돼 앱이 멈춘다).
+  static const _minTrail = 12;
+  static const _maxTrailCap = 44;
+  static const _trailSpeedFactor = 3.0;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
-  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy 앱의 파티클 이동
-  /// 속도에 맞춰 낮게 잡았다(너무 크면 바람이 실제보다 빨라 보인다). 궤적
-  /// 길이(_minTrail·_maxTrailCap)를 늘려 속도를 낮춰도 선은 잘 보이게 한다.
-  static const _degreesPerMps = 0.12;
+  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. 너무 크면(0.34) 바람이
+  /// 실제보다 빨라 보이고, 너무 작으면(0.12) 흐름선이 거의 안 보인다 —
+  /// 그 중간으로 잡는다.
+  static const _degreesPerMps = 0.2;
 
   @override
   void initState() {
@@ -71,6 +78,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   @override
   void dispose() {
     _ticker.dispose();
+    _repaint.dispose();
     super.dispose();
   }
 
@@ -128,7 +136,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
         _particles[i] = _spawnParticle(field);
       }
     }
-    setState(() {});
+    // 위젯 트리 전체를 rebuild하지 않고 바람 레이어만 다시 그린다.
+    _repaint.value++;
   }
 
   @override
@@ -154,6 +163,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                 child: _WindMapArea(
                   field: field,
                   particles: _particles,
+                  repaint: _repaint,
                   forecastPoint: _forecastPoint,
                   onForecast: (lat, lon) => setState(
                     () => _forecastPoint = pointSeaLocation(lat, lon),
@@ -194,12 +204,16 @@ class _WindMapArea extends StatefulWidget {
   const _WindMapArea({
     required this.field,
     required this.particles,
+    required this.repaint,
     required this.forecastPoint,
     required this.onForecast,
   });
 
   final WindField field;
   final List<WindParticle> particles;
+
+  /// 매 프레임 파티클 레이어만 다시 그리게 하는 리페인트 신호.
+  final Listenable repaint;
 
   /// 현재 예보 모드로 켜진 지점(있으면 핀을 강조 표시).
   final SeaLocation? forecastPoint;
@@ -327,19 +341,25 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         ),
                         size: size,
                       ),
-                    CustomPaint(
-                      painter: CoastlinePainter(projection: projection),
-                      size: size,
+                    RepaintBoundary(
+                      child: CustomPaint(
+                        painter: CoastlinePainter(projection: projection),
+                        size: size,
+                      ),
                     ),
                     Positioned.fromRect(
                       rect: fieldRect,
-                      child: CustomPaint(
-                        painter: WindMapPainter(
-                          particles: widget.particles,
-                          // 순백이 아니라 살짝 흐린 회백색으로 은은하게.
-                          color: const Color(0xFFDCE6F0),
+                      // 파티클만 매 프레임 다시 그려지도록 경계를 둔다.
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: WindMapPainter(
+                            particles: widget.particles,
+                            // 순백이 아니라 살짝 흐린 회백색으로 은은하게.
+                            color: const Color(0xFFDCE6F0),
+                            repaint: widget.repaint,
+                          ),
+                          size: fieldRect.size,
                         ),
-                        size: fieldRect.size,
                       ),
                     ),
                     // 지도 앱처럼 도시 이름만 확대 단계별로 표시(항구 점 라벨은

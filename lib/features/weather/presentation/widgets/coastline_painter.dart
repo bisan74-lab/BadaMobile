@@ -34,11 +34,13 @@ class CoastlinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    final paths = <Path>[];
+    // 수백 개 해안선·섬 폴리라인을 **하나의 Path**로 합쳐 한 번에 그린다
+    // (폴리라인마다 drawPath를 부르면 블러 처리 비용이 커져 첫 프레임이
+    // 크게 지연되고 화면이 잠깐 검게 보인다).
+    final path = Path();
     for (final polylines in countryBorders.values) {
       for (final points in polylines) {
         if (points.length < 2) continue;
-        final path = Path();
         final start = projection.project(
           points.first.$1,
           points.first.$2 + _lonShift,
@@ -48,15 +50,10 @@ class CoastlinePainter extends CustomPainter {
           final o = projection.project(p.$1, p.$2 + _lonShift);
           path.lineTo(o.dx, o.dy);
         }
-        paths.add(path);
       }
     }
-    for (final path in paths) {
-      canvas.drawPath(path, halo);
-    }
-    for (final path in paths) {
-      canvas.drawPath(path, line);
-    }
+    canvas.drawPath(path, halo);
+    canvas.drawPath(path, line);
   }
 
   @override
