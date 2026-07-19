@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // pump()로 몇 프레임만 진행해 예외 없이 그려지는지 확인한다.
 
 void main() {
-  testWidgets('날씨 화면이 지도·시간 스크러버·상세 정보를 그린다', (tester) async {
+  testWidgets('진입 시 지도만 그리고, 지도를 탭하면 상단에 바람·상세예보가 뜬다', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
@@ -35,12 +35,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
 
+    // 진입 시: 지도(CustomPaint)만, 하단 표/스크러버·상단 바 없음.
     expect(find.byType(CustomPaint), findsWidgets);
-    // 지도가 화면 전체를 채우고 그 위에 하단 정보 바가 겹쳐 뜨므로
-    // 스크롤 없이 바로 스크러버가 보여야 한다.
-    expect(find.byType(Slider), findsOneWidget);
-    // "지금"이 아니라 실제 날짜·시간이 표시되어야 한다.
-    expect(find.textContaining(':'), findsWidgets);
+    expect(find.byType(Slider), findsNothing);
+    expect(find.text('상세 예보'), findsNothing);
+
+    // 지도 중앙을 탭하면 커서가 찍히고 상단에 바람 세기·방향 + "상세 예보" 버튼.
+    await tester.tapAt(tester.getCenter(find.byType(WeatherScreen)));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(find.text('상세 예보'), findsOneWidget);
   });
 
   testWidgets('지도 마커를 탭하면 선택 지역이 바뀐다', (tester) async {
