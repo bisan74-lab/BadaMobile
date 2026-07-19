@@ -46,20 +46,21 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// forecast at this point로 선택한 지점. null이면 일반(선택 지역) 모드.
   SeaLocation? _forecastPoint;
 
-  static const _particleCount = 320;
-  static const _maxAgeSeconds = 10.0;
+  static const _particleCount = 300;
+  static const _maxAgeSeconds = 16.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
   /// 짧은 선 → 조금 긴 선 → 아주 긴 흐름선으로 보이게 한다(윈디식 잔상).
-  static const _minTrail = 10;
-  static const _maxTrailCap = 52;
-  static const _trailSpeedFactor = 2.6;
+  /// 이동속도를 낮춘 대신 궤적을 길게 잡아 흐름선 길이는 유지한다.
+  static const _minTrail = 22;
+  static const _maxTrailCap = 120;
+  static const _trailSpeedFactor = 6.0;
 
-  /// 위경도 이동 배율(도/초 per m/s) — 화면 안에서 흐름선이 실제로 "선"으로
-  /// 보일 만큼 이동하도록 과장한 시각적 배율이며, 실제 지리적 이동 속도가
-  /// 아니다. 값이 너무 작으면(예: 0.02) 60fps에서 프레임당 이동이 1px 미만이라
-  /// 궤적이 점처럼만 보인다 — 흐름선이 나오도록 충분히 키운다.
-  static const _degreesPerMps = 0.34;
+  /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
+  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy 앱의 파티클 이동
+  /// 속도에 맞춰 낮게 잡았다(너무 크면 바람이 실제보다 빨라 보인다). 궤적
+  /// 길이(_minTrail·_maxTrailCap)를 늘려 속도를 낮춰도 선은 잘 보이게 한다.
+  static const _degreesPerMps = 0.12;
 
   @override
   void initState() {

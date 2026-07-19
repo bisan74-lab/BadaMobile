@@ -18,12 +18,12 @@ const List<CityLabel> mapCityLabels = [
   (name: '서울', lat: 37.5665, lon: 126.9780, rank: 1, island: false),
   (name: '인천', lat: 37.4563, lon: 126.7052, rank: 1, island: false),
   (name: '부산', lat: 35.1796, lon: 129.0756, rank: 1, island: false),
-  (name: '대구', lat: 35.8714, lon: 128.6014, rank: 1, island: false),
-  (name: '대전', lat: 36.3504, lon: 127.3845, rank: 1, island: false),
-  (name: '광주', lat: 35.1595, lon: 126.8526, rank: 1, island: false),
-  (name: '울산', lat: 35.5384, lon: 129.3114, rank: 1, island: false),
+  (name: '대구', lat: 35.8714, lon: 128.6014, rank: 2, island: false),
+  (name: '대전', lat: 36.3504, lon: 127.3845, rank: 2, island: false),
+  (name: '광주', lat: 35.1595, lon: 126.8526, rank: 2, island: false),
+  (name: '울산', lat: 35.5384, lon: 129.3114, rank: 2, island: false),
   (name: '제주', lat: 33.4996, lon: 126.5312, rank: 1, island: true),
-  (name: '강릉', lat: 37.7519, lon: 128.8761, rank: 1, island: false),
+  (name: '강릉', lat: 37.7519, lon: 128.8761, rank: 2, island: false),
   (name: '평양', lat: 39.0392, lon: 125.7625, rank: 1, island: false),
   (name: '후쿠오카', lat: 33.5904, lon: 130.4017, rank: 1, island: false),
 
@@ -92,11 +92,12 @@ class MapCityLabelLayer extends StatelessWidget {
   /// 확대되지 않고 항상 같은 화면 크기로 보이도록 반대로 축소해 그린다.
   final double scale;
 
-  /// rank별 라벨 노출 임계 배율.
+  /// rank별 라벨 노출 임계 배율. 기본 배율(1.0)에서는 최상위 도시만 보이고,
+  /// 확대할수록 더 많은 지역이 단계적으로 드러난다.
   static double _threshold(int rank) => switch (rank) {
     1 => 1.0,
-    2 => 2.0,
-    _ => 3.4,
+    2 => 2.4,
+    _ => 3.8,
   };
 
   @override
@@ -123,8 +124,8 @@ class MapCityLabelLayer extends StatelessWidget {
                     ? Transform.rotate(
                         angle: 0.785398, // 45°
                         child: Container(
-                          width: 4,
-                          height: 4,
+                          width: 3,
+                          height: 3,
                           decoration: const BoxDecoration(
                             color: Color(0xFF9AD7FF),
                             boxShadow: [
@@ -134,10 +135,10 @@ class MapCityLabelLayer extends StatelessWidget {
                         ),
                       )
                     : Container(
-                        width: 4,
-                        height: 4,
+                        width: 3,
+                        height: 3,
                         decoration: const BoxDecoration(
-                          color: Colors.white,
+                          color: Color(0xFFCFD6DD),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(color: Colors.black54, blurRadius: 2),
@@ -147,8 +148,11 @@ class MapCityLabelLayer extends StatelessWidget {
                 final label = Text(
                   c.name,
                   style: TextStyle(
-                    color: c.island ? const Color(0xFFDCF1FF) : Colors.white,
-                    fontSize: c.rank == 1 ? 11 : 9.5,
+                    // 순백 대신 조금 어두운 회백색으로 덜 튀게.
+                    color: c.island
+                        ? const Color(0xFFA9C4D8)
+                        : const Color(0xFFBCC5CE),
+                    fontSize: c.rank == 1 ? 8.5 : 7.5,
                     fontWeight: FontWeight.w600,
                     shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
                   ),
