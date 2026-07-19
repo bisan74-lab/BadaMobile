@@ -114,66 +114,66 @@ class MapCityLabelLayer extends StatelessWidget {
               builder: (context) {
                 // 해안선과 같은 보정값을 적용해 지명이 육지 위에 얹히도록 한다.
                 final o = projection.project(c.lat, c.lon + kMapLonShift);
+                // 반도 안쪽(지도 중심)을 향해 글자를 배치한다: 뷰 중심 경도보다
+                // 동쪽 지점이면 글자를 마커 왼쪽에 둬 동해안 지명이 바다로
+                // 삐져나가지 않게 한다.
+                final textLeft = c.lon > (b.minLon + b.maxLon) / 2 && !c.island;
+                // 섬은 하늘색 마름모, 육지 도시는 흰 원으로 구분한다.
+                final marker = c.island
+                    ? Transform.rotate(
+                        angle: 0.785398, // 45°
+                        child: Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF9AD7FF),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black54, blurRadius: 2),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(color: Colors.black54, blurRadius: 2),
+                          ],
+                        ),
+                      );
+                final label = Text(
+                  c.name,
+                  style: TextStyle(
+                    color: c.island ? const Color(0xFFDCF1FF) : Colors.white,
+                    fontSize: c.rank == 1 ? 11 : 9.5,
+                    fontWeight: FontWeight.w600,
+                    shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+                  ),
+                );
+                final row = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: textLeft
+                      ? [label, const SizedBox(width: 3), marker]
+                      : [marker, const SizedBox(width: 3), label],
+                );
                 return Positioned(
                   left: o.dx,
                   top: o.dy,
+                  // 확대해도 지리 지점(o)에 마커가 고정되도록 topLeft를
+                  // 피벗으로 역확대한다(기존 center 피벗은 배율에 따라 라벨이
+                  // 동쪽으로 밀려 바다에 걸쳐 보이는 문제가 있었다).
                   child: Transform.scale(
                     scale: 1 / scale,
-                    alignment: Alignment.center,
+                    alignment: Alignment.topLeft,
                     child: FractionalTranslation(
-                      translation: const Offset(-0.5, -0.5),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 섬은 하늘색 마름모, 육지 도시는 흰 원으로 구분한다.
-                          if (c.island)
-                            Transform.rotate(
-                              angle: 0.785398, // 45°
-                              child: Container(
-                                width: 4,
-                                height: 4,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF9AD7FF),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black54,
-                                      blurRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          else
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black54,
-                                    blurRadius: 2,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(width: 3),
-                          Text(
-                            c.name,
-                            style: TextStyle(
-                              color: c.island
-                                  ? const Color(0xFFDCF1FF)
-                                  : Colors.white,
-                              fontSize: c.rank == 1 ? 11 : 9.5,
-                              fontWeight: FontWeight.w600,
-                              shadows: const [
-                                Shadow(color: Colors.black, blurRadius: 3),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      // 세로는 항상 가운데, 가로는 마커가 o에 오도록 정렬.
+                      // 글자를 왼쪽에 둘 땐 행 전체를 왼쪽으로 당겨 마커를 o에
+                      // 붙인다.
+                      translation: Offset(textLeft ? -1.0 : 0.0, -0.5),
+                      child: row,
                     ),
                   ),
                 );

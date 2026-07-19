@@ -335,7 +335,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
                       child: CustomPaint(
                         painter: WindMapPainter(
                           particles: widget.particles,
-                          color: Colors.white,
+                          // 순백이 아니라 살짝 흐린 회백색으로 은은하게.
+                          color: const Color(0xFFDCE6F0),
                         ),
                         size: fieldRect.size,
                       ),

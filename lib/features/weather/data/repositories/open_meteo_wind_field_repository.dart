@@ -26,7 +26,15 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   // 연동 불필요) 범위만 넓히면 된다.
   static const double minLat = 26.5, maxLat = 45.5;
   static const double minLon = 118.5, maxLon = 136.5;
-  static const int latSteps = 10, lonSteps = 12;
+
+  /// 격자 해상도. 촘촘할수록 바람 방향이 국지적으로 더 정확해진다
+  /// (파티클은 이 격자를 쌍선형 보간해 흐른다).
+  static const int latSteps = 14, lonSteps = 16;
+
+  /// 바람 데이터 출처 모델. Windy 기본 레이어와 같은 ECMWF(IFS 0.25°)를 써서
+  /// 바람 방향·세기를 Windy와 최대한 일치시킨다. 응답이 없으면(모델 미제공 등)
+  /// 상위 조립부의 캐싱→목업 폴백 체인이 앱 실행을 막지 않는다.
+  static const String _model = 'ecmwf_ifs025';
 
   List<double> _latGrid() {
     final step = (maxLat - minLat) / (latSteps - 1);
@@ -55,6 +63,7 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
       'current': 'wind_speed_10m,wind_direction_10m',
       'wind_speed_unit': 'ms',
       'timezone': 'Asia/Seoul',
+      'models': _model,
     });
 
     final res = await _client.get(uri);
@@ -110,6 +119,7 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
       'wind_speed_unit': 'ms',
       'timezone': 'Asia/Seoul',
       'forecast_days': forecastDays.toString(),
+      'models': _model,
     });
 
     final res = await _client.get(uri);

@@ -17,19 +17,20 @@ class CoastlinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 그림자(글로우): 넓고 어둡게 블러 처리해 밑에 깔고,
-    final shadow = Paint()
-      ..color = Colors.black.withValues(alpha: 0.45)
+    // 윈디 지도처럼 **얇고 검정에 가까운 선**으로 해안선을 그린다.
+    // 어두운 바다 위에서도 경계가 읽히도록, 아주 옅은 밝은 헤일로(글로우)를
+    // 살짝 깔고 그 위에 얇은 짙은 선을 얹는다.
+    final halo = Paint()
+      ..color = Colors.white.withValues(alpha: 0.12)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
+      ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 2);
-    // 그 위에 얇고 밝은 선을 얹는다.
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 1.4);
     final line = Paint()
-      ..color = Colors.white.withValues(alpha: 0.9)
+      ..color = const Color(0xFF10161F).withValues(alpha: 0.72)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9
+      ..strokeWidth = 0.7
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -51,7 +52,7 @@ class CoastlinePainter extends CustomPainter {
       }
     }
     for (final path in paths) {
-      canvas.drawPath(path, shadow);
+      canvas.drawPath(path, halo);
     }
     for (final path in paths) {
       canvas.drawPath(path, line);
