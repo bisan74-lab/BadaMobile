@@ -671,9 +671,10 @@ class _PointCallout extends StatelessWidget {
   }
 }
 
-/// 선택 지점 위에 뜨는 윈디식 방향 나침반. 가운데 점을 중심으로 WIND(바람)·
-/// SWELL(너울)·SWELL2(2차 너울)가 각자 진행 방향으로 뻗는 색 막대와 값
-/// 라벨을 그린다. 지도를 확대해도 크기가 일정하도록 반대로 축소한다.
+/// 선택 지점 위에 뜨는 윈디식 방향 나침반. 가운데 점을 중심으로 바람·너울·
+/// 너울2가 각자 진행 방향으로 뻗는 **가늘고 긴 색 막대**로 그리고, 글자를
+/// 막대 안에 넣어(작은 글씨) 막대끼리 가까워도 서로 가려지지 않게 한다.
+/// 지도를 확대해도 크기가 일정하도록 반대로 축소한다.
 class _ForecastRose extends StatelessWidget {
   const _ForecastRose({
     required this.scale,
@@ -687,13 +688,14 @@ class _ForecastRose extends StatelessWidget {
   final double top;
   final HourlyMarine hour;
 
-  static const double _r = 44; // 막대 길이(중심→끝)
-  static const double _d = 220; // 로즈 박스 한 변(라벨 공간 포함)
+  static const double _len = 96; // 막대 길이(중심→끝)
+  static const double _thick = 15; // 막대 두께(글자가 들어갈 만큼만)
+  static const double _d = 240; // 로즈 박스 한 변
   static const Offset _c = Offset(_d / 2, _d / 2);
 
-  static const _windC = Color(0xFF4FC7E8);
-  static const _swellC = Color(0xFFF2A03D);
-  static const _swell2C = Color(0xFF8CC152);
+  static const _windC = Color(0xFF3FB6DC);
+  static const _swellC = Color(0xFFEB963A);
+  static const _swell2C = Color(0xFF7CB342);
 
   @override
   Widget build(BuildContext context) {
@@ -701,22 +703,22 @@ class _ForecastRose extends StatelessWidget {
       (
         dir: hour.windDirectionDeg,
         color: _windC,
-        label: 'WIND',
+        label: '바람',
         value: '${hour.windSpeedMs.round()}m/s',
       ),
       (
         dir: hour.swellDirectionDeg,
         color: _swellC,
-        label: 'SWELL',
+        label: '너울',
         value:
-            '${hour.swellHeightM.toStringAsFixed(1)}m, ${hour.swellPeriodS.round()}s',
+            '${hour.swellHeightM.toStringAsFixed(1)}m·${hour.swellPeriodS.round()}s',
       ),
       (
         dir: hour.swell2DirectionDeg,
         color: _swell2C,
-        label: 'SWELL 2',
+        label: '너울2',
         value:
-            '${hour.swell2HeightM.toStringAsFixed(1)}m, ${hour.swell2PeriodS.round()}s',
+            '${hour.swell2HeightM.toStringAsFixed(1)}m·${hour.swell2PeriodS.round()}s',
       ),
     ];
     return Positioned(
@@ -734,13 +736,9 @@ class _ForecastRose extends StatelessWidget {
               children: [
                 CustomPaint(
                   size: const Size(_d, _d),
-                  painter: _RosePainter(
-                    center: _c,
-                    radius: _r,
-                    bars: [for (final b in bars) (dir: b.dir, color: b.color)],
-                  ),
+                  painter: _RoseRingPainter(center: _c),
                 ),
-                for (final b in bars) _label(b.dir, b.color, b.label, b.value),
+                for (final b in bars) _bar(b.dir, b.color, b.label, b.value),
               ],
             ),
           ),
@@ -749,44 +747,64 @@ class _ForecastRose extends StatelessWidget {
     );
   }
 
-  Widget _label(double dirDeg, Color color, String label, String value) {
-    // 막대는 진행(불어가는) 방향(dir+180)으로 뻗는다.
+  /// 진행(불어가는) 방향(dir+180)으로 뻗는 가늘고 긴 캡슐 막대. 글자를 막대
+  /// 안에 넣고, 막대가 어느 방향이든 글씨가 뒤집히지 않도록 캡슐 중심을
+  /// 축으로 필요하면 180° 돌려 항상 바로 읽히게 한다(막대 위치는 그대로).
+  Widget _bar(double dirDeg, Color color, String label, String value) {
     final rad = (dirDeg + 180) * math.pi / 180;
-    final pos = _c + Offset(math.sin(rad), -math.cos(rad)) * (_r + 8);
+    final u = Offset(math.sin(rad), -math.cos(rad)); // 화면상 진행 방향 단위벡터
+    final mid = _c + u * (_len / 2); // 캡슐 중심(중심→끝 구간의 중점)
+    var angle = math.atan2(u.dy, u.dx); // 캡슐 장축의 화면 각도
+    // 글씨가 위를 향하도록: 왼쪽(cos<0)으로 향하면 같은 직선 위에서 180° 회전.
+    var flip = false;
+    if (math.cos(angle) < 0) {
+      angle += math.pi;
+      flip = true;
+    }
     return Positioned(
-      left: pos.dx,
-      top: pos.dy,
+      left: mid.dx,
+      top: mid.dy,
       child: FractionalTranslation(
         translation: const Offset(-0.5, -0.5),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: const Color(0xE6202A33),
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: color, width: 1.3),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.bold,
-                  height: 1.05,
+        child: Transform.rotate(
+          angle: angle,
+          child: Container(
+            width: _len,
+            height: _thick,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(_thick / 2),
+              boxShadow: const [
+                BoxShadow(color: Colors.black45, blurRadius: 2),
+              ],
+            ),
+            // 뒤집힌 경우 라벨이 바깥쪽에 오도록 순서를 뒤집는다.
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              textDirection: flip ? TextDirection.rtl : TextDirection.ltr,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.bold,
+                    height: 1.0,
+                  ),
                 ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w600,
-                  height: 1.1,
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -794,42 +812,22 @@ class _ForecastRose extends StatelessWidget {
   }
 }
 
-class _RosePainter extends CustomPainter {
-  _RosePainter({
-    required this.center,
-    required this.radius,
-    required this.bars,
-  });
+/// 나침반의 반투명 원 + 가운데 점만 그린다(막대는 위젯으로 얹는다).
+class _RoseRingPainter extends CustomPainter {
+  _RoseRingPainter({required this.center});
 
   final Offset center;
-  final double radius;
-  final List<({double dir, Color color})> bars;
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 반투명 원.
     canvas.drawCircle(
       center,
-      radius,
+      _ForecastRose._len,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.5)
+        ..color = Colors.white.withValues(alpha: 0.45)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2,
     );
-    // 각 막대(진행 방향으로 뻗는 두꺼운 캡슐).
-    for (final b in bars) {
-      final rad = (b.dir + 180) * math.pi / 180;
-      final end = center + Offset(math.sin(rad), -math.cos(rad)) * radius;
-      canvas.drawLine(
-        center,
-        end,
-        Paint()
-          ..color = b.color
-          ..strokeWidth = 8
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-    // 중심 점.
     canvas.drawCircle(center, 5, Paint()..color = Colors.white);
     canvas.drawCircle(
       center,
@@ -842,8 +840,7 @@ class _RosePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_RosePainter old) =>
-      old.center != center || old.radius != radius || old.bars != bars;
+  bool shouldRepaint(_RoseRingPainter old) => old.center != center;
 }
 
 /// 파고/너울 높이(m) → 색상. 낮음(청록) → 높음(분홍/자주)으로 이어지는
@@ -1122,7 +1119,6 @@ class _Meteogram extends StatelessWidget {
       '기온 °C',
       '바람 m/s',
       '돌풍 m/s',
-      '풍파 m',
       '너울 m',
       '너울2 m',
       '파력 kW/m',
@@ -1206,7 +1202,6 @@ class _MeteogramColumn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final windC = windSpeedColor(hour.windSpeedMs);
     final gustC = windSpeedColor(hour.windGustMs);
-    final windWaveC = waveHeightColor(hour.windWaveHeightM);
     final swellC = waveHeightColor(hour.swellHeightM);
     final swell2C = waveHeightColor(hour.swell2HeightM);
     final isNight = hour.time.hour < 6 || hour.time.hour >= 19;
@@ -1332,11 +1327,6 @@ class _MeteogramColumn extends StatelessWidget {
             cell(
               '${hour.windGustMs.round()}',
               bg: gustC.withValues(alpha: 0.65),
-            ),
-            arrowCell(
-              hour.windWaveHeightM.toStringAsFixed(1),
-              hour.windWaveDirectionDeg,
-              bg: windWaveC,
             ),
             arrowCell(
               hour.swellHeightM.toStringAsFixed(1),
