@@ -52,6 +52,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return best;
   }
 
+  /// 대표 어종 변경 메뉴 — 후보 어종 중 하나를 골라 [slot]에 반영한다.
+  Future<void> _pickSpecies(int slot, String current) async {
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('대표 어종 선택', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final s in fishingSpeciesCatalog)
+                    ChoiceChip(
+                      label: Text(s),
+                      selected: s == current,
+                      onSelected: (_) => Navigator.of(context).pop(s),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen != null) {
+      ref.read(fishingSpeciesProvider.notifier).setAt(slot, chosen);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final location = ref.watch(selectedLocationProvider);
@@ -65,6 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     final forecastAsync = ref.watch(homeMarineForecastProvider(location));
     final fishingAsync = ref.watch(fishingForecastProvider(location));
+    final species = ref.watch(fishingSpeciesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -209,54 +246,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   loading: () => const _LoadingCard(),
                   error: (e, _) => _ErrorCard(message: '낚시지수 오류: $e'),
                   data: (fishing) {
-                    final groups = fishing.speciesGroupsForDate(
-                      _date,
-                      preferredSpecies: preferredSpeciesForRegion(
-                        location.region,
-                      ),
-                    );
-                    if (groups.isEmpty) {
-                      return const _InfoCard(
-                        color: Color(0xFF4C9BC9),
-                        icon: Icons.phishing,
-                        title: Text('선택한 날짜의 낚시지수 정보가 없습니다'),
-                      );
-                    }
                     return Card(
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '바다낚시지수',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            for (final indices in groups) ...[
-                              const SizedBox(height: 8),
-                              if (indices.first.species != null)
+                            Row(
+                              children: [
                                 Text(
-                                  '기준 어종 ${indices.first.species}',
-                                  style: Theme.of(context).textTheme.labelMedium
+                                  '바다낚시지수',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '어종 탭하여 변경',
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
                                         color: Theme.of(
                                           context,
                                         ).colorScheme.onSurfaceVariant,
                                       ),
                                 ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  for (final index in indices) ...[
-                                    FishingLevelBadge(
-                                      timeSlot: index.timeSlot,
-                                      grade: index.grade,
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                ],
+                              ],
+                            ),
+                            for (var slot = 0; slot < species.length; slot++)
+                              _SpeciesRow(
+                                species: species[slot],
+                                indices: fishing
+                                    .forDate(_date)
+                                    .where((i) => i.species == species[slot])
+                                    .toList(),
+                                onTap: () => _pickSpecies(slot, species[slot]),
                               ),
-                            ],
                           ],
                         ),
                       ),
@@ -271,6 +293,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 대표 어종 한 줄: 어종명(탭하면 변경 메뉴) + 오전/오후 낚시지수 배지.
+class _SpeciesRow extends StatelessWidget {
+  const _SpeciesRow({
+    required this.species,
+    required this.indices,
+    required this.onTap,
+  });
+
+  final String species;
+  final List<FishingIndex> indices;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final sorted = [...indices]
+      ..sort((a, b) => a.timeSlot.compareTo(b.timeSlot));
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '기준 어종 $species',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Icon(Icons.arrow_drop_down, size: 20, color: scheme.primary),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (sorted.isEmpty)
+            Text(
+              '이 날짜의 지수 정보가 없습니다',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else
+            Row(
+              children: [
+                for (final index in sorted) ...[
+                  FishingLevelBadge(
+                    timeSlot: index.timeSlot,
+                    grade: index.grade,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
         ],
       ),
     );

@@ -54,9 +54,11 @@ void main() {
 
     test('28일(과거 2주~미래 2주) × 오전/오후 × 어종별 지수를 반환한다', () async {
       final forecast = await repo.fetchForecast(sampleLocations.first);
-      // sampleLocations.first는 서해 지점 — 기준 어종 2종(쭈꾸미·갑오징어).
-      expect(forecast.indices, hasLength(28 * 2 * 2));
-      expect(forecast.forDate(DateTime.now()), hasLength(4));
+      // 이제 후보 어종 전체(fishingSpeciesCatalog)에 대해 생성한다 — 사용자가
+      // 홈에서 어떤 어종을 골라도 지수가 보이도록.
+      final n = fishingSpeciesCatalog.length;
+      expect(forecast.indices, hasLength(28 * 2 * n));
+      expect(forecast.forDate(DateTime.now()), hasLength(2 * n));
       for (final i in forecast.indices) {
         expect(i.grade.score, inInclusiveRange(1, 5));
       }

@@ -7,6 +7,24 @@ List<String> preferredSpeciesForRegion(String region) => switch (region) {
   _ => const ['문어', '광어', '우럭'],
 };
 
+/// 홈 화면에서 사용자가 고를 수 있는 대표 어종 후보. 합성 낚시지수도 이
+/// 목록 전체에 대해 생성해, 어떤 어종을 골라도 지수가 표시되도록 한다.
+const fishingSpeciesCatalog = <String>[
+  '광어',
+  '우럭',
+  '문어',
+  '참돔',
+  '감성돔',
+  '농어',
+  '갑오징어',
+  '쭈꾸미',
+  '볼락',
+  '삼치',
+];
+
+/// 홈 대표 어종 기본값(사용자 미설정 시). 최대 3종.
+const defaultFishingSpecies = <String>['광어', '우럭', '문어'];
+
 /// 바다낚시지수 등급 (국립해양조사원 5단계).
 enum FishingGrade {
   veryBad('매우나쁨', 1),

@@ -9,17 +9,23 @@ import '../providers.dart';
 /// 각 탭 상단 우측 버튼([RegionSelectorAction])으로 여는 지역 선택
 /// 바텀시트. 현재 위치 · 지명 검색(읍/면/동 단위) · 즐겨찾기 · 선택을
 /// 가벼운 시트 하나로 제공한다.
-Future<void> showLocationPickerSheet(BuildContext context) {
+Future<void> showLocationPickerSheet(
+  BuildContext context, {
+  bool forWeather = false,
+}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) => const _LocationPickerSheet(),
+    builder: (context) => _LocationPickerSheet(forWeather: forWeather),
   );
 }
 
 class _LocationPickerSheet extends ConsumerStatefulWidget {
-  const _LocationPickerSheet();
+  const _LocationPickerSheet({required this.forWeather});
+
+  /// true면 날씨 탭 전용 지역([weatherLocationProvider])에만 반영한다.
+  final bool forWeather;
 
   @override
   ConsumerState<_LocationPickerSheet> createState() =>
@@ -49,7 +55,11 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
   }
 
   void _choose(SeaLocation loc) {
-    ref.read(selectedLocationProvider.notifier).select(loc);
+    if (widget.forWeather) {
+      ref.read(weatherLocationProvider.notifier).select(loc);
+    } else {
+      ref.read(selectedLocationProvider.notifier).select(loc);
+    }
     Navigator.of(context).pop();
   }
 
@@ -69,7 +79,9 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final all = ref.watch(locationsProvider);
-    final selected = ref.watch(selectedLocationProvider);
+    final selected = ref.watch(
+      widget.forWeather ? weatherLocationProvider : selectedLocationProvider,
+    );
     final favorites = ref.watch(favoritesProvider);
     final scheme = Theme.of(context).colorScheme;
 

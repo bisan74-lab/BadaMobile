@@ -18,9 +18,9 @@ class MockFishingRepository implements FishingRepository {
   @override
   Future<FishingForecast> fetchForecast(SeaLocation location) async {
     final seed = (location.latitude * 11 + location.longitude * 3) % 5;
-    // 해역별 기준 어종을 전부 생성해 홈 화면에서 여러 어종을 함께 볼 수
-    // 있게 한다(어종마다 시드를 조금씩 달리해 값이 겹치지 않게 한다).
-    final speciesList = preferredSpeciesForRegion(location.region);
+    // 사용자가 홈에서 어떤 어종을 골라도 지수가 보이도록, 후보 어종 전체를
+    // 생성한다(어종마다 시드를 조금씩 달리해 값이 겹치지 않게 한다).
+    final speciesList = fishingSpeciesCatalog;
     final today = DateTime.now();
     final start = DateTime(
       today.year,

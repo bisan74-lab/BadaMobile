@@ -89,6 +89,40 @@ class SelectedLocationNotifier extends Notifier<SeaLocation> {
   }
 }
 
+/// 날씨 탭 **전용** 지역 — 물때·바다타임·Windy 등 다른 탭과 완전히 분리된다.
+/// 육지(내륙) 지점을 골라도 다른 탭의 조석·해양 정보에 영향을 주지 않는다.
+/// 별도 키로 영속화되어 재시작 후에도 유지된다.
+class WeatherLocationNotifier extends Notifier<SeaLocation> {
+  static const _prefsKey = 'weather_location';
+
+  @override
+  SeaLocation build() {
+    final prefs = ref.read(sharedPreferencesProvider);
+    final raw = prefs.getString(_prefsKey);
+    if (raw != null) {
+      try {
+        return SeaLocation.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      } catch (_) {
+        // 손상 시 아래 폴백으로.
+      }
+    }
+    // 날씨 탭 최초 진입 시엔 공용 선택 지역을 초기값으로 따른다.
+    return ref.read(selectedLocationProvider);
+  }
+
+  void select(SeaLocation location) {
+    state = location;
+    ref
+        .read(sharedPreferencesProvider)
+        .setString(_prefsKey, jsonEncode(location.toJson()));
+  }
+}
+
+final weatherLocationProvider =
+    NotifierProvider<WeatherLocationNotifier, SeaLocation>(
+      WeatherLocationNotifier.new,
+    );
+
 final selectedLocationProvider =
     NotifierProvider<SelectedLocationNotifier, SeaLocation>(
       SelectedLocationNotifier.new,

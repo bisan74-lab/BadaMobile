@@ -25,13 +25,15 @@ class _KmaWeatherScreenState extends ConsumerState<KmaWeatherScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final location = ref.watch(selectedLocationProvider);
+    // 날씨 탭은 다른 탭과 분리된 전용 지역을 쓴다(육지 지점 선택이 물때·
+    // 바다타임 등 다른 탭에 영향을 주지 않도록).
+    final location = ref.watch(weatherLocationProvider);
     final forecastAsync = ref.watch(weatherForecastProvider(location));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('날씨 예보'),
-        actions: const [RegionSelectorAction()],
+        actions: const [RegionSelectorAction(forWeather: true)],
       ),
       body: forecastAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

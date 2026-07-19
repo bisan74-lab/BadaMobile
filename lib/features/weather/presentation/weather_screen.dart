@@ -363,8 +363,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
                               loc.id == widget.selected.id ||
                               _scale >= labelThreshold(loc.rank),
                           scale: _scale,
-                          left: projection.x(loc.longitude) - 10,
-                          top: projection.y(loc.latitude) - 10,
+                          left: projection.x(loc.longitude),
+                          top: projection.y(loc.latitude),
                         ),
                     if (_pickedLat case final plat?)
                       if (_pickedLon case final plon?)
@@ -411,40 +411,45 @@ class _LocationMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     final dotSize = highlighted ? 12.0 : 6.0;
     return Positioned(
+      // (left, top)은 지점의 정확한 투영 좌표. 점(dot)의 중심이 이 좌표에
+      // 오도록 점 반지름만큼 당겨, 해안선(같은 투영으로 그린)과 맞춘다.
       left: left,
       top: top,
       child: IgnorePointer(
-        child: Transform.scale(
-          scale: 1 / scale,
-          alignment: Alignment.topLeft,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: dotSize,
-                height: dotSize,
-                decoration: BoxDecoration(
-                  color: highlighted ? Colors.amberAccent : Colors.white70,
-                  shape: BoxShape.circle,
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black45, blurRadius: 2),
-                  ],
-                ),
-              ),
-              if (showLabel) ...[
-                const SizedBox(width: 3),
-                Text(
-                  location.name,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    height: 1.1,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 3)],
+        child: Transform.translate(
+          offset: Offset(-dotSize / 2, -dotSize / 2),
+          child: Transform.scale(
+            scale: 1 / scale,
+            alignment: Alignment.topLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: dotSize,
+                  height: dotSize,
+                  decoration: BoxDecoration(
+                    color: highlighted ? Colors.amberAccent : Colors.white70,
+                    shape: BoxShape.circle,
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black45, blurRadius: 2),
+                    ],
                   ),
                 ),
+                if (showLabel) ...[
+                  const SizedBox(width: 3),
+                  Text(
+                    location.name,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      height: 1.1,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 3)],
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -829,11 +834,11 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                 child: Text('예보를 불러오지 못했습니다'),
               ),
               data: (forecast) {
-                // 3시간 간격으로 향후 2주(112스텝)를 뽑는다.
+                // 3시간 간격으로 향후 최대 16일(Open-Meteo 예보 상한)을 뽑는다.
                 final steps = [
                   for (final h in forecast.hourly)
                     if (h.time.hour % 3 == 0) h,
-                ].take(14 * 8).toList();
+                ].take(16 * 8).toList();
                 if (steps.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(16),

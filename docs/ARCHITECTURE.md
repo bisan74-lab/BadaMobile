@@ -159,11 +159,17 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   `geolocator`→`resolveCurrentLocation`)** + **지명 검색(읍/면/동 단위,
   `GeocodingRepository`=Open-Meteo Geocoding 무료·키불필요→`geocodingSearchProvider`)**
   + 내장 지점 + 즐겨찾기를 한 화면에 제공한다.
-- 선택된 지역은 `selectedLocationProvider`로 공유되어 tide/weather/home/kma_weather가 함께 반응.
-  선택은 **전체 정보(JSON)로 영속화**되어 검색·현재위치 등 목록에 없는 커스텀 지점도
-  재시작 후 복원된다(구버전 id-only 키 호환).
+- 공용 지역 `selectedLocationProvider`는 tide/home/Windy가 공유하고, **날씨 탭은
+  별도의 `weatherLocationProvider`**를 쓴다 — 날씨 탭에서 내륙 지점을 골라도 물때·
+  바다타임 등 다른 탭에 영향을 주지 않는다. `RegionSelectorAction(forWeather: true)`와
+  `showLocationPickerSheet(forWeather: true)`로 대상 provider를 고른다.
+- 두 provider 모두 선택을 **전체 정보(JSON)로 영속화**해 검색·현재위치 등 목록에 없는
+  커스텀 지점도 재시작 후 복원된다(구버전 id-only 키 호환).
+- **앱 시작 위치**(`AppShell._initLocation`): 저장된 위치가 있으면 그 위치로 시작하고,
+  없는 첫 실행이면 위치 권한을 요청해 현재 위치로 설정한다(거부·실패 시 기본 위치 유지).
 - `SeaLocation.rank`(1=주요→3=소규모)로 Windy 지도 라벨을 확대 단계별 노출,
-  `inland=true`(내륙 도시·검색 지점)는 지도 마커에서 제외.
+  `inland=true`(내륙 도시·검색 지점)는 지도 마커에서 제외. 마커 점은 투영 좌표에
+  정확히 중심을 맞춰 해안선과 정렬된다.
 
 ### features/home — 홈 대시보드
 - AppBar 제목 "바다 윈디" + 우측 `RegionSelectorAction`(현재 지역명 + 지역 선택).

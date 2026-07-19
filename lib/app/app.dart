@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/remote_config/app_gate_provider.dart';
+import '../core/storage/prefs.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/kma_weather/presentation/kma_weather_screen.dart';
+import '../features/locations/presentation/providers.dart';
 import '../features/settings/presentation/providers.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/tide/presentation/tide_screen.dart';
@@ -43,14 +45,14 @@ class BadaMobileApp extends ConsumerWidget {
 }
 
 /// 하단 탭 기반 앱 셸: 홈 / 날씨 / 물때 / Windy / 설정
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
 
   static const _screens = [
@@ -60,6 +62,30 @@ class _AppShellState extends State<AppShell> {
     WeatherScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initLocation());
+  }
+
+  /// 앱 시작 시: 마지막 설정 위치가 있으면 그대로 두고(그 위치로 시작),
+  /// 저장된 위치가 없는 첫 실행이면 위치 권한을 요청해 현재 위치로 설정한다.
+  /// 권한 거부·실패 시엔 기본 위치를 유지한다.
+  Future<void> _initLocation() async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    final hasSaved =
+        prefs.getString('selected_location') != null ||
+        prefs.getString('selected_location_id') != null;
+    if (hasSaved) return;
+    try {
+      final loc = await resolveCurrentLocation();
+      if (!mounted) return;
+      ref.read(selectedLocationProvider.notifier).select(loc);
+    } catch (_) {
+      // 권한 거부/위치 서비스 꺼짐 등 — 기본 위치로 조용히 시작한다.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
