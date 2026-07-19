@@ -28,17 +28,18 @@ dart format lib test       # 커밋 전 포맷
   현재탭)`로 감싸야 한다** — 안 그러면 비활성 탭의 Ticker가 계속 돌아 다른
   탭 위젯 테스트가 멈춘다.
 - 날씨 지도(`features/weather/presentation/`)의 `mapViewBounds`
-  (`widgets/map_projection.dart`)는 **`OpenMeteoWindFieldRepository`의 격자
-  범위(`minLat` 등)의 부분집합**이어야 한다 — 뷰가 격자보다 크면(밖으로 나가면)
-  히트맵이 지도를 못 채운다. 현재 뷰는 북쪽을 잘라(maxLat 43.0) 격자
-  (26.5~45.5)의 부분집합이므로 히트맵·해안선은 그대로 뷰를 채운다. 격자 범위
-  자체를 바꾸면 `country_borders_data.dart`(해안선)도 같은 범위로 재추출해야
-  한다. 이 파일은 **Natural Earth 10m 해안선 + 소형 섬 해안선**(공개 도메인)을
-  bbox로 클리핑·RDP 단순화(0.012°)해 자동 생성한 것이라 제주·울릉도·다도해 등
-  실제 섬이 그대로 들어 있다(scratchpad `gen_coast.py`로 재생성). 10m가 아니라
-  50m를 쓰면 섬이 대부분 빠지니 다시 뽑을 때도 10m를 쓴다.
-- 해안선(`CoastlinePainter`)과 도시 라벨(`MapCityLabelLayer`)은 **둘 다
-  실제 WGS84 위경도**(Natural Earth 10m 해안선, 지명 좌표)를 그대로 쓴다.
+  (`widgets/map_projection.dart`)와 **`OpenMeteoWindFieldRepository`의 격자
+  범위(`minLat` 등)는 같은 bbox**(현재 위도 21~49, 경도 112~144 — 한국 중심에
+  동아시아 주변국까지)를 써야 히트맵이 뷰를 정확히 채운다. 범위를 바꾸면
+  `country_borders_data.dart`도 같은 bbox로 다시 뽑아야 한다(`tool/gen_coast.py`).
+  이 파일은 **Natural Earth 10m 해안선·소형 섬·국경선·행정경계(주/성)·주요
+  하천**(공개 도메인)을 bbox 클리핑·RDP 단순화해 자동 생성하며, 키별
+  레이어(`해안선`·`국경`은 항상, `행정`·`강`은 확대 시)로 담는다
+  (`CoastlinePainter`가 배율로 분기해 그린다). 제주·울릉도·외연도·다도해 등
+  실제 섬이 그대로 들어 있다. 10m가 아니라 50m를 쓰면 섬이 대부분 빠지니 다시
+  뽑을 때도 10m를 쓴다.
+- 해안선·경계선(`CoastlinePainter`)과 도시 라벨(`MapCityLabelLayer`)은 **둘 다
+  실제 WGS84 위경도**(Natural Earth 10m, 지명 좌표)를 그대로 쓴다.
   그래서 경도 보정 `kMapLonShift`(`map_projection.dart`)는 **0**이어야
   실제 지도와 맞고 서로도 정확히 겹친다 — 과거 -0.5°는 지금은 삭제된 항구
   점 마커에 맞추려던 오진단이었고, 해안선을 실제보다 서쪽으로 밀었다.

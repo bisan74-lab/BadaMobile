@@ -1,13 +1,15 @@
 import json, math
 
-MINLAT, MAXLAT = 26.5, 45.5
-MINLON, MAXLON = 118.5, 136.5
+MINLAT, MAXLAT = 21.0, 49.0
+MINLON, MAXLON = 112.0, 144.0
 
 def inside(lon, lat):
     return MINLON <= lon <= MAXLON and MINLAT <= lat <= MAXLAT
 
-def iter_lines(gj):
+def iter_lines(gj, prop_filter=None):
     for feat in gj['features']:
+        if prop_filter and not prop_filter(feat.get('properties') or {}):
+            continue
         g = feat.get('geometry') or {}
         t = g.get('type'); c = g.get('coordinates')
         if t == 'LineString':
@@ -17,82 +19,74 @@ def iter_lines(gj):
                 yield part
 
 def clip_runs(coords):
-    """Split a linestring into contiguous runs of points inside bbox.
-    Include one boundary-crossing neighbor so lines reach the edge."""
-    runs = []
-    cur = []
-    n = len(coords)
+    runs=[]; cur=[]
     for i,(lon,lat) in enumerate(coords):
         if inside(lon,lat):
-            if not cur:
-                # include previous point (outside) so the line extends to edge
-                if i>0:
-                    cur.append(coords[i-1])
+            if not cur and i>0: cur.append(coords[i-1])
             cur.append((lon,lat))
         else:
             if cur:
-                cur.append((lon,lat))  # include this outside point to reach edge
-                runs.append(cur); cur=[]
+                cur.append((lon,lat)); runs.append(cur); cur=[]
     if cur: runs.append(cur)
     return runs
 
-def perp_dist(p, a, b):
+def perp(p,a,b):
     (px,py),(ax,ay),(bx,by)=p,a,b
     dx,dy=bx-ax,by-ay
     if dx==0 and dy==0: return math.hypot(px-ax,py-ay)
-    t=((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)
-    t=max(0,min(1,t))
-    cx,cy=ax+t*dx,ay+t*dy
-    return math.hypot(px-cx,py-cy)
+    t=max(0,min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)))
+    return math.hypot(px-(ax+t*dx),py-(ay+t*dy))
 
-def rdp(pts, eps):
+def rdp(pts,eps):
     if len(pts)<3: return pts
-    dmax,idx=0,0
+    dm,idx=0,0
     for i in range(1,len(pts)-1):
-        d=perp_dist(pts[i],pts[0],pts[-1])
-        if d>dmax: dmax,idx=d,i
-    if dmax>eps:
-        left=rdp(pts[:idx+1],eps); right=rdp(pts[idx:],eps)
-        return left[:-1]+right
+        d=perp(pts[i],pts[0],pts[-1])
+        if d>dm: dm,idx=d,i
+    if dm>eps:
+        return rdp(pts[:idx+1],eps)[:-1]+rdp(pts[idx:],eps)
     return [pts[0],pts[-1]]
 
-EPS=0.012  # simplification tolerance in degrees (~1.3km)
-MINPTS=2
+def extract(files, eps, prop_filter=None, minpts=2):
+    out=[]
+    for fn in files:
+        gj=json.load(open(fn))
+        for line in iter_lines(gj, prop_filter):
+            if not any(inside(lo,la) for lo,la in line): continue
+            for run in clip_runs(line):
+                if len(run)<minpts: continue
+                s=rdp(run,eps)
+                if len(s)>=minpts: out.append(s)
+    return out
 
-polylines=[]
-stats={'main':0,'minor':0}
-for fname,key in [('ne10_coastline.geojson','main'),('ne10_minor_islands.geojson','minor')]:
-    gj=json.load(open(fname))
-    for line in iter_lines(gj):
-        # quick reject: bounding
-        if not any(inside(lon,lat) for lon,lat in line): 
-            continue
-        for run in clip_runs(line):
-            if len(run)<MINPTS: continue
-            simp=rdp(run,EPS)
-            if len(simp)>=MINPTS:
-                polylines.append(simp)
-                stats[key]+=1
+# 강: 큰 강만(scalerank 낮음)
+def river_filter(props):
+    sr = props.get('scalerank')
+    return sr is None or sr <= 7
 
-# stats
-tot_pts=sum(len(p) for p in polylines)
-print("polylines:",len(polylines),"main runs:",stats['main'],"minor runs:",stats['minor'],"total points:",tot_pts)
+layers = {
+ '해안선': extract(['ne10_coastline.geojson','ne10_minor_islands.geojson'], 0.010),
+ '국경':   extract(['ne_10m_admin_0_boundary_lines_land.geojson'], 0.012),
+ '행정':   extract(['ne_10m_admin_1_states_provinces_lines.geojson'], 0.02),
+ '강':     extract(['ne_10m_rivers_lake_centerlines.geojson'], 0.014, river_filter),
+}
+for k,v in layers.items():
+    print(k, 'polylines', len(v), 'pts', sum(len(p) for p in v))
 
-# write dart
 with open('country_borders_data.dart','w') as f:
-    f.write("// 자동 생성: Natural Earth 10m 해안선 + 소형 섬 해안선(공개 도메인)에서\n")
-    f.write("// 한반도 주변(위도 %.1f~%.1f, 경도 %.1f~%.1f)을 bbox로 클리핑·단순화(RDP %.3f°)한 좌표.\n" % (MINLAT,MAXLAT,MINLON,MAXLON,EPS))
+    f.write("// 자동 생성: Natural Earth 10m 해안선·소형섬·국경선·행정경계(주/성)·주요 하천\n")
+    f.write("// (공개 도메인)에서 위도 %.0f~%.0f, 경도 %.0f~%.0f을 클리핑·단순화한 좌표.\n"%(MINLAT,MAXLAT,MINLON,MAXLON))
     f.write("// 출처: https://github.com/nvkelso/natural-earth-vector (Natural Earth, Public Domain)\n")
-    f.write("// 실제 해안선·섬을 그대로 담아 지도가 실제 지형과 일치한다.\n")
+    f.write("// scratchpad/gen_coast2.py로 재생성. 키: 해안선(항상)·국경(항상)·행정/강(확대 시).\n")
     f.write("const Map<String, List<List<(double lat, double lon)>>> countryBorders = {\n")
-    f.write("  '해안선': [\n")
-    for p in polylines:
-        f.write("    [\n")
-        for lon,lat in p:
-            f.write("      (%.3f, %.3f),\n" % (lat,lon))
-        f.write("    ],\n")
-    f.write("  ],\n")
+    for k,polys in layers.items():
+        f.write("  '%s': [\n"%k)
+        for p in polys:
+            f.write("    [\n")
+            for lon,lat in p:
+                f.write("      (%.3f, %.3f),\n"%(lat,lon))
+            f.write("    ],\n")
+        f.write("  ],\n")
     f.write("};\n")
-print("wrote country_borders_data.dart")
 import os
-print("dart file size:", os.path.getsize('country_borders_data.dart'))
+print("dart bytes", os.path.getsize('country_borders_data.dart'))

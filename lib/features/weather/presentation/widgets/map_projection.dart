@@ -20,15 +20,16 @@ class LatLonBounds {
   final double minLat, maxLat, minLon, maxLon;
 }
 
-/// 바람 지도의 기본 화면뷰 범위. 북쪽(중국 북부·러시아)은 정보 가치가 낮아
-/// 상단을 잘라(뷰를 위로 이동) 한국이 화면에서 조금 더 크게·위쪽에 오도록 한다.
-/// 이 뷰는 바람장 격자 범위(minLat 26.5 ~ maxLat 45.5)의 부분집합이므로
-/// 히트맵·해안선은 그대로 뷰를 가득 채운다(재추출 불필요).
+/// 바람 지도의 기본 화면뷰 범위. 한국을 중심으로 동(일본)·서(중국)·남(대만·
+/// 오키나와)·북(러시아 연해주)까지 넓게 담아, 확대/이동으로 주변국 해역까지
+/// 볼 수 있게 한다. 바람장 격자([OpenMeteoWindFieldRepository])와 같은 범위라
+/// 히트맵·해안선이 뷰를 가득 채운다(범위를 바꾸면 격자와 country_borders_data
+/// 도 같은 bbox로 다시 맞춰야 한다).
 const mapViewBounds = LatLonBounds(
-  minLat: 26.5,
-  maxLat: 43.0,
-  minLon: 118.5,
-  maxLon: 136.5,
+  minLat: 21.0,
+  maxLat: 49.0,
+  minLon: 112.0,
+  maxLon: 144.0,
 );
 
 /// [bounds] 안의 위경도를 [size] 크기의 캔버스 좌표로 변환한다.

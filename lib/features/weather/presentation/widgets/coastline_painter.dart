@@ -20,13 +20,61 @@ class CoastlinePainter extends CustomPainter {
   /// 지명 라벨과 동일한 보정값을 공유한다([kMapLonShift]).
   static const double _lonShift = kMapLonShift;
 
+  /// 한 레이어(키)의 모든 폴리라인을 하나의 Path로 합친다.
+  Path _pathFor(String key) {
+    final path = Path();
+    final polylines = countryBorders[key];
+    if (polylines == null) return path;
+    for (final points in polylines) {
+      if (points.length < 2) continue;
+      final start = projection.project(
+        points.first.$1,
+        points.first.$2 + _lonShift,
+      );
+      path.moveTo(start.dx, start.dy);
+      for (final p in points.skip(1)) {
+        final o = projection.project(p.$1, p.$2 + _lonShift);
+        path.lineTo(o.dx, o.dy);
+      }
+    }
+    return path;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    // 윈디 지도처럼 **얇고 검정에 가까운 선**으로 해안선을 그린다.
-    // 어두운 바다 위에서도 경계가 읽히도록, 아주 옅은 밝은 헤일로(글로우)를
-    // 살짝 깔고 그 위에 얇은 짙은 선을 얹는다. 두께는 확대 배율로 나눠
-    // 화면상 항상 얇게 보이도록 한다.
     final s = scale <= 0 ? 1.0 : scale;
+
+    // 확대할수록(행정경계·하천 등) 지형의 디테일한 선이 드러나게 한다.
+    // 각 레이어는 하나의 Path로 합쳐 한 번에 그려 성능을 유지한다.
+
+    // 하천(강): 많이 확대하면 옅은 청색 선으로.
+    if (s >= 3.0) {
+      canvas.drawPath(
+        _pathFor('강'),
+        Paint()
+          ..color = const Color(0xFF6FA8C7).withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.5 / s
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+    // 행정경계(주·성): 조금 확대하면 아주 옅은 점선 느낌의 얇은 선으로.
+    if (s >= 2.2) {
+      canvas.drawPath(
+        _pathFor('행정'),
+        Paint()
+          ..color = const Color(0xFF2A3543).withValues(alpha: 0.5)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.4 / s
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    // 해안선·국경: 항상. 윈디처럼 얇고 검정에 가까운 선 + 옅은 헤일로.
+    final coast = _pathFor('해안선');
+    final border = _pathFor('국경');
     final halo = Paint()
       ..color = Colors.white.withValues(alpha: 0.12)
       ..style = PaintingStyle.stroke
@@ -34,33 +82,22 @@ class CoastlinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 1.2 / s);
-    final line = Paint()
+    final coastLine = Paint()
       ..color = const Color(0xFF10161F).withValues(alpha: 0.72)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.6 / s
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
+    final borderLine = Paint()
+      ..color = const Color(0xFF1B2430).withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5 / s
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
-    // 수백 개 해안선·섬 폴리라인을 **하나의 Path**로 합쳐 한 번에 그린다
-    // (폴리라인마다 drawPath를 부르면 블러 처리 비용이 커져 첫 프레임이
-    // 크게 지연되고 화면이 잠깐 검게 보인다).
-    final path = Path();
-    for (final polylines in countryBorders.values) {
-      for (final points in polylines) {
-        if (points.length < 2) continue;
-        final start = projection.project(
-          points.first.$1,
-          points.first.$2 + _lonShift,
-        );
-        path.moveTo(start.dx, start.dy);
-        for (final p in points.skip(1)) {
-          final o = projection.project(p.$1, p.$2 + _lonShift);
-          path.lineTo(o.dx, o.dy);
-        }
-      }
-    }
-    canvas.drawPath(path, halo);
-    canvas.drawPath(path, line);
+    canvas.drawPath(coast, halo);
+    canvas.drawPath(border, borderLine);
+    canvas.drawPath(coast, coastLine);
   }
 
   @override
