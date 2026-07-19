@@ -645,7 +645,7 @@ class _PointCallout extends StatelessWidget {
                         Icon(Icons.insights, size: 14, color: scheme.onPrimary),
                         const SizedBox(width: 4),
                         Text(
-                          '이 지점의 예보',
+                          '상세 예보',
                           style: TextStyle(
                             color: scheme.onPrimary,
                             fontWeight: FontWeight.bold,
@@ -688,9 +688,9 @@ class _ForecastRose extends StatelessWidget {
   final double top;
   final HourlyMarine hour;
 
-  static const double _len = 96; // 막대 길이(중심→끝)
-  static const double _thick = 15; // 막대 두께(글자가 들어갈 만큼만)
-  static const double _d = 240; // 로즈 박스 한 변
+  static const double _len = 84; // 막대 길이(중심→끝)
+  static const double _thick = 16; // 막대 두께(글자가 들어갈 만큼만)
+  static const double _d = 220; // 로즈 박스 한 변
   static const Offset _c = Offset(_d / 2, _d / 2);
 
   static const _windC = Color(0xFF3FB6DC);
@@ -761,6 +761,10 @@ class _ForecastRose extends StatelessWidget {
       angle += math.pi;
       flip = true;
     }
+    // 화살표 방향: 뒤집히지 않으면 막대의 바깥쪽(진행 방향)이 오른쪽, 뒤집히면
+    // 왼쪽이다. 뾰족한 끝(tip)이 항상 바깥(진행 방향)을 향하도록 화살표 모양을
+    // 좌우로 맞춘다.
+    final pointRight = !flip;
     return Positioned(
       left: mid.dx,
       top: mid.dy,
@@ -768,48 +772,90 @@ class _ForecastRose extends StatelessWidget {
         translation: const Offset(-0.5, -0.5),
         child: Transform.rotate(
           angle: angle,
-          child: Container(
-            width: _len,
-            height: _thick,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 5),
-            decoration: BoxDecoration(
+          child: ClipPath(
+            clipper: _ArrowBarClipper(pointRight: pointRight),
+            child: Container(
+              width: _len,
+              height: _thick,
+              alignment: Alignment.center,
+              // 뾰족한 끝·홈이 글자를 가리지 않게 좌우 여백을 준다.
+              padding: const EdgeInsets.symmetric(horizontal: 11),
               color: color,
-              borderRadius: BorderRadius.circular(_thick / 2),
-              boxShadow: const [
-                BoxShadow(color: Colors.black45, blurRadius: 2),
-              ],
-            ),
-            // 뒤집힌 경우 라벨이 바깥쪽에 오도록 순서를 뒤집는다.
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              textDirection: flip ? TextDirection.rtl : TextDirection.ltr,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.bold,
-                    height: 1.0,
-                  ),
+              // 뒤집힌 경우 라벨이 바깥쪽(tip)에 오도록 순서를 뒤집는다.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  textDirection: flip ? TextDirection.rtl : TextDirection.ltr,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1.0,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// 방향 막대의 화살표 모양: 한쪽 끝은 뾰족(tip), 반대쪽 끝은 화살 오늬처럼
+/// 안으로 파인 홈(notch). [pointRight]로 뾰족한 끝의 좌우를 정한다.
+class _ArrowBarClipper extends CustomClipper<Path> {
+  _ArrowBarClipper({required this.pointRight});
+
+  final bool pointRight;
+  static const double _tip = 9;
+  static const double _notch = 6;
+
+  @override
+  Path getClip(Size size) {
+    final w = size.width;
+    final h = size.height;
+    final p = Path();
+    if (pointRight) {
+      p
+        ..moveTo(0, 0)
+        ..lineTo(w - _tip, 0)
+        ..lineTo(w, h / 2) // 뾰족한 끝(오른쪽)
+        ..lineTo(w - _tip, h)
+        ..lineTo(0, h)
+        ..lineTo(_notch, h / 2) // 오늬 홈(왼쪽)
+        ..close();
+    } else {
+      p
+        ..moveTo(w, 0)
+        ..lineTo(_tip, 0)
+        ..lineTo(0, h / 2) // 뾰족한 끝(왼쪽)
+        ..lineTo(_tip, h)
+        ..lineTo(w, h)
+        ..lineTo(w - _notch, h / 2) // 오늬 홈(오른쪽)
+        ..close();
+    }
+    return p;
+  }
+
+  @override
+  bool shouldReclip(_ArrowBarClipper old) => old.pointRight != pointRight;
 }
 
 /// 나침반의 반투명 원 + 가운데 점만 그린다(막대는 위젯으로 얹는다).
@@ -881,6 +927,11 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   bool _syncingFromSlider = false;
   bool _initialized = false;
   final ScrollController _hCtrl = ScrollController();
+
+  /// 지점을 바꿔 다시 로딩하는 동안에도 표를 그대로 유지하기 위해 직전
+  /// 예보를 붙잡아 둔다. 로딩 스피너로 표를 잠깐 없애면 스크롤 컨트롤러가
+  /// 0으로 리셋되면서 보고 있던 날짜 위치가 처음으로 튕겨나가는 문제를 막는다.
+  MarineForecast? _lastForecast;
 
   /// [steps] 중 현재 시각과 가장 가까운 칸의 인덱스.
   int _closestToNow(List<HourlyMarine> steps) {
@@ -970,7 +1021,7 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '이 지점의 예보  ·  ${widget.location.name}',
+                      '상세 예보  ·  ${widget.location.name}',
                       style: Theme.of(context).textTheme.titleSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -984,20 +1035,24 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                 ],
               ),
             ),
-            forecastAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(24),
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-              error: (e, _) => const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('예보를 불러오지 못했습니다'),
-              ),
-              data: (forecast) {
+            Builder(
+              builder: (context) {
+                // 지점 변경 재로딩 중에도 직전 예보를 유지해 표가 사라지지
+                // 않게 한다(표를 스피너로 바꾸면 스크롤이 0으로 리셋된다).
+                final forecast = forecastAsync.valueOrNull ?? _lastForecast;
+                if (forecastAsync.hasValue) _lastForecast = forecastAsync.value;
+                if (forecast == null) {
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: forecastAsync.hasError
+                        ? const Text('예보를 불러오지 못했습니다')
+                        : const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                  );
+                }
                 // 3시간 간격으로 향후 최대 16일(Open-Meteo 예보 상한)을 뽑는다.
                 final steps = [
                   for (final h in forecast.hourly)
