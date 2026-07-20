@@ -100,14 +100,32 @@ const _stopB = <int>[
   for (var i = 0; i < _stopSpeeds.length - 1; i++) {
     if (s <= _stopSpeeds[i + 1]) {
       final t = (s - _stopSpeeds[i]) / (_stopSpeeds[i + 1] - _stopSpeeds[i]);
-      return (
-        (_stopR[i] + (_stopR[i + 1] - _stopR[i]) * t).round(),
-        (_stopG[i] + (_stopG[i + 1] - _stopG[i]) * t).round(),
-        (_stopB[i] + (_stopB[i + 1] - _stopB[i]) * t).round(),
+      return _vivid(
+        _stopR[i] + (_stopR[i + 1] - _stopR[i]) * t,
+        _stopG[i] + (_stopG[i + 1] - _stopG[i]) * t,
+        _stopB[i] + (_stopB[i + 1] - _stopB[i]) * t,
       );
     }
   }
-  return (_stopR.last, _stopG.last, _stopB.last);
+  return _vivid(
+    _stopR.last.toDouble(),
+    _stopG.last.toDouble(),
+    _stopB.last.toDouble(),
+  );
+}
+
+/// windy.com 기본 그라데이션은 중간 풍속대(카키·갈색)가 탁해 보여 실제
+/// Windy 앱보다 색이 약하게 느껴진다. 색상(hue)은 그대로 두고 채도·명도만
+/// 살짝 끌어올려 초록·노랑·주황이 또렷하게 살아나게 한다(윈디 앱 느낌).
+(int r, int g, int b) _vivid(double rf, double gf, double bf) {
+  final hsv = HSVColor.fromColor(
+    Color.fromARGB(255, rf.round(), gf.round(), bf.round()),
+  );
+  final c = hsv
+      .withSaturation((hsv.saturation * 1.32).clamp(0.0, 1.0))
+      .withValue((hsv.value * 1.06).clamp(0.0, 1.0))
+      .toColor();
+  return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }
 
 Color windSpeedColor(double speedMs) {

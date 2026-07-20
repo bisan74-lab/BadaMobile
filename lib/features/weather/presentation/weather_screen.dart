@@ -106,17 +106,17 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
-  static const _particleCount = 170;
-  static const _maxAgeSeconds = 18.0;
+  static const _particleCount = 230;
+  static const _maxAgeSeconds = 24.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 흰 점이
   /// 짧은 선 → 조금 긴 선 → 아주 긴 흐름선으로 보이게 한다(윈디식 잔상).
-  /// 올챙이처럼 꼬리가 길게 남도록 상한을 넉넉히 잡되, 풍속 비례 계수를
-  /// 키워 센 바람일수록 확실히 더 길어지게 한다. 성능(프레임당 drawLine 수
-  /// = 파티클수 × 궤적)을 위해 파티클 수는 낮춘다.
-  static const _minTrail = 22;
-  static const _maxTrailCap = 112;
-  static const _trailSpeedFactor = 7.0;
+  /// Windy 앱처럼 올챙이 꼬리가 길고 또렷하게 남도록 최소·최대 길이와 풍속
+  /// 비례 계수를 모두 키웠다. 성능(프레임당 drawLine 수 = 파티클수 × 궤적)은
+  /// 파티클 레이어만 RepaintBoundary로 다시 그려 감당한다.
+  static const _minTrail = 34;
+  static const _maxTrailCap = 185;
+  static const _trailSpeedFactor = 11.0;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
   /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy에 맞춰 0.18로 둔다.
