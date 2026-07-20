@@ -34,4 +34,19 @@ class Env {
         'https://raw.githubusercontent.com/bisan74-lab/BadaMobile/'
         'claude/mobile-app-project-setup-87rgak/remote_config/app_gate.json',
   );
+
+  /// 지도용 바람장 격자 데이터(서버가 미리 뽑아 둔 정적 파일) URL.
+  ///
+  /// GitHub Actions 크론(`.github/workflows/wind-data.yml`)이 Open-Meteo에서
+  /// 받아 롤링 릴리스(`wind-data`)에 올린 `wind_field.json.gz`를 가리킨다.
+  /// 앱은 이 파일 하나만 내려받아 지도에 쓰므로 사용자 기기가 Open-Meteo를
+  /// 직접 다지점 호출하지 않는다(분당 한도 회피·모든 사용자 동일 데이터).
+  /// 받지 못하면 앱이 Open-Meteo 직접 호출로 폴백한다.
+  /// `--dart-define=WIND_DATA_URL=...` 로 재정의 가능.
+  static const windDataUrl = String.fromEnvironment(
+    'WIND_DATA_URL',
+    defaultValue:
+        'https://github.com/bisan74-lab/BadaMobile/releases/download/'
+        'wind-data/wind_field.json.gz',
+  );
 }

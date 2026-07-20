@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import '../../../../core/storage/cache_store.dart';
 import '../../../../core/utils/kst.dart';
 import '../models/wind_field.dart';
-import 'open_meteo_wind_field_repository.dart';
 import 'wind_field_repository.dart';
 
 /// [inner](실 API)의 바람장 시계열을 로컬에 캐시하는 래퍼 (FR-11 체인).
@@ -100,11 +99,8 @@ class CachingWindFieldRepository implements WindFieldRepository {
     final json = cache.readJson(_key);
     if (json == null) return null;
     try {
-      // 앱 업데이트로 격자 구성이 바뀌었으면 옛 캐시는 버린다.
-      if (json['latSteps'] != OpenMeteoWindFieldRepository.latSteps ||
-          json['lonSteps'] != OpenMeteoWindFieldRepository.lonSteps) {
-        return null;
-      }
+      // 격자 구성은 데이터마다 다를 수 있다(서버 파일 vs 직접 호출). 크기를
+      // 강제하지 않고, 배열 길이가 스텝×격자와 맞는지로만 무결성을 검증한다.
       final fetchedAt = DateTime.parse(json['fetchedAt'] as String);
       final start = DateTime.parse(json['start'] as String);
       final n = json['hours'] as int;

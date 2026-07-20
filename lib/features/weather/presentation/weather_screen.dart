@@ -694,8 +694,10 @@ class _MapTimeBar extends StatelessWidget {
     final i = offset.clamp(0, maxIdx);
     final t = series.at(i).time;
     final isNow = i == nowOffset;
-    // 현재 시각 대비 상대 표시(+N시간 / -N시간).
-    final diffH = i - nowOffset;
+    // 현재 시각 대비 상대 표시(+N시간 / -N시간). 스텝 간격이 1시간이 아닐 수
+    // 있으므로(서버 데이터는 3시간 간격) 인덱스 차가 아니라 실제 시각 차로
+    // 계산해 정확히 표시한다.
+    final diffH = t.difference(series.at(nowOffset).time).inHours;
     final rel = diffH == 0 ? '지금' : (diffH > 0 ? '+$diffH시간' : '$diffH시간');
     return SafeArea(
       top: false,
@@ -791,7 +793,7 @@ class _MapTimeBar extends StatelessWidget {
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       icon: const Icon(Icons.chevron_left),
-                      tooltip: '1시간 전',
+                      tooltip: '이전 시각',
                       onPressed: i > 0 ? () => onChanged(i - 1) : null,
                     ),
                     Expanded(
@@ -813,7 +815,7 @@ class _MapTimeBar extends StatelessWidget {
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       icon: const Icon(Icons.chevron_right),
-                      tooltip: '1시간 후',
+                      tooltip: '다음 시각',
                       onPressed: i < maxIdx ? () => onChanged(i + 1) : null,
                     ),
                   ],

@@ -5,16 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/cache_store.dart';
 import '../data/models/wind_field.dart';
 import '../data/repositories/caching_wind_field_repository.dart';
+import '../data/repositories/github_wind_field_repository.dart';
 import '../data/repositories/mock_wind_field_repository.dart';
 import '../data/repositories/open_meteo_wind_field_repository.dart';
 import '../data/repositories/wind_field_repository.dart';
 
-/// 바람장 리포지토리 주입 지점 — 실API → 캐싱 → (provider의) 합성 폴백 체인.
-/// 캐시 덕에 앱을 열 때마다 무거운 격자 요청을 반복하지 않고, 일시 실패
-/// 시에도 최근 실데이터를 유지한다.
+/// 바람장 리포지토리 주입 지점 — 서버 파일 → Open-Meteo 직접 → 캐싱 →
+/// (provider의) 합성 폴백 체인.
+///
+/// 1순위는 서버(GitHub Actions 크론)가 미리 뽑아 릴리스에 올린 정적 파일이다
+/// (사용자 기기가 Open-Meteo를 직접 호출하지 않아 분당 한도와 무관하고, 더
+/// 촘촘한 격자로 색 디테일↑). 파일을 못 받으면 Open-Meteo 직접 호출로,
+/// 그마저 실패하면 캐시로, 캐시도 없으면 합성으로 내려간다.
 final windFieldRepositoryProvider = Provider<WindFieldRepository>(
   (ref) => CachingWindFieldRepository(
-    inner: OpenMeteoWindFieldRepository(),
+    inner: GithubWindFieldRepository(direct: OpenMeteoWindFieldRepository()),
     cache: ref.watch(cacheStoreProvider),
   ),
 );

@@ -1,0 +1,39 @@
+name: Wind data refresh
+
+# 바람장 격자 데이터를 Open-Meteo에서 받아 롤링 릴리스(wind-data)에 올린다.
+# 앱은 이 정적 파일 하나만 내려받아 지도에 쓴다(사용자 기기가 Open-Meteo를
+# 직접 다지점 호출하지 않아 분당 호출 한도에 걸리지 않는다). ECMWF 갱신 주기
+# (약 6~12시간)를 고려해 6시간마다 새로 뽑는다.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 */6 * * *' # 6시간마다(00:15, 06:15, 12:15, 18:15 UTC)
+
+permissions:
+  contents: write
+
+# 앞선 실행이 아직 돌고 있으면(배치 대기로 몇 분 걸림) 겹치지 않게 한다.
+concurrency:
+  group: wind-data
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 바람장 수집(배치로 한도 준수)
+        run: python3 tool/fetch_wind.py
+
+      - name: 롤링 릴리스에 업로드
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wind-data
+          name: 바람장 데이터 (자동 갱신)
+          body: |
+            앱 지도용 바람장 격자 데이터입니다(자동 갱신). Open-Meteo ECMWF
+            IFS 0.25° 기반. `wind_field.json.gz` 하나만 올라오며, 앱이 이
+            파일을 내려받아 씁니다.
+          files: wind_field.json.gz
+          prerelease: true
