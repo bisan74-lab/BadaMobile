@@ -93,6 +93,19 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     });
   }
 
+  /// 지도 모드 하단 슬라이더로 바람장 시각을 바꾼다.
+  void _setMapHour(int idx) {
+    if (idx != _hourOffset) setState(() => _hourOffset = idx);
+  }
+
+  /// 지도 시각을 다시 "지금"으로 되돌린다.
+  void _mapHourToNow() {
+    final series = _series;
+    if (series == null) return;
+    final idx = series.indexClosestTo(DateTime.now());
+    if (idx != _hourOffset) setState(() => _hourOffset = idx);
+  }
+
   static const _particleCount = 170;
   static const _maxAgeSeconds = 18.0;
 
@@ -258,6 +271,21 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                       speed: cSpeed,
                       dir: cDir,
                       onDetail: _openDetail,
+                    ),
+                  ),
+                // 하단(지도 모드): 시간·날짜 슬라이더. 지도만 보이는 상태에서
+                // 바람장 시각을 윈디처럼 앞뒤로 스크럽한다.
+                if (_forecastPoint == null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _MapTimeBar(
+                      series: series,
+                      offset: _hourOffset,
+                      nowOffset: series.indexClosestTo(DateTime.now()),
+                      onChanged: _setMapHour,
+                      onNow: _mapHourToNow,
                     ),
                   ),
                 // 하단: 상세 예보 표(열렸을 때만).
@@ -588,6 +616,140 @@ class _CursorWindBar extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 지도 모드 하단에 붙는 윈디식 시간·날짜 스크러버. 슬라이더를 움직이면
+/// 지도 바람장 시각([offset])이 바뀌어 히트맵·흐름선이 그 시각의 바람으로
+/// 갱신된다. 현재 시각(now)에 "지금" 배지를 붙이고, ◀▶로 1시간씩 미세
+/// 조정하며, "지금" 버튼으로 현재 시각으로 되돌린다.
+class _MapTimeBar extends StatelessWidget {
+  const _MapTimeBar({
+    required this.series,
+    required this.offset,
+    required this.nowOffset,
+    required this.onChanged,
+    required this.onNow,
+  });
+
+  final WindFieldSeries series;
+  final int offset;
+  final int nowOffset;
+  final ValueChanged<int> onChanged;
+  final VoidCallback onNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final maxIdx = series.length - 1;
+    final i = offset.clamp(0, maxIdx);
+    final t = series.at(i).time;
+    final isNow = i == nowOffset;
+    // 현재 시각 대비 상대 표시(+N시간 / -N시간).
+    final diffH = i - nowOffset;
+    final rel = diffH == 0 ? '지금' : (diffH > 0 ? '+$diffH시간' : '$diffH시간');
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        child: Material(
+          color: scheme.surface.withValues(alpha: 0.95),
+          elevation: 4,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 6, 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.schedule, size: 18, color: scheme.primary),
+                    const SizedBox(width: 6),
+                    if (isNow)
+                      Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '지금',
+                          style: TextStyle(
+                            color: scheme.onPrimary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    Flexible(
+                      child: Text(
+                        '${formatMonthDay(t)}  ${formatHm(t)}',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (!isNow) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        rel,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                    const Spacer(),
+                    TextButton(
+                      onPressed: isNow ? null : onNow,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      child: const Text('지금'),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.chevron_left),
+                      tooltip: '1시간 전',
+                      onPressed: i > 0 ? () => onChanged(i - 1) : null,
+                    ),
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3,
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 14,
+                          ),
+                        ),
+                        child: Slider(
+                          value: i.toDouble(),
+                          min: 0,
+                          max: maxIdx.toDouble(),
+                          onChanged: (v) => onChanged(v.round()),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.chevron_right),
+                      tooltip: '1시간 후',
+                      onPressed: i < maxIdx ? () => onChanged(i + 1) : null,
+                    ),
+                  ],
                 ),
               ],
             ),

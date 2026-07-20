@@ -35,9 +35,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
 
-    // 진입 시: 지도(CustomPaint)만, 하단 표/스크러버·상단 바 없음.
+    // 진입 시: 지도(CustomPaint) + 하단 시간 스크러버(Slider)만, 상세 예보 표·
+    // 상단 바 없음. (윈디처럼 지도만 보일 때도 바람장 시각을 앞뒤로 스크럽한다.)
     expect(find.byType(CustomPaint), findsWidgets);
-    expect(find.byType(Slider), findsNothing);
+    expect(find.byType(Slider), findsOneWidget);
     expect(find.text('상세 예보'), findsNothing);
 
     // 지도 중앙을 탭하면 커서가 찍히고 상단에 바람 세기·방향 + "상세 예보" 버튼.
