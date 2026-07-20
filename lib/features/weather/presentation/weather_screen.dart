@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/kst.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../../kma_weather/presentation/widgets/weather_icon.dart';
@@ -85,10 +86,10 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     _roseHour.value = null;
     setState(() {
       _forecastPoint = null;
-      // 표를 닫으면 지도를 다시 현재 시각 바람으로 되돌린다.
+      // 표를 닫으면 지도를 다시 현재 시각(서울 기준) 바람으로 되돌린다.
       final series = _series;
       if (series != null) {
-        _hourOffset = series.indexClosestTo(DateTime.now());
+        _hourOffset = series.indexClosestTo(nowKst());
       }
     });
   }
@@ -98,11 +99,11 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
-  /// 지도 시각을 다시 "지금"으로 되돌린다.
+  /// 지도 시각을 다시 "지금"(서울 기준)으로 되돌린다.
   void _mapHourToNow() {
     final series = _series;
     if (series == null) return;
-    final idx = series.indexClosestTo(DateTime.now());
+    final idx = series.indexClosestTo(nowKst());
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
@@ -152,8 +153,9 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   void _ensureSeeded(WindFieldSeries series) {
     if (_series != null) return;
     _series = series;
-    // 시계열은 오늘 0시부터 시작하므로, 지도 기본 시각을 "지금"에 맞춘다.
-    _hourOffset = series.indexClosestTo(DateTime.now());
+    // 시계열은 오늘 0시(서울)부터 시작하므로, 지도 기본 시각을 서울 기준
+    // "지금"에 맞춘다(기기 시간대 설정과 무관).
+    _hourOffset = series.indexClosestTo(nowKst());
     final field = series.at(_hourOffset);
     _particles
       ..clear()
@@ -243,6 +245,31 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                   cSpeed = math.sqrt(u * u + v * v);
                   cDir = (math.atan2(-u, -v) * 180 / math.pi + 360) % 360;
                 }
+                // 격자(약 2° 간격) 보간은 국지 바람이 뭉개져 실제(윈디 지점
+                // 표시값)보다 약하게 나온다. 정확한 좌표로 요청한 지점 시계열이
+                // 도착하면, 지도에 표시 중인 시각과 같은 시각의 지점값으로
+                // 덮어써 윈디와 숫자가 맞게 한다(도착 전엔 격자값 폴백).
+                final points = ref
+                    .watch(
+                      cursorWindSeriesProvider((
+                        lat: (clat * 1000).roundToDouble() / 1000,
+                        lon: (clon * 1000).roundToDouble() / 1000,
+                      )),
+                    )
+                    .valueOrNull;
+                if (points != null && points.isNotEmpty) {
+                  var best = points.first;
+                  var bestDiff = best.time.difference(field.time).abs();
+                  for (final p in points) {
+                    final d = p.time.difference(field.time).abs();
+                    if (d < bestDiff) {
+                      bestDiff = d;
+                      best = p;
+                    }
+                  }
+                  cSpeed = best.speedMs;
+                  cDir = best.directionDeg;
+                }
               }
             }
 
@@ -283,7 +310,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                     child: _MapTimeBar(
                       series: series,
                       offset: _hourOffset,
-                      nowOffset: series.indexClosestTo(DateTime.now()),
+                      nowOffset: series.indexClosestTo(nowKst()),
                       onChanged: _setMapHour,
                       onNow: _mapHourToNow,
                     ),
@@ -700,12 +727,18 @@ class _MapTimeBar extends StatelessWidget {
                           ),
                         ),
                       ),
+                    // 날짜가 길어 시각이 말줄임표로 잘리지 않도록 짧은
+                    // 형식("7/20 (일) 23:00")을 쓰고, 좁으면 글자를 줄여서라도
+                    // 시각이 항상 보이게 한다.
                     Flexible(
-                      child: Text(
-                        '${formatMonthDay(t)}  ${formatHm(t)}',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${t.month}/${t.day} (${weekdayKo(t)}) ${formatHm(t)}',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                     if (!isNow) ...[
@@ -1044,9 +1077,9 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   /// 0으로 리셋되면서 보고 있던 날짜 위치가 처음으로 튕겨나가는 문제를 막는다.
   MarineForecast? _lastForecast;
 
-  /// [steps] 중 현재 시각과 가장 가까운 칸의 인덱스.
+  /// [steps] 중 현재 시각(서울 기준)과 가장 가까운 칸의 인덱스.
   int _closestToNow(List<HourlyMarine> steps) {
-    final now = DateTime.now();
+    final now = nowKst();
     var best = 0;
     var bestDiff = const Duration(days: 999);
     for (var k = 0; k < steps.length; k++) {

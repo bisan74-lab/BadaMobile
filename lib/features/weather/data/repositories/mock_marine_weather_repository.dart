@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../../../core/utils/kst.dart';
 import '../../../locations/data/models/sea_location.dart';
 import '../models/marine_weather.dart';
 import 'marine_weather_repository.dart';
@@ -17,7 +18,8 @@ class MockMarineWeatherRepository implements MarineWeatherRepository {
     int pastDays = 0,
   }) async {
     final seed = (location.latitude * 7 + location.longitude * 13) % 10;
-    final start = DateTime.now().subtract(Duration(days: pastDays));
+    // 시간축은 실데이터와 같은 서울 시간 기준(정시 눈금)으로 만든다.
+    final start = nowKst().subtract(Duration(days: pastDays));
     final startHour = DateTime(start.year, start.month, start.day, start.hour);
 
     final hourly = List<HourlyMarine>.generate(hours, (i) {

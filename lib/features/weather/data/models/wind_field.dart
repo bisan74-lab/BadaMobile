@@ -69,6 +69,24 @@ class WindField {
   return (-speedMs * math.sin(rad), -speedMs * math.cos(rad));
 }
 
+/// 특정 지점(정확한 위경도)의 시간별 바람 값.
+///
+/// 지도 격자(약 2° 간격)를 쌍선형 보간한 값이 아니라 그 좌표를 그대로 API에
+/// 요청해 받은 원해상도 값이라, 윈디 앱의 지점 표시값과 직접 비교된다.
+class PointWind {
+  const PointWind({
+    required this.time,
+    required this.speedMs,
+    required this.directionDeg,
+  });
+
+  final DateTime time;
+  final double speedMs;
+
+  /// 기상 관례 풍향(바람이 불어오는 방향, 도).
+  final double directionDeg;
+}
+
 /// 같은 격자 지리(bbox·해상도)에 대해 시간대별 [WindField] 스냅샷을 모은 것.
 /// 윈디 스타일 시간 스크러버(time slider)에 쓰인다.
 class WindFieldSeries {

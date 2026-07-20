@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../../../core/utils/kst.dart';
 import '../models/wind_field.dart';
 import 'open_meteo_wind_field_repository.dart';
 import 'wind_field_repository.dart';
@@ -12,17 +13,38 @@ import 'wind_field_repository.dart';
 /// 격자 범위·해상도는 [OpenMeteoWindFieldRepository]와 동일하게 맞춘다.
 class MockWindFieldRepository implements WindFieldRepository {
   @override
-  Future<WindField> fetchField() async => _buildField(DateTime.now());
+  Future<WindField> fetchField() async => _buildField(nowKst());
 
   @override
   Future<WindFieldSeries> fetchSeries({int hours = 48}) async {
-    final start = DateTime.now();
+    // 실제 API처럼 정시(서울 시간) 눈금으로 맞춰, 시간 슬라이더의 "지금"
+    // 배지·상대 표시가 목업에서도 어긋나지 않게 한다.
+    final now = nowKst();
+    final start = DateTime(now.year, now.month, now.day, now.hour);
     return WindFieldSeries(
       hourly: List.generate(
         hours,
         (h) => _buildField(start.add(Duration(hours: h))),
       ),
     );
+  }
+
+  @override
+  Future<List<PointWind>> fetchPointSeries(
+    double lat,
+    double lon, {
+    int days = 16,
+  }) async {
+    final series = await fetchSeries(hours: days * 24);
+    return [
+      for (final f in series.hourly)
+        if (f.sample(lat, lon) case (final double u, final double v))
+          PointWind(
+            time: f.time,
+            speedMs: math.sqrt(u * u + v * v),
+            directionDeg: (math.atan2(-u, -v) * 180 / math.pi + 360) % 360,
+          ),
+    ];
   }
 
   WindField _buildField(DateTime at) {

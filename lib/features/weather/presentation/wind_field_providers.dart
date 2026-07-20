@@ -39,3 +39,15 @@ final windFieldSeriesProvider = FutureProvider.autoDispose<WindFieldSeries>((
     return MockWindFieldRepository().fetchSeries(hours: windFieldSeriesHours);
   }
 });
+
+/// 커서(탭한 지점)의 시간별 바람. 지도 격자(약 2° 간격) 보간은 국지 바람이
+/// 뭉개져 실제보다 약하게 나오므로(윈디 지점 표시는 원해상도 지점값),
+/// 상단 커서 바의 숫자는 좌표를 그대로 요청한 이 지점값을 쓴다.
+/// 실패하면 화면이 격자 보간값으로 폴백한다(별도 목업 폴백 없음).
+final cursorWindSeriesProvider = FutureProvider.autoDispose
+    .family<List<PointWind>, ({double lat, double lon})>((ref, p) async {
+      final repo = ref.watch(windFieldRepositoryProvider);
+      final list = await repo.fetchPointSeries(p.lat, p.lon);
+      ref.keepAlive();
+      return list;
+    });

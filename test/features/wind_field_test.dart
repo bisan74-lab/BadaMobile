@@ -169,6 +169,41 @@ void main() {
       expect(series.at(0).time, series.hourly.first.time);
       expect(series.at(9999).time, series.hourly.last.time); // 범위 밖은 끝 고정
     });
+
+    test('fetchPointSeries는 지점 좌표를 그대로 요청해 시간별 바람을 준다', () async {
+      final client = MockClient((request) async {
+        // 격자 배치가 아니라 탭한 좌표 하나를 그대로 요청한다.
+        expect(request.url.queryParameters['latitude'], '36.2500');
+        expect(request.url.queryParameters['longitude'], '126.0800');
+        expect(
+          request.url.queryParameters['hourly'],
+          contains('wind_speed_10m'),
+        );
+        final times = List.generate(
+          24,
+          (h) => '2026-07-20T${h.toString().padLeft(2, '0')}:00',
+        );
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              'wind_speed_10m': List.filled(24, 8.0),
+              'wind_direction_10m': List.filled(24, 180.0),
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final repo = OpenMeteoWindFieldRepository(client: client);
+      final list = await repo.fetchPointSeries(36.25, 126.08);
+
+      expect(list, hasLength(24));
+      expect(list.first.speedMs, closeTo(8, 1e-9));
+      expect(list.first.directionDeg, closeTo(180, 1e-9));
+      expect(list[23].time.hour, 23);
+    });
   });
 
   group('MockWindFieldRepository', () {

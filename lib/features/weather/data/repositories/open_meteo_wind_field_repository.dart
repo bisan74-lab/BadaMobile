@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/utils/kst.dart';
 import '../models/wind_field.dart';
 import 'wind_field_repository.dart';
 
@@ -136,7 +137,7 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
     }
 
     return WindField(
-      time: time ?? DateTime.now(),
+      time: time ?? nowKst(),
       minLat: minLat,
       maxLat: maxLat,
       minLon: minLon,
@@ -221,5 +222,46 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
         ),
       ),
     );
+  }
+
+  @override
+  Future<List<PointWind>> fetchPointSeries(
+    double lat,
+    double lon, {
+    int days = 16,
+  }) async {
+    final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
+      'latitude': lat.toStringAsFixed(4),
+      'longitude': lon.toStringAsFixed(4),
+      'hourly': 'wind_speed_10m,wind_direction_10m',
+      'wind_speed_unit': 'ms',
+      'timezone': 'Asia/Seoul',
+      'forecast_days': days.clamp(1, 16).toString(),
+      'models': _model,
+    });
+    final res = await _client.get(uri);
+    if (res.statusCode != 200) {
+      throw http.ClientException('지점 바람 응답 오류 ${res.statusCode}', uri);
+    }
+    final decoded = jsonDecode(res.body);
+    final obj =
+        (decoded is List ? decoded.first : decoded) as Map<String, dynamic>;
+    final hourly = obj['hourly'] as Map<String, dynamic>?;
+    final times = (hourly?['time'] as List?) ?? const [];
+    final speeds = (hourly?['wind_speed_10m'] as List?) ?? const [];
+    final dirs = (hourly?['wind_direction_10m'] as List?) ?? const [];
+    if (times.isEmpty) {
+      throw const FormatException('지점 바람 응답에 시간별 데이터가 없음');
+    }
+    return [
+      for (var i = 0; i < times.length; i++)
+        PointWind(
+          time: DateTime.parse(times[i] as String),
+          speedMs:
+              (i < speeds.length ? speeds[i] as num? : null)?.toDouble() ?? 0,
+          directionDeg:
+              (i < dirs.length ? dirs[i] as num? : null)?.toDouble() ?? 0,
+        ),
+    ];
   }
 }
