@@ -47,26 +47,26 @@ class CoastlinePainter extends CustomPainter {
     // 확대할수록(행정경계·하천 등) 지형의 디테일한 선이 드러나게 한다.
     // 각 레이어는 하나의 Path로 합쳐 한 번에 그려 성능을 유지한다.
 
-    // 하천(강): 많이 확대하면 옅은 청색 선으로.
-    if (s >= 3.0) {
+    // 하천(강): 조금 확대하면 옅은 청색 선으로.
+    if (s >= 2.2) {
       canvas.drawPath(
         _pathFor('강'),
         Paint()
-          ..color = const Color(0xFF6FA8C7).withValues(alpha: 0.55)
+          ..color = const Color(0xFF6FA8C7).withValues(alpha: 0.6)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.5 / s
+          ..strokeWidth = 0.55 / s
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
     }
-    // 행정경계(주·성): 조금 확대하면 아주 옅은 점선 느낌의 얇은 선으로.
-    if (s >= 2.2) {
+    // 행정경계(주·성): 살짝만 확대해도 아주 옅은 얇은 선으로 드러난다.
+    if (s >= 1.8) {
       canvas.drawPath(
         _pathFor('행정'),
         Paint()
-          ..color = const Color(0xFF2A3543).withValues(alpha: 0.5)
+          ..color = const Color(0xFF2A3543).withValues(alpha: 0.55)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.4 / s
+          ..strokeWidth = 0.42 / s
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );

@@ -27,7 +27,7 @@ class LatLonBounds {
 /// 도 같은 bbox로 다시 맞춰야 한다).
 const mapViewBounds = LatLonBounds(
   minLat: 21.0,
-  maxLat: 49.0,
+  maxLat: 54.0,
   minLon: 112.0,
   maxLon: 144.0,
 );

@@ -304,7 +304,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
   DateTime? _heatmapTime;
   final TransformationController _transformController =
       TransformationController();
-  double _scale = 1.0;
+  double _scale = 1.5;
+  bool _didInitTransform = false;
 
   @override
   void initState() {
@@ -365,12 +366,26 @@ class _WindMapAreaState extends State<_WindMapArea> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final size = constraints.biggest;
+          final screen = constraints.biggest;
           final heatmap = _heatmap;
-          // 지도 뷰(mapViewBounds)는 바람장 격자와 같은 범위를 쓴다 —
-          // 히트맵이 지도 전체를 채운다. 모든 레이어가 같은 투영을 공유해
-          // 서로 어긋나지 않게 한다.
-          final projection = MapProjection(mapViewBounds, size);
+          // 실물 비율(위·경도 왜곡 보정): 위도 1° ≈ 경도 1°×cos(위도)이므로,
+          // 지도 캔버스의 가로:세로를 (경도폭×cos):(위도폭)로 잡아 세로로
+          // 늘어나 보이던 왜곡을 없앤다. 화면을 가득 덮도록(cover) 크기를 잡아
+          // 남는 한 방향은 넘쳐서(pan) 볼 수 있게 한다.
+          final centerLat = (mapViewBounds.minLat + mapViewBounds.maxLat) / 2;
+          final cosLat = math.cos(centerLat * math.pi / 180);
+          final lonSpan = mapViewBounds.maxLon - mapViewBounds.minLon;
+          final latSpan = mapViewBounds.maxLat - mapViewBounds.minLat;
+          final aspect = (lonSpan * cosLat) / latSpan; // 가로/세로
+          var mapW = screen.width;
+          var mapH = mapW / aspect;
+          if (mapH < screen.height) {
+            mapH = screen.height;
+            mapW = mapH * aspect;
+          }
+          final mapSize = Size(mapW, mapH);
+          // 모든 레이어가 같은 투영(mapSize 기준)을 공유해 서로 어긋나지 않는다.
+          final projection = MapProjection(mapViewBounds, mapSize);
           final fieldRect = projection.rectFor(
             LatLonBounds(
               minLat: field.minLat,
@@ -379,14 +394,29 @@ class _WindMapAreaState extends State<_WindMapArea> {
               maxLon: field.maxLon,
             ),
           );
+          // 진입 시 남한을 화면 중앙에 두고 1.5배 확대해서 시작한다.
+          if (!_didInitTransform) {
+            _didInitTransform = true;
+            final kx = projection.x(127.8); // 남한 중앙 경도
+            final ky = projection.y(36.3); // 남한 중앙 위도
+            const s = 1.5;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _transformController.value = Matrix4.identity()
+                ..translate(
+                  screen.width / 2 - s * kx,
+                  screen.height / 2 - s * ky,
+                )
+                ..scale(s);
+            });
+          }
           return InteractiveViewer(
             transformationController: _transformController,
+            // 캔버스를 화면보다 크게(cover) 잡으므로 constrained를 끈다.
+            constrained: false,
             minScale: 1,
             // 섬 이름까지 보이도록 더 깊게 확대할 수 있게 한다.
             maxScale: 14,
-            // 기본값(EdgeInsets.zero)을 그대로 써서 지도 바깥(빈 배경)이
-            // 보이는 지점까지는 이동할 수 없게 한다 — 끝까지 이동하면
-            // 지도 가장자리에서 멈춘다.
             boundaryMargin: EdgeInsets.zero,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -399,8 +429,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
                 widget.onPick(lat, lon);
               },
               child: SizedBox(
-                width: size.width,
-                height: size.height,
+                width: mapSize.width,
+                height: mapSize.height,
                 child: Stack(
                   children: [
                     if (heatmap != null)
@@ -409,7 +439,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
                           image: heatmap,
                           dstRect: fieldRect,
                         ),
-                        size: size,
+                        size: mapSize,
                       ),
                     // RepaintBoundary로 감싸지 않는다 — 감싸면 base 해상도로
                     // 래스터화된 뒤 확대되어 흐려지고, 1/scale 두께가 사라진다.
@@ -423,7 +453,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         projection: projection,
                         scale: _scale,
                       ),
-                      size: size,
+                      size: mapSize,
                     ),
                     Positioned.fromRect(
                       rect: fieldRect,

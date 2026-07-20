@@ -1,6 +1,6 @@
 import json, math
 
-MINLAT, MAXLAT = 21.0, 49.0
+MINLAT, MAXLAT = 21.0, 54.0
 MINLON, MAXLON = 112.0, 144.0
 
 def inside(lon, lat):
@@ -62,7 +62,7 @@ def extract(files, eps, prop_filter=None, minpts=2):
 # 강: 큰 강만(scalerank 낮음)
 def river_filter(props):
     sr = props.get('scalerank')
-    return sr is None or sr <= 7
+    return sr is None or sr <= 8
 
 layers = {
  '해안선': extract(['ne10_coastline.geojson','ne10_minor_islands.geojson'], 0.010),
