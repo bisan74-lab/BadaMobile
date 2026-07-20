@@ -148,91 +148,136 @@ class MapCityLabelLayer extends StatelessWidget {
     return out;
   }
 
+  /// 한 화면에 보이는 최대 라벨 수(이 이상은 겹쳐 보이므로 자른다).
+  static const int _maxVisible = 28;
+
+  /// 라벨끼리 화면상 최소 간격(px). 두 지점의 지도 좌표 거리 × scale이
+  /// 화면 거리이므로, 지도 좌표 기준으로는 이 값 / scale 이상 떨어져야 한다.
+  static const double _minScreenGap = 52;
+
   @override
   Widget build(BuildContext context) {
     final b = projection.bounds;
     final th = _thresholds;
+
+    // 1) 후보: 임계 배율 통과 + 뷰 범위 안.
+    final candidates = <({int i, Offset o})>[];
+    for (var i = 0; i < mapCityLabels.length; i++) {
+      final c = mapCityLabels[i];
+      if (scale < th[i]) continue;
+      if (c.lon < b.minLon ||
+          c.lon > b.maxLon ||
+          c.lat < b.minLat ||
+          c.lat > b.maxLat) {
+        continue;
+      }
+      candidates.add((
+        i: i,
+        o: projection.project(c.lat, c.lon + kMapLonShift),
+      ));
+    }
+    // 2) 중요도 순(rank↑, 같으면 임계 배율↑ = 더 일찍 나오는 것 우선) 정렬.
+    candidates.sort((a, z) {
+      final ca = mapCityLabels[a.i], cz = mapCityLabels[z.i];
+      if (ca.rank != cz.rank) return ca.rank - cz.rank;
+      return th[a.i].compareTo(th[z.i]);
+    });
+    // 3) 화면 겹침 방지 그리디 선택 + 최대 개수 제한. 이미 고른 라벨과
+    //    화면상 너무 가까우면(겹치면) 건너뛴다.
+    final minMapGap = _minScreenGap / scale;
+    final keptPos = <Offset>[];
+    final keptIdx = <int>[];
+    for (final cand in candidates) {
+      if (keptIdx.length >= _maxVisible) break;
+      var ok = true;
+      for (final p in keptPos) {
+        if ((p - cand.o).distance < minMapGap) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        keptPos.add(cand.o);
+        keptIdx.add(cand.i);
+      }
+    }
+
     return Stack(
       children: [
-        for (var i = 0; i < mapCityLabels.length; i++)
-          if (scale >= th[i] &&
-              mapCityLabels[i].lon >= b.minLon &&
-              mapCityLabels[i].lon <= b.maxLon &&
-              mapCityLabels[i].lat >= b.minLat &&
-              mapCityLabels[i].lat <= b.maxLat)
-            Builder(
-              builder: (context) {
-                final c = mapCityLabels[i];
-                // 해안선과 같은 보정값을 적용해 지명이 육지 위에 얹히도록 한다.
-                final o = projection.project(c.lat, c.lon + kMapLonShift);
-                // 반도 안쪽(지도 중심)을 향해 글자를 배치한다: 뷰 중심 경도보다
-                // 동쪽 지점이면 글자를 마커 왼쪽에 둬 동해안 지명이 바다로
-                // 삐져나가지 않게 한다.
-                final textLeft = c.lon > (b.minLon + b.maxLon) / 2 && !c.island;
-                // 섬은 하늘색 마름모, 육지 도시는 흰 원으로 구분한다.
-                final marker = c.island
-                    ? Transform.rotate(
-                        angle: 0.785398, // 45°
-                        child: Container(
-                          width: 3,
-                          height: 3,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF9AD7FF),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black54, blurRadius: 2),
-                            ],
-                          ),
-                        ),
-                      )
-                    : Container(
+        for (final i in keptIdx)
+          Builder(
+            builder: (context) {
+              final c = mapCityLabels[i];
+              // 해안선과 같은 보정값을 적용해 지명이 육지 위에 얹히도록 한다.
+              final o = projection.project(c.lat, c.lon + kMapLonShift);
+              // 반도 안쪽(지도 중심)을 향해 글자를 배치한다: 뷰 중심 경도보다
+              // 동쪽 지점이면 글자를 마커 왼쪽에 둬 동해안 지명이 바다로
+              // 삐져나가지 않게 한다.
+              final textLeft = c.lon > (b.minLon + b.maxLon) / 2 && !c.island;
+              // 섬은 하늘색 마름모, 육지 도시는 흰 원으로 구분한다.
+              final marker = c.island
+                  ? Transform.rotate(
+                      angle: 0.785398, // 45°
+                      child: Container(
                         width: 3,
                         height: 3,
                         decoration: const BoxDecoration(
-                          color: Color(0xFFCFD6DD),
-                          shape: BoxShape.circle,
+                          color: Color(0xFF9AD7FF),
                           boxShadow: [
                             BoxShadow(color: Colors.black54, blurRadius: 2),
                           ],
                         ),
-                      );
-                final label = Text(
-                  c.name,
-                  style: TextStyle(
-                    // 순백 대신 조금 어두운 회백색으로 덜 튀게.
-                    color: c.island
-                        ? const Color(0xFFA9C4D8)
-                        : const Color(0xFFBCC5CE),
-                    fontSize: c.rank == 1 ? 12.5 : 11,
-                    fontWeight: FontWeight.w600,
-                    shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+                      ),
+                    )
+                  : Container(
+                      width: 3,
+                      height: 3,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFCFD6DD),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: Colors.black54, blurRadius: 2),
+                        ],
+                      ),
+                    );
+              final label = Text(
+                c.name,
+                style: TextStyle(
+                  // 순백 대신 조금 어두운 회백색으로 덜 튀게.
+                  color: c.island
+                      ? const Color(0xFFA9C4D8)
+                      : const Color(0xFFBCC5CE),
+                  fontSize: c.rank == 1 ? 12.5 : 11,
+                  fontWeight: FontWeight.w600,
+                  shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+                ),
+              );
+              final row = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: textLeft
+                    ? [label, const SizedBox(width: 3), marker]
+                    : [marker, const SizedBox(width: 3), label],
+              );
+              return Positioned(
+                left: o.dx,
+                top: o.dy,
+                // 확대해도 지리 지점(o)에 마커가 고정되도록 topLeft를
+                // 피벗으로 역확대한다(기존 center 피벗은 배율에 따라 라벨이
+                // 동쪽으로 밀려 바다에 걸쳐 보이는 문제가 있었다).
+                child: Transform.scale(
+                  scale: 1 / scale,
+                  alignment: Alignment.topLeft,
+                  child: FractionalTranslation(
+                    // 세로는 항상 가운데, 가로는 마커가 o에 오도록 정렬.
+                    // 글자를 왼쪽에 둘 땐 행 전체를 왼쪽으로 당겨 마커를 o에
+                    // 붙인다.
+                    translation: Offset(textLeft ? -1.0 : 0.0, -0.5),
+                    child: row,
                   ),
-                );
-                final row = Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: textLeft
-                      ? [label, const SizedBox(width: 3), marker]
-                      : [marker, const SizedBox(width: 3), label],
-                );
-                return Positioned(
-                  left: o.dx,
-                  top: o.dy,
-                  // 확대해도 지리 지점(o)에 마커가 고정되도록 topLeft를
-                  // 피벗으로 역확대한다(기존 center 피벗은 배율에 따라 라벨이
-                  // 동쪽으로 밀려 바다에 걸쳐 보이는 문제가 있었다).
-                  child: Transform.scale(
-                    scale: 1 / scale,
-                    alignment: Alignment.topLeft,
-                    child: FractionalTranslation(
-                      // 세로는 항상 가운데, 가로는 마커가 o에 오도록 정렬.
-                      // 글자를 왼쪽에 둘 땐 행 전체를 왼쪽으로 당겨 마커를 o에
-                      // 붙인다.
-                      translation: Offset(textLeft ? -1.0 : 0.0, -0.5),
-                      child: row,
-                    ),
-                  ),
-                );
-              },
-            ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }

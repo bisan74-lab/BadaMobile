@@ -114,16 +114,16 @@ const _stopB = <int>[
   );
 }
 
-/// windy.com 기본 그라데이션은 중간 풍속대(카키·갈색)가 탁해 보여 실제
-/// Windy 앱보다 색이 약하게 느껴진다. 색상(hue)은 그대로 두고 채도·명도만
-/// 살짝 끌어올려 초록·노랑·주황이 또렷하게 살아나게 한다(윈디 앱 느낌).
+/// 실제 Windy 앱은 전체적으로 **약간 어두운(가라앉은) 색감**이다(계산대 녹색·
+/// 파랑이 밝게 튀지 않는다). 색상(hue)은 그대로 두고 채도는 살짝만 올리되
+/// **명도를 낮춰(×0.8)** 초록·파랑을 조금 어둡게 해 Windy와 톤을 맞춘다.
 (int r, int g, int b) _vivid(double rf, double gf, double bf) {
   final hsv = HSVColor.fromColor(
     Color.fromARGB(255, rf.round(), gf.round(), bf.round()),
   );
   final c = hsv
-      .withSaturation((hsv.saturation * 1.32).clamp(0.0, 1.0))
-      .withValue((hsv.value * 1.06).clamp(0.0, 1.0))
+      .withSaturation((hsv.saturation * 1.15).clamp(0.0, 1.0))
+      .withValue((hsv.value * 0.8).clamp(0.0, 1.0))
       .toColor();
   return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }
