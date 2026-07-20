@@ -59,6 +59,21 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// 상세 예보로 켜진 지점. null이면 지도 모드(하단 표 없음).
   SeaLocation? _forecastPoint;
 
+  /// 하단 상세 예보 표가 지도를 가리는 높이(px). 표가 지도 위에 겹쳐 뜨므로,
+  /// 이 높이만큼 지도의 팬(pan) 경계를 아래로 넓혀 표에 가려진 지도 아랫부분도
+  /// 위로 끌어올려 볼 수 있게 한다. 표는 높이가 가변(로딩/슬라이더)이라 실제
+  /// 렌더 높이를 측정해 반영한다.
+  final GlobalKey _panelKey = GlobalKey();
+  double _panelHeight = 0;
+
+  /// 렌더된 상세 예보 표의 실제 높이를 읽어 지도 팬 경계에 반영한다.
+  void _measurePanel() {
+    final h = _panelKey.currentContext?.size?.height ?? 0;
+    if ((h - _panelHeight).abs() > 0.5 && mounted) {
+      setState(() => _panelHeight = h);
+    }
+  }
+
   /// 지도에서 탭한 커서 좌표. null이면 아직 안 찍음(진입 시 지도만 보인다).
   double? _cursorLat;
   double? _cursorLon;
@@ -85,6 +100,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     _roseHour.value = null;
     setState(() {
       _forecastPoint = null;
+      _panelHeight = 0;
       // 표를 닫으면 지도를 다시 현재 시각 바람으로 되돌린다.
       final series = _series;
       if (series != null) {
@@ -246,6 +262,13 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
               }
             }
 
+            // 표가 떠 있으면 렌더 뒤 그 높이를 측정해 지도 팬 경계에 반영한다.
+            if (_forecastPoint != null) {
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _measurePanel(),
+              );
+            }
+
             return Stack(
               children: [
                 Positioned.fill(
@@ -257,6 +280,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                     roseHour: _roseHour,
                     cursorLat: _cursorLat,
                     cursorLon: _cursorLon,
+                    // 표에 가려진 아랫부분만큼 지도를 위로 더 끌어올릴 수 있게 한다.
+                    bottomInset: _forecastPoint == null ? 0 : _panelHeight,
                     onPick: _onPick,
                     onOpenDetail: _openDetail,
                   ),
@@ -295,6 +320,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                     right: 0,
                     bottom: 0,
                     child: _PointForecastPanel(
+                      key: _panelKey,
                       location: fp,
                       roseHour: _roseHour,
                       onClose: _closeDetail,
@@ -322,12 +348,17 @@ class _WindMapArea extends StatefulWidget {
     required this.roseHour,
     required this.cursorLat,
     required this.cursorLon,
+    required this.bottomInset,
     required this.onPick,
     required this.onOpenDetail,
   });
 
   final WindField field;
   final List<WindParticle> particles;
+
+  /// 하단 표에 가려지는 높이(px). 이만큼 지도 팬 경계를 아래로 넓혀 가려진
+  /// 지도 아랫부분을 위로 끌어올려 볼 수 있게 한다(0이면 전체 화면).
+  final double bottomInset;
 
   /// 매 프레임 파티클 레이어만 다시 그리게 하는 리페인트 신호.
   final Listenable repaint;
@@ -470,7 +501,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
             minScale: 1,
             // 섬·소지역 이름까지 보이도록 더 깊게 확대할 수 있게 한다.
             maxScale: 21,
-            boundaryMargin: EdgeInsets.zero,
+            // 하단 표가 가리는 만큼 아래 경계를 넓혀, 표에 덮인 지도 아랫부분도
+            // 위로 끌어올려 볼 수 있게 한다(표가 없으면 0 = 전체 화면 그대로).
+            boundaryMargin: EdgeInsets.only(bottom: widget.bottomInset),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
@@ -1008,6 +1041,7 @@ Color _readableOn(Color bg) =>
 /// 바람·돌풍·파도·너울에 색을 입혀 세기를 직관적으로 느낄 수 있게 한다.
 class _PointForecastPanel extends ConsumerStatefulWidget {
   const _PointForecastPanel({
+    super.key,
     required this.location,
     required this.roseHour,
     required this.onClose,
