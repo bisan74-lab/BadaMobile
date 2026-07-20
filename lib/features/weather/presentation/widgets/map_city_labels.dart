@@ -111,37 +111,58 @@ class MapCityLabelLayer extends StatelessWidget {
   /// 확대되지 않고 항상 같은 화면 크기로 보이도록 반대로 축소해 그린다.
   final double scale;
 
-  /// rank별 라벨 노출 임계 배율. 기본 배율(1.0)에서는 최상위 도시만 보이고,
-  /// 확대할수록 더 많은 지역이 단계적으로 드러난다. 섬(낚시 포인트)은
-  /// 조금 더 낮은 배율에서부터 보이도록 임계값을 낮춘다.
-  static double _thresholdFor(CityLabel c) {
+  /// rank·섬 여부별 시작 임계 배율. 기본 배율에서는 최상위 도시만 보이고,
+  /// 확대할수록 더 많은 지역이 드러난다.
+  static double _rankBase(CityLabel c) {
     if (c.island) {
       return switch (c.rank) {
         1 => 1.0,
-        2 => 1.7,
-        _ => 2.6,
+        2 => 2.0,
+        _ => 3.2,
       };
     }
     return switch (c.rank) {
       1 => 1.0,
-      2 => 2.4,
-      _ => 3.8,
+      2 => 2.6,
+      _ => 4.4,
     };
+  }
+
+  /// 같은 등급 안에서도 확대에 따라 라벨이 **한꺼번에가 아니라 하나씩** 늘어나게,
+  /// 목록 순서(대략 중요도 순)대로 임계 배율을 조금씩 벌린 값(라벨별 캐시).
+  static List<double>? _cached;
+  static List<double> get _thresholds {
+    final cached = _cached;
+    if (cached != null) return cached;
+    final seen = <String, int>{};
+    final out = <double>[
+      for (final c in mapCityLabels)
+        () {
+          final key = '${c.island}_${c.rank}';
+          final n = seen[key] ?? 0;
+          seen[key] = n + 1;
+          return _rankBase(c) + n * 0.12;
+        }(),
+    ];
+    _cached = out;
+    return out;
   }
 
   @override
   Widget build(BuildContext context) {
     final b = projection.bounds;
+    final th = _thresholds;
     return Stack(
       children: [
-        for (final c in mapCityLabels)
-          if (scale >= _thresholdFor(c) &&
-              c.lon >= b.minLon &&
-              c.lon <= b.maxLon &&
-              c.lat >= b.minLat &&
-              c.lat <= b.maxLat)
+        for (var i = 0; i < mapCityLabels.length; i++)
+          if (scale >= th[i] &&
+              mapCityLabels[i].lon >= b.minLon &&
+              mapCityLabels[i].lon <= b.maxLon &&
+              mapCityLabels[i].lat >= b.minLat &&
+              mapCityLabels[i].lat <= b.maxLat)
             Builder(
               builder: (context) {
+                final c = mapCityLabels[i];
                 // 해안선과 같은 보정값을 적용해 지명이 육지 위에 얹히도록 한다.
                 final o = projection.project(c.lat, c.lon + kMapLonShift);
                 // 반도 안쪽(지도 중심)을 향해 글자를 배치한다: 뷰 중심 경도보다

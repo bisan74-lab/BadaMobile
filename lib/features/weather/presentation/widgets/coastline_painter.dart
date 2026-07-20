@@ -82,10 +82,11 @@ class CoastlinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 1.2 / s);
+    // 바다-육지 경계선은 더 진하고 살짝 굵게 그려 또렷하게 보이도록 한다.
     final coastLine = Paint()
-      ..color = const Color(0xFF10161F).withValues(alpha: 0.72)
+      ..color = const Color(0xFF080C12).withValues(alpha: 0.92)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.6 / s
+      ..strokeWidth = 0.85 / s
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final borderLine = Paint()

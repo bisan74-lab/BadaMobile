@@ -304,7 +304,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
   DateTime? _heatmapTime;
   final TransformationController _transformController =
       TransformationController();
-  double _scale = 1.5;
+  double _scale = 1.8;
   bool _didInitTransform = false;
 
   @override
@@ -399,7 +399,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
             _didInitTransform = true;
             final kx = projection.x(127.8); // 남한 중앙 경도
             final ky = projection.y(36.3); // 남한 중앙 위도
-            const s = 1.5;
+            const s = 1.8;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
               _transformController.value = Matrix4.identity()
@@ -415,8 +415,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
             // 캔버스를 화면보다 크게(cover) 잡으므로 constrained를 끈다.
             constrained: false,
             minScale: 1,
-            // 섬 이름까지 보이도록 더 깊게 확대할 수 있게 한다.
-            maxScale: 14,
+            // 섬·소지역 이름까지 보이도록 더 깊게 확대할 수 있게 한다.
+            maxScale: 21,
             boundaryMargin: EdgeInsets.zero,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
