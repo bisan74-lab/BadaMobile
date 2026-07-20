@@ -26,10 +26,10 @@ class LatLonBounds {
 /// 히트맵·해안선이 뷰를 가득 채운다(범위를 바꾸면 격자와 country_borders_data
 /// 도 같은 bbox로 다시 맞춰야 한다).
 const mapViewBounds = LatLonBounds(
-  minLat: 21.0,
-  maxLat: 54.0,
-  minLon: 112.0,
-  maxLon: 144.0,
+  minLat: 18.0,
+  maxLat: 57.0,
+  minLon: 108.0,
+  maxLon: 148.0,
 );
 
 /// [bounds] 안의 위경도를 [size] 크기의 캔버스 좌표로 변환한다.

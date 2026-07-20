@@ -29,7 +29,7 @@ dart format lib test       # 커밋 전 포맷
   탭 위젯 테스트가 멈춘다.
 - 날씨 지도(`features/weather/presentation/`)의 `mapViewBounds`
   (`widgets/map_projection.dart`)와 **`OpenMeteoWindFieldRepository`의 격자
-  범위(`minLat` 등)는 같은 bbox**(현재 위도 21~49, 경도 112~144 — 한국 중심에
+  범위(`minLat` 등)는 같은 bbox**(현재 위도 18~57, 경도 108~148 — 한국 중심에
   동아시아 주변국까지)를 써야 히트맵이 뷰를 정확히 채운다. 범위를 바꾸면
   `country_borders_data.dart`도 같은 bbox로 다시 뽑아야 한다(`tool/gen_coast.py`).
   이 파일은 **Natural Earth 10m 해안선·소형 섬·국경선·행정경계(주/성)·주요

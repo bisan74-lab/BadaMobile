@@ -25,12 +25,15 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   // Open-Meteo는 위경도만 주면 전 세계 어디든 응답하므로(별도 글로벌 API
   // 연동 불필요) 범위만 넓히면 된다.
   // 지도 뷰(mapViewBounds)와 같은 넓은 범위 — 한국 주변 동아시아 해역 전체.
-  static const double minLat = 21.0, maxLat = 54.0;
-  static const double minLon = 112.0, maxLon = 144.0;
+  // 동서남북 끝을 조금씩 더 넓혀(위도 18~57, 경도 108~148) 지도를 확대·이동해도
+  // 가장자리에 빈(검은) 부분이 덜 보이게 한다.
+  static const double minLat = 18.0, maxLat = 57.0;
+  static const double minLon = 108.0, maxLon = 148.0;
 
   /// 격자 해상도. 넓어진 범위를 적당한 밀도로 덮되(한 번의 다지점 요청 크기를
-  /// 고려) 파티클은 이 격자를 쌍선형 보간해 흐른다.
-  static const int latSteps = 18, lonSteps = 20;
+  /// 고려) 파티클은 이 격자를 쌍선형 보간해 흐른다. 범위를 넓힌 만큼 격자 수도
+  /// 늘려 기존과 비슷한 간격(약 2°)을 유지한다.
+  static const int latSteps = 21, lonSteps = 24;
 
   /// 바람 데이터 출처 모델. Windy 기본 레이어와 같은 ECMWF(IFS 0.25°)를 써서
   /// 바람 방향·세기를 Windy와 최대한 일치시킨다. 응답이 없으면(모델 미제공 등)

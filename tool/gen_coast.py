@@ -1,7 +1,7 @@
 import json, math
 
-MINLAT, MAXLAT = 21.0, 54.0
-MINLON, MAXLON = 112.0, 144.0
+MINLAT, MAXLAT = 18.0, 57.0
+MINLON, MAXLON = 108.0, 148.0
 
 def inside(lon, lat):
     return MINLON <= lon <= MAXLON and MINLAT <= lat <= MAXLAT
