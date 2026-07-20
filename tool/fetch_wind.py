@@ -40,8 +40,11 @@ FORECAST_DAYS = 7
 STEP_HOURS = 3  # 3시간 간격으로 솎아 파일 크기를 줄인다(지도 스크러버에 충분).
 MODEL = "ecmwf_ifs025"  # Windy 기본 레이어와 같은 ECMWF IFS 0.25°.
 
-BATCH = 500  # 한 요청 좌표 수(분당 600콜 한도 아래).
-SLEEP = 65  # 배치 사이 대기(초) — 분당 한도 창을 넘긴다.
+# 한 요청 좌표 수. 500이면 URL이 8KB를 넘어 414(URI Too Large)로 거부되므로
+# 작게 잡는다(앱 직접호출도 100씩 배치). SLEEP과 함께 분당 600콜 한도도 지킨다:
+# 150좌표 / (요청~1s + 20s) ≈ 430콜/분 < 600.
+BATCH = 150
+SLEEP = 20  # 배치 사이 대기(초).
 TIMEOUT = 60
 
 
@@ -58,8 +61,9 @@ def grid():
 
 def fetch_batch(lats, lons):
     params = {
-        "latitude": ",".join(f"{v:.3f}" for v in lats),
-        "longitude": ",".join(f"{v:.3f}" for v in lons),
+        # 소수 2자리로 URL을 줄인다(격자 간격 약 1°라 정밀도 충분).
+        "latitude": ",".join(f"{v:.2f}" for v in lats),
+        "longitude": ",".join(f"{v:.2f}" for v in lons),
         "hourly": "wind_speed_10m,wind_direction_10m",
         "wind_speed_unit": "ms",
         "timezone": "Asia/Seoul",
