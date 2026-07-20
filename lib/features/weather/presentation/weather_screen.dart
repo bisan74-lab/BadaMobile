@@ -47,11 +47,14 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// 떨어뜨리고 ANR로 앱이 종료됐다).
   final ValueNotifier<int> _repaint = ValueNotifier(0);
 
-  /// 예보 표에서 선택 중인 시각의 해양값 — 지도 위 방향 나침반과 공유한다.
+  /// 예보 표에서 선택 중인 시각의 해양값 — 지도 위 방향 나침반과 공유하고,
+  /// 지도 바람장(히트맵·파티클)도 이 시각을 따라간다.
   final ValueNotifier<HourlyMarine?> _roseHour = ValueNotifier(null);
   WindFieldSeries? _series;
-  // 지도는 항상 현재 시각 바람장을 보여준다(진입 시 지도만; 시간 스크러버 없음).
-  final int _hourOffset = 0;
+
+  /// 지도에 그릴 바람장 시각 인덱스. 기본은 현재 시각이고, 상세 예보의
+  /// 슬라이더로 시각을 고르면 지도도 그 시각의 바람으로 바뀐다(윈디처럼).
+  int _hourOffset = 0;
 
   /// 상세 예보로 켜진 지점. null이면 지도 모드(하단 표 없음).
   SeaLocation? _forecastPoint;
@@ -80,7 +83,14 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
 
   void _closeDetail() {
     _roseHour.value = null;
-    setState(() => _forecastPoint = null);
+    setState(() {
+      _forecastPoint = null;
+      // 표를 닫으면 지도를 다시 현재 시각 바람으로 되돌린다.
+      final series = _series;
+      if (series != null) {
+        _hourOffset = series.indexClosestTo(DateTime.now());
+      }
+    });
   }
 
   static const _particleCount = 170;
@@ -103,12 +113,25 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick);
+    _roseHour.addListener(_syncMapHour);
+  }
+
+  /// 상세 예보 슬라이더가 고른 시각으로 지도 바람장을 맞춘다.
+  void _syncMapHour() {
+    final series = _series;
+    final hour = _roseHour.value;
+    if (series == null || hour == null) return;
+    final idx = series.indexClosestTo(hour.time);
+    if (idx != _hourOffset && mounted) {
+      setState(() => _hourOffset = idx);
+    }
   }
 
   @override
   void dispose() {
     _ticker.dispose();
     _repaint.dispose();
+    _roseHour.removeListener(_syncMapHour);
     _roseHour.dispose();
     super.dispose();
   }
@@ -116,6 +139,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   void _ensureSeeded(WindFieldSeries series) {
     if (_series != null) return;
     _series = series;
+    // 시계열은 오늘 0시부터 시작하므로, 지도 기본 시각을 "지금"에 맞춘다.
+    _hourOffset = series.indexClosestTo(DateTime.now());
     final field = series.at(_hourOffset);
     _particles
       ..clear()

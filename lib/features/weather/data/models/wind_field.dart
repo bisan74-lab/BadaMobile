@@ -80,5 +80,19 @@ class WindFieldSeries {
   /// [offset]시간째 스냅샷. 범위를 벗어나면 가장 가까운 끝으로 고정한다.
   WindField at(int offset) => hourly[offset.clamp(0, hourly.length - 1)];
 
+  /// [time]과 가장 가까운 스냅샷의 인덱스(지도 시각을 예보 슬라이더와 맞출 때).
+  int indexClosestTo(DateTime time) {
+    var best = 0;
+    Duration bestDiff = const Duration(days: 9999);
+    for (var i = 0; i < hourly.length; i++) {
+      final d = hourly[i].time.difference(time).abs();
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   int get length => hourly.length;
 }

@@ -7,12 +7,93 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/wind_field.dart';
 
-/// 윈디 스타일 풍속 색상 스케일(m/s → RGB). 정지는 파랑, 강풍(태풍급)은
-/// 자주색/보라로 이어지는 구간별 보간이다.
-const _stopSpeeds = <double>[0, 3, 5, 10, 15, 20, 25, 30];
-const _stopR = <int>[0x3E, 0x4A, 0x57, 0xD7, 0xE0, 0xD1, 0xB2, 0x7A];
-const _stopG = <int>[0x6C, 0xA9, 0xC7, 0xD2, 0xA2, 0x58, 0x3A, 0x3F];
-const _stopB = <int>[0xB5, 0xC9, 0x85, 0x57, 0x3A, 0x3A, 0x6B, 0xA0];
+/// Windy.com의 기본 바람 레이어 색상 스케일(m/s → RGB)을 그대로 옮긴 것.
+/// 보라(정온) → 파랑 → 청록 → 초록 → 카키/노랑 → 주황갈색 → 자주 …로
+/// 이어지는 Windy 고유 그라데이션이라 화면 색이 Windy 앱과 일치한다.
+const _stopSpeeds = <double>[
+  0,
+  1,
+  3,
+  5,
+  7,
+  9,
+  11,
+  13,
+  15,
+  17,
+  19,
+  21,
+  24,
+  27,
+  29,
+  36,
+  46.5,
+  51.5,
+  77,
+];
+const _stopR = <int>[
+  98,
+  57,
+  74,
+  77,
+  83,
+  53,
+  167,
+  159,
+  161,
+  129,
+  175,
+  117,
+  109,
+  68,
+  92,
+  125,
+  231,
+  219,
+  205,
+];
+const _stopG = <int>[
+  113,
+  97,
+  148,
+  141,
+  165,
+  159,
+  157,
+  127,
+  108,
+  58,
+  80,
+  74,
+  97,
+  105,
+  144,
+  68,
+  215,
+  212,
+  202,
+];
+const _stopB = <int>[
+  183,
+  159,
+  169,
+  123,
+  83,
+  53,
+  81,
+  58,
+  92,
+  78,
+  136,
+  147,
+  163,
+  141,
+  152,
+  165,
+  215,
+  135,
+  112,
+];
 
 (int r, int g, int b) windSpeedRgb(double speedMs) {
   final s = speedMs.clamp(0.0, _stopSpeeds.last);
