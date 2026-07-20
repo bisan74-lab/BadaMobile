@@ -75,17 +75,18 @@ void main() {
       const lonSteps = OpenMeteoWindFieldRepository.lonSteps;
       final total = latSteps * lonSteps;
 
+      // 격자는 배치(≤100좌표)로 나뉘어 여러 번 요청되고 순서대로 합쳐진다.
       final client = MockClient((request) async {
         expect(request.url.host, 'api.open-meteo.com');
         expect(request.url.path, '/v1/forecast');
         final lats = request.url.queryParameters['latitude']!.split(',');
         final lons = request.url.queryParameters['longitude']!.split(',');
-        expect(lats, hasLength(total));
-        expect(lons, hasLength(total));
+        expect(lats.length, lons.length);
+        expect(lats.length, lessThanOrEqualTo(100)); // 한 요청은 배치 크기 이하
         expect(request.url.queryParameters['wind_speed_unit'], 'ms');
 
         final list = List.generate(
-          total,
+          lats.length,
           (i) => {
             'current': {
               'time': '2026-07-16T09:00',
@@ -128,17 +129,20 @@ void main() {
       final total = latSteps * lonSteps;
       const hours = 6;
 
+      // 격자는 배치(≤100좌표)로 나뉘어 여러 번 요청되고 순서대로 합쳐진다.
       final client = MockClient((request) async {
         expect(
           request.url.queryParameters['hourly'],
           contains('wind_speed_10m'),
         );
+        final lats = request.url.queryParameters['latitude']!.split(',');
+        expect(lats.length, lessThanOrEqualTo(100));
         final times = List.generate(
           24,
           (h) => '2026-07-16T${h.toString().padLeft(2, '0')}:00',
         );
         final list = List.generate(
-          total,
+          lats.length,
           (i) => {
             'hourly': {
               'time': times,

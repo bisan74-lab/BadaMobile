@@ -56,26 +56,64 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
     ];
   }
 
+  /// 한 요청에 담는 최대 좌표 수. Open-Meteo 다중 좌표 요청은 URL 길이·좌표
+  /// 개수 제한이 있어, 전체 격자(수백 점)를 한 번에 보내면 URL이 수천 자가
+  /// 되어 서버가 거부한다(414 등 → 조용히 목업으로 폴백해 화면이 균일한
+  /// 합성 바람으로 채워졌다). 좌표를 이만큼씩 잘라 여러 번(병렬) 요청하고
+  /// 격자 순서대로 합쳐, 실제 ECMWF 바람이 지도에 뜨게 한다.
+  static const int _batchSize = 100;
+
+  /// [lats]/[lons] 좌표들을 [_batchSize]개씩 잘라 병렬 요청하고, 좌표(격자)
+  /// 순서를 유지한 채 각 지점의 결과(JSON 객체)를 이어 붙여 돌려준다.
+  /// [extraParams]에는 요청별로 다른 부분(current 또는 hourly·forecast_days)만
+  /// 넣고, 공통 파라미터(단위·시간대·모델)는 여기서 붙인다.
+  Future<List<dynamic>> _fetchLocations(
+    Map<String, String> extraParams,
+    List<double> lats,
+    List<double> lons,
+  ) async {
+    final ranges = <(int, int)>[];
+    for (var start = 0; start < lats.length; start += _batchSize) {
+      ranges.add((start, math.min(start + _batchSize, lats.length)));
+    }
+    final batches = await Future.wait(
+      ranges.map((r) async {
+        final (start, end) = r;
+        final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
+          'latitude': lats
+              .sublist(start, end)
+              .map((v) => v.toStringAsFixed(2))
+              .join(','),
+          'longitude': lons
+              .sublist(start, end)
+              .map((v) => v.toStringAsFixed(2))
+              .join(','),
+          'wind_speed_unit': 'ms',
+          'timezone': 'Asia/Seoul',
+          'models': _model,
+          ...extraParams,
+        });
+        final res = await _client.get(uri);
+        if (res.statusCode != 200) {
+          throw http.ClientException('바람장 응답 오류 ${res.statusCode}', uri);
+        }
+        final decoded = jsonDecode(res.body);
+        return decoded is List ? decoded : [decoded];
+      }),
+    );
+    return [for (final b in batches) ...b];
+  }
+
   @override
   Future<WindField> fetchField() async {
     final lats = _latGrid();
     final lons = _lonGrid();
 
-    final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
-      'latitude': lats.map((v) => v.toStringAsFixed(3)).join(','),
-      'longitude': lons.map((v) => v.toStringAsFixed(3)).join(','),
-      'current': 'wind_speed_10m,wind_direction_10m',
-      'wind_speed_unit': 'ms',
-      'timezone': 'Asia/Seoul',
-      'models': _model,
-    });
-
-    final res = await _client.get(uri);
-    if (res.statusCode != 200) {
-      throw http.ClientException('바람장 응답 오류 ${res.statusCode}', uri);
-    }
-    final decoded = jsonDecode(res.body);
-    final list = decoded is List ? decoded : [decoded];
+    final list = await _fetchLocations(
+      {'current': 'wind_speed_10m,wind_direction_10m'},
+      lats,
+      lons,
+    );
     if (list.length != lats.length) {
       throw FormatException(
         '바람장 응답 개수 불일치: 기대 ${lats.length}, 실제 ${list.length}',
@@ -116,22 +154,14 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
     final lons = _lonGrid();
     final forecastDays = ((hours / 24).ceil() + 1).clamp(1, 16);
 
-    final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
-      'latitude': lats.map((v) => v.toStringAsFixed(3)).join(','),
-      'longitude': lons.map((v) => v.toStringAsFixed(3)).join(','),
-      'hourly': 'wind_speed_10m,wind_direction_10m',
-      'wind_speed_unit': 'ms',
-      'timezone': 'Asia/Seoul',
-      'forecast_days': forecastDays.toString(),
-      'models': _model,
-    });
-
-    final res = await _client.get(uri);
-    if (res.statusCode != 200) {
-      throw http.ClientException('바람장 시계열 응답 오류 ${res.statusCode}', uri);
-    }
-    final decoded = jsonDecode(res.body);
-    final list = decoded is List ? decoded : [decoded];
+    final list = await _fetchLocations(
+      {
+        'hourly': 'wind_speed_10m,wind_direction_10m',
+        'forecast_days': forecastDays.toString(),
+      },
+      lats,
+      lons,
+    );
     if (list.length != lats.length) {
       throw FormatException(
         '바람장 시계열 응답 개수 불일치: 기대 ${lats.length}, 실제 ${list.length}',
