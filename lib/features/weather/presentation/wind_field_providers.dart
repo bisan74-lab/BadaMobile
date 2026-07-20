@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/cache_store.dart';
@@ -56,6 +58,11 @@ final windFieldSeriesProvider = FutureProvider.autoDispose<WindSeriesResult>((
     ref.keepAlive();
     return WindSeriesResult(series: series, isSynthetic: false);
   } catch (_) {
+    // 분당 호출 한도 등 일시 제한일 수 있으니, 한도 창(1분)이 지난 뒤 자동으로
+    // 다시 시도한다. 화면이 열려 있는 동안 실데이터가 도착하면 합성 배지가
+    // 사라지고 지도가 실바람으로 바뀐다.
+    final timer = Timer(const Duration(seconds: 75), ref.invalidateSelf);
+    ref.onDispose(timer.cancel);
     return WindSeriesResult(
       series: await MockWindFieldRepository().fetchSeries(
         hours: windFieldSeriesHours,

@@ -31,11 +31,13 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   static const double minLat = 18.0, maxLat = 57.0;
   static const double minLon = 108.0, maxLon = 148.0;
 
-  /// 격자 해상도. 약 1.4~1.5° 간격으로 촘촘히 덮어 히트맵 색 변화가 윈디에
-  /// 가깝게 세밀해지도록 한다(더 촘촘하면 요청량·응답량이 급증해 무료 API
-  /// 한도에 걸리기 쉬워 이 정도가 균형점). 파티클·커서 표시는 이 격자를
-  /// 쌍선형 보간해 쓰고, 탭 지점 숫자는 별도 원해상도 지점 요청으로 맞춘다.
-  static const int latSteps = 27, lonSteps = 31;
+  /// 격자 해상도. **총 좌표 수는 반드시 600 미만**이어야 한다 — Open-Meteo
+  /// 무료 한도가 분당 600콜이고 다지점 요청은 좌표 1개=1콜로 계산돼, 이를
+  /// 넘기면(한때 837점으로 올렸다가) 요청 한 번에 분당 한도를 초과해 매번
+  /// 429로 거부되고 지도가 항상 합성 폴백으로 떨어진다. 504점(약 2° 간격)은
+  /// 실사용으로 검증된 값이다. 색 세밀함은 래스터 보간이 채우고, 탭 지점
+  /// 숫자는 별도 원해상도 지점 요청으로 맞춘다.
+  static const int latSteps = 21, lonSteps = 24;
 
   /// 바람 데이터 출처 모델. Windy 기본 레이어와 같은 ECMWF(IFS 0.25°)를 써서
   /// 바람 방향·세기를 Windy와 최대한 일치시킨다. 응답이 없으면(모델 미제공 등)
