@@ -107,19 +107,18 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
-  // Windy처럼 가늘고 은은한 흐름선을 촘촘하게: 개수를 2배로 늘리고(460)
-  // 궤적은 중간 길이로 줄여 화면이 흰 선으로 뒤덮이지 않게 한다. 굵기·투명도는
-  // 페인터에서 더 얇고 투명하게 그린다.
-  static const _particleCount = 460;
-  static const _maxAgeSeconds = 22.0;
+  // Windy처럼 가늘고 은은한 흐름선을 아주 촘촘하게: 개수를 920으로 늘린다.
+  // 굵기·투명도는 페인터에서 더 얇고 투명하게 그린다.
+  static const _particleCount = 920;
+  static const _maxAgeSeconds = 20.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 짧은 선 →
-  /// 조금 긴 흐름선으로 보이게 한다(윈디식 잔상). 개수를 2배로 늘린 만큼
-  /// 성능을 위해 궤적 길이는 이전보다 줄였다(파티클 레이어만 RepaintBoundary로
-  /// 다시 그려 프레임당 drawLine 수를 감당한다).
-  static const _minTrail = 20;
-  static const _maxTrailCap = 110;
-  static const _trailSpeedFactor = 7.0;
+  /// 조금 긴 흐름선으로 보이게 한다(윈디식 잔상). 개수를 크게 늘린 만큼
+  /// 성능(프레임당 drawLine 수 = 파티클수 × 궤적)을 위해 궤적 길이는 짧게
+  /// 유지한다(파티클 레이어만 RepaintBoundary로 다시 그린다).
+  static const _minTrail = 16;
+  static const _maxTrailCap = 84;
+  static const _trailSpeedFactor = 6.0;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
   /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy에 맞춰 0.18로 둔다.
@@ -554,8 +553,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         child: CustomPaint(
                           painter: WindMapPainter(
                             particles: widget.particles,
-                            // 순백이 아니라 살짝 흐린 회백색으로 은은하게.
-                            color: const Color(0xFFDCE6F0),
+                            // 순백이 아니라 살짝 어두운 회청색으로 은은하게
+                            // (Windy처럼 흰 선이 과하게 밝지 않게).
+                            color: const Color(0xFFAEB9C6),
                             repaint: widget.repaint,
                           ),
                           size: fieldRect.size,

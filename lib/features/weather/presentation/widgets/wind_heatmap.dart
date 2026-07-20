@@ -123,7 +123,7 @@ const _stopB = <int>[
   );
   final c = hsv
       .withSaturation((hsv.saturation * 1.15).clamp(0.0, 1.0))
-      .withValue((hsv.value * 0.8).clamp(0.0, 1.0))
+      .withValue((hsv.value * 0.88).clamp(0.0, 1.0))
       .toColor();
   return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }

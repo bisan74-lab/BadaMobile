@@ -39,7 +39,7 @@ class WindMapPainter extends CustomPainter {
       for (var i = 1; i < n; i++) {
         final t = i / (n - 1); // 0(꼬리) ~ 1(머리)
         paint
-          ..color = color.withValues(alpha: t * (0.3 + 0.7 * t) * 0.5)
+          ..color = color.withValues(alpha: t * (0.3 + 0.7 * t) * 0.38)
           ..strokeWidth = 0.25 + t * 0.55;
         canvas.drawLine(
           Offset(trail[i - 1].dx * size.width, trail[i - 1].dy * size.height),
