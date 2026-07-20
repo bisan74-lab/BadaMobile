@@ -1,12 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/storage/cache_store.dart';
 import '../data/models/wind_field.dart';
+import '../data/repositories/caching_wind_field_repository.dart';
 import '../data/repositories/mock_wind_field_repository.dart';
 import '../data/repositories/open_meteo_wind_field_repository.dart';
 import '../data/repositories/wind_field_repository.dart';
 
+/// 바람장 리포지토리 주입 지점 — 실API → 캐싱 → (provider의) 합성 폴백 체인.
+/// 캐시 덕에 앱을 열 때마다 무거운 격자 요청을 반복하지 않고, 일시 실패
+/// 시에도 최근 실데이터를 유지한다.
 final windFieldRepositoryProvider = Provider<WindFieldRepository>(
-  (ref) => OpenMeteoWindFieldRepository(),
+  (ref) => CachingWindFieldRepository(
+    inner: OpenMeteoWindFieldRepository(),
+    cache: ref.watch(cacheStoreProvider),
+  ),
 );
 
 /// 현재 시점 바람장 스냅샷. 실패하면 합성 바람장으로 폴백한다.
