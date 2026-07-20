@@ -135,10 +135,12 @@ Color windSpeedColor(double speedMs) {
 
 /// [field]를 풍속 기준 색상 래스터([width]×[height])로 구운 이미지를 만든다.
 /// 매 프레임이 아니라 필드(시간대)가 바뀔 때만 호출해야 한다.
+/// 해상도는 격자(약 1.4° 간격)를 부드럽게 보간해 색 경계가 세밀하게 보이는
+/// 정도로 잡는다(픽셀당 약 0.2°).
 Future<ui.Image> buildWindHeatmapImage(
   WindField field, {
-  int width = 144,
-  int height = 108,
+  int width = 216,
+  int height = 162,
 }) {
   final buffer = Uint8List(width * height * 4);
   var idx = 0;

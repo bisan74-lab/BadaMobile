@@ -31,10 +31,11 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   static const double minLat = 18.0, maxLat = 57.0;
   static const double minLon = 108.0, maxLon = 148.0;
 
-  /// 격자 해상도. 넓어진 범위를 적당한 밀도로 덮되(한 번의 다지점 요청 크기를
-  /// 고려) 파티클은 이 격자를 쌍선형 보간해 흐른다. 범위를 넓힌 만큼 격자 수도
-  /// 늘려 기존과 비슷한 간격(약 2°)을 유지한다.
-  static const int latSteps = 21, lonSteps = 24;
+  /// 격자 해상도. 약 1.4~1.5° 간격으로 촘촘히 덮어 히트맵 색 변화가 윈디에
+  /// 가깝게 세밀해지도록 한다(더 촘촘하면 요청량·응답량이 급증해 무료 API
+  /// 한도에 걸리기 쉬워 이 정도가 균형점). 파티클·커서 표시는 이 격자를
+  /// 쌍선형 보간해 쓰고, 탭 지점 숫자는 별도 원해상도 지점 요청으로 맞춘다.
+  static const int latSteps = 27, lonSteps = 31;
 
   /// 바람 데이터 출처 모델. Windy 기본 레이어와 같은 ECMWF(IFS 0.25°)를 써서
   /// 바람 방향·세기를 Windy와 최대한 일치시킨다. 응답이 없으면(모델 미제공 등)
@@ -63,6 +64,20 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
   /// 합성 바람으로 채워졌다). 좌표를 이만큼씩 잘라 여러 번(병렬) 요청하고
   /// 격자 순서대로 합쳐, 실제 ECMWF 바람이 지도에 뜨게 한다.
   static const int _batchSize = 100;
+
+  /// 일시 오류(레이트리밋 429·서버 5xx·순간 네트워크 끊김)에 대비해 한 번
+  /// 재시도한다. 배치 하나만 실패해도 시계열 전체가 목업으로 폴백돼 지도가
+  /// 합성 바람으로 바뀌므로, 재시도가 실데이터 표시율을 크게 올린다.
+  Future<http.Response> _getWithRetry(Uri uri) async {
+    try {
+      final res = await _client.get(uri);
+      if (res.statusCode == 200) return res;
+    } catch (_) {
+      // 아래에서 한 번 더 시도한다.
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    return _client.get(uri);
+  }
 
   /// [lats]/[lons] 좌표들을 [_batchSize]개씩 잘라 병렬 요청하고, 좌표(격자)
   /// 순서를 유지한 채 각 지점의 결과(JSON 객체)를 이어 붙여 돌려준다.
@@ -94,7 +109,7 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
           'models': _model,
           ...extraParams,
         });
-        final res = await _client.get(uri);
+        final res = await _getWithRetry(uri);
         if (res.statusCode != 200) {
           throw http.ClientException('바람장 응답 오류 ${res.statusCode}', uri);
         }
@@ -239,7 +254,7 @@ class OpenMeteoWindFieldRepository implements WindFieldRepository {
       'forecast_days': days.clamp(1, 16).toString(),
       'models': _model,
     });
-    final res = await _client.get(uri);
+    final res = await _getWithRetry(uri);
     if (res.statusCode != 200) {
       throw http.ClientException('지점 바람 응답 오류 ${res.statusCode}', uri);
     }

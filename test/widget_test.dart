@@ -3,7 +3,9 @@ import 'package:bada_mobile/core/remote_config/app_gate_repository.dart';
 import 'package:bada_mobile/core/remote_config/app_gate_provider.dart';
 import 'package:bada_mobile/core/storage/prefs.dart';
 import 'package:bada_mobile/features/weather/data/repositories/mock_marine_weather_repository.dart';
+import 'package:bada_mobile/features/weather/data/repositories/mock_wind_field_repository.dart';
 import 'package:bada_mobile/features/weather/presentation/providers.dart';
+import 'package:bada_mobile/features/weather/presentation/wind_field_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +23,9 @@ Future<Widget> buildApp() async {
       marineWeatherRepositoryProvider.overrideWithValue(
         MockMarineWeatherRepository(),
       ),
+      // 실 리포지토리는 HTTP 실패 시 재시도 지연 타이머를 쓰므로(테스트에서
+      // pending timer로 실패) 바람장도 목으로 대체한다.
+      windFieldRepositoryProvider.overrideWithValue(MockWindFieldRepository()),
       // 실 네트워크 호출 없이 항상 "강제 업데이트 아님"으로 응답하게 한다.
       appGateRepositoryProvider.overrideWithValue(
         AppGateRepository(

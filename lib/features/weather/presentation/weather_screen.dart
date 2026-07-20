@@ -229,7 +229,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
         body: seriesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('바람장을 불러오지 못했습니다: $e')),
-          data: (series) {
+          data: (result) {
+            final series = result.series;
             _ensureSeeded(series);
             final field = series.at(_hourOffset);
 
@@ -311,6 +312,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                       series: series,
                       offset: _hourOffset,
                       nowOffset: series.indexClosestTo(nowKst()),
+                      synthetic: result.isSynthetic,
                       onChanged: _setMapHour,
                       onNow: _mapHourToNow,
                     ),
@@ -670,6 +672,7 @@ class _MapTimeBar extends StatelessWidget {
     required this.series,
     required this.offset,
     required this.nowOffset,
+    required this.synthetic,
     required this.onChanged,
     required this.onNow,
   });
@@ -677,6 +680,10 @@ class _MapTimeBar extends StatelessWidget {
   final WindFieldSeries series;
   final int offset;
   final int nowOffset;
+
+  /// 실데이터 호출 실패로 합성(목업) 바람이 표시 중인지. 사용자에게 명확히
+  /// 알려 실데이터(윈디)와 비교하다 혼동하지 않게 한다.
+  final bool synthetic;
   final ValueChanged<int> onChanged;
   final VoidCallback onNow;
 
@@ -703,6 +710,25 @@ class _MapTimeBar extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 실데이터를 못 받아 합성 바람이 표시 중이면 명확히 알린다.
+                if (synthetic)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 2),
+                    child: Row(
+                      children: [
+                        Icon(Icons.wifi_off, size: 14, color: scheme.error),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            '실데이터 연결 실패 — 합성 바람 표시 중 (탭을 다시 열면 재시도)',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: scheme.error),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Row(
                   children: [
                     Icon(Icons.schedule, size: 18, color: scheme.primary),
