@@ -38,23 +38,24 @@ Future<Widget> buildApp() async {
 }
 
 void main() {
-  testWidgets('앱이 렌더링되고 5개 탭이 보인다', (tester) async {
+  testWidgets('앱이 렌더링되고 5개 아이콘 내비게이션이 보인다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('홈'), findsOneWidget);
-    expect(find.text('날씨'), findsOneWidget);
-    expect(find.text('물때'), findsOneWidget);
-    expect(find.text('Windy'), findsOneWidget);
-    expect(find.text('설정'), findsOneWidget);
+    // 하단 라벨 바 대신 오른쪽 아이콘 세로 내비게이션(홈 선택 상태).
+    expect(find.byIcon(Icons.home), findsOneWidget); // 선택된 홈
+    expect(find.byIcon(Icons.wb_sunny_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.waves_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.air_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
     expect(find.text('바다 윈디'), findsOneWidget);
   });
 
-  testWidgets('물때 탭으로 이동하면 만조/간조 목록이 보인다', (tester) async {
+  testWidgets('물때 아이콘으로 이동하면 만조/간조 목록이 보인다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('물때'));
+    await tester.tap(find.byIcon(Icons.waves_outlined));
     await tester.pumpAndSettle();
 
     // 제목은 이제 지역명 없이 "물때"만, 지역은 우측 상단 선택 버튼에 표시된다.
@@ -89,7 +90,7 @@ void main() {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('설정'));
+    await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
     // 템플릿(펼침) + 그 아래 정보 항목이 한 화면에 나열된다.

@@ -88,46 +88,74 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        // 화면 밖 탭(특히 애니메이션이 있는 Windy 탭)의 Ticker를 꺼서
-        // 불필요한 리빌드와 배터리 소모, pumpAndSettle 무한대기를 막는다.
+      // 하단 내비게이션 바(흰 박스)를 없애고, 오른쪽에 아이콘만 세로로 띄운다
+      // (윈디식 몰입형). 지도가 화면 전체를 채우도록 body 위에 겹쳐 그린다.
+      body: Stack(
         children: [
-          for (var i = 0; i < _screens.length; i++)
-            TickerMode(enabled: i == _index, child: _screens[i]),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: '홈',
+          IndexedStack(
+            index: _index,
+            // 화면 밖 탭(특히 애니메이션이 있는 Windy 탭)의 Ticker를 꺼서
+            // 불필요한 리빌드와 배터리 소모, pumpAndSettle 무한대기를 막는다.
+            children: [
+              for (var i = 0; i < _screens.length; i++)
+                TickerMode(enabled: i == _index, child: _screens[i]),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.wb_sunny_outlined),
-            selectedIcon: Icon(Icons.wb_sunny),
-            label: '날씨',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.waves_outlined),
-            selectedIcon: Icon(Icons.waves),
-            label: '물때',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.air_outlined),
-            selectedIcon: Icon(Icons.air),
-            label: 'Windy',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: '설정',
+          // 오른쪽 아이콘 세로 내비게이션(박스 없이 아이콘만). 상단 커서 바·하단
+          // 시간 바와 겹치지 않게 오른쪽 중앙보다 살짝 아래에 둔다.
+          Align(
+            alignment: const Alignment(1.0, 0.28),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 2),
+                child: _NavRail(
+                  index: _index,
+                  onSelect: (i) => setState(() => _index = i),
+                ),
+              ),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 오른쪽에 세로로 뜨는 아이콘 전용 내비게이션(박스·라벨 없이 아이콘만).
+/// 선택된 탭은 강조색, 나머지는 흰색+그림자로 어떤 배경 위에서도 보이게 한다.
+class _NavRail extends StatelessWidget {
+  const _NavRail({required this.index, required this.onSelect});
+
+  final int index;
+  final ValueChanged<int> onSelect;
+
+  static const _icons = <(IconData, IconData)>[
+    (Icons.home_outlined, Icons.home),
+    (Icons.wb_sunny_outlined, Icons.wb_sunny),
+    (Icons.waves_outlined, Icons.waves),
+    (Icons.air_outlined, Icons.air),
+    (Icons.settings_outlined, Icons.settings),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    const shadow = [Shadow(color: Colors.black, blurRadius: 5)];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < _icons.length; i++)
+          IconButton(
+            onPressed: () => onSelect(i),
+            iconSize: 27,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              i == index ? _icons[i].$2 : _icons[i].$1,
+              color: i == index ? primary : Colors.white,
+              shadows: shadow,
+            ),
+          ),
+      ],
     );
   }
 }
