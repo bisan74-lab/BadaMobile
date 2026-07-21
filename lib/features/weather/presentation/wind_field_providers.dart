@@ -34,10 +34,9 @@ final windFieldProvider = FutureProvider.autoDispose<WindField>((ref) async {
   }
 });
 
-/// 시간 스크러버가 다룰 시계열 범위: 향후 8일.
-/// 격자를 촘촘하게(약 1.4°) 올린 만큼 기간을 2주→8일로 줄여 무료 API
-/// 요청량·응답량 균형을 맞춘다(상세 예보 표는 별도 지점 요청으로 16일 유지).
-const int windFieldSeriesHours = 24 * 8;
+/// 시간 스크러버가 다룰 시계열 범위: 향후 16일(모델 상한). 지도 1순위는
+/// 서버 파일이라 앱 직접호출은 폴백일 때만 이 범위로 요청한다.
+const int windFieldSeriesHours = 24 * 16;
 
 /// 바람장 시계열 결과. [isSynthetic]이 true면 실데이터(Open-Meteo) 호출이
 /// 실패해 합성(목업) 바람장으로 폴백한 것 — 지도에 배지로 알려 실데이터와

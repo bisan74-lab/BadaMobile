@@ -36,7 +36,7 @@ MIN_LON, MAX_LON = 108.0, 148.0
 LAT_STEPS = 40
 LON_STEPS = 41
 
-FORECAST_DAYS = 7
+FORECAST_DAYS = 16  # Open-Meteo/ECMWF 모델 상한(지도 스크러버 최대치).
 STEP_HOURS = 3  # 3시간 간격으로 솎아 파일 크기를 줄인다(지도 스크러버에 충분).
 MODEL = "ecmwf_ifs025"  # Windy 기본 레이어와 같은 ECMWF IFS 0.25°.
 
