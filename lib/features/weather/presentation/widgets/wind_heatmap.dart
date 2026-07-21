@@ -114,16 +114,16 @@ const _stopB = <int>[
   );
 }
 
-/// 실제 Windy 앱은 전체적으로 **약간 어두운(가라앉은) 색감**이다(계산대 녹색·
-/// 파랑이 밝게 튀지 않는다). 색상(hue)은 그대로 두고 채도는 살짝만 올리되
-/// **명도를 낮춰(×0.8)** 초록·파랑을 조금 어둡게 해 Windy와 톤을 맞춘다.
+/// 실제 Windy 앱과 **밝기·톤을 맞춘다**. 예전엔 명도를 ×0.88로 낮춰 전체가
+/// Windy보다 어두웠는데(특히 초록·청록이 가라앉음), 나란히 비교하니 Windy가
+/// 더 밝고 선명했다. 그래서 **명도는 그대로(×1.0) 두고** 채도만 아주 살짝
+/// (×1.05) 올려, 색상(hue)은 유지한 채 Windy의 밝은 톤에 일치시킨다.
 (int r, int g, int b) _vivid(double rf, double gf, double bf) {
   final hsv = HSVColor.fromColor(
     Color.fromARGB(255, rf.round(), gf.round(), bf.round()),
   );
   final c = hsv
-      .withSaturation((hsv.saturation * 1.15).clamp(0.0, 1.0))
-      .withValue((hsv.value * 0.88).clamp(0.0, 1.0))
+      .withSaturation((hsv.saturation * 1.05).clamp(0.0, 1.0))
       .toColor();
   return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }

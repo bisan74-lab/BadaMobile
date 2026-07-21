@@ -23,7 +23,7 @@ dart format lib test       # 커밋 전 포맷
   새 데이터 소스를 추가할 때도 이 패턴을 따른다.
 - **지도 바람장은 서버 파일 우선**(`features/weather/.../github_wind_field_repository.dart`):
   GitHub Actions 크론(`.github/workflows/wind-data.yml` → `tool/fetch_wind.py`)이
-  Open-Meteo에서 격자(현재 40×41≈1°)를 배치로 받아 롤링 릴리스 `wind-data`의
+  Open-Meteo에서 격자(현재 79×81≈0.5°)를 배치로 받아 롤링 릴리스 `wind-data`의
   `wind_field.json.gz`(u/v를 cm/s int16 양자화)로 올리고, 앱은 그 파일 하나만
   내려받는다. 그래서 **사용자 기기는 Open-Meteo를 직접 다지점 호출하지 않아**
   분당 한도와 무관하고, 서버는 시간을 두고 배치로 받으므로 격자를 더 촘촘히

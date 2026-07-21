@@ -31,10 +31,13 @@ import urllib.request
 MIN_LAT, MAX_LAT = 18.0, 57.0
 MIN_LON, MAX_LON = 108.0, 148.0
 
-# 약 1° 간격 — 앱 직접호출(504점, 약 2°)보다 3배 이상 촘촘해 색 변화가
-# 윈디에 가깝게 세밀해진다. 서버는 배치로 나눠 받으므로 이 밀도가 가능하다.
-LAT_STEPS = 40
-LON_STEPS = 41
+# 약 0.5° 간격(39°/78, 40°/80) — 앱 직접호출(504점, 약 2°)보다 훨씬 촘촘하고,
+# 예전 1°(40×41)보다 4배 촘촘해 바람장의 가는 줄기·소용돌이 구조가 뭉개지지
+# 않고 Windy처럼 세밀하게 드러난다. 모델 자체가 0.25°(ecmwf_ifs025)라 이보다
+# 더 촘촘히 뽑을 실익은 적고 파일만 커진다. 서버는 배치로 나눠 받으므로
+# (150좌표씩 SLEEP 간격) 이 밀도(6399점)도 분당 한도에 걸리지 않는다.
+LAT_STEPS = 79
+LON_STEPS = 81
 
 FORECAST_DAYS = 16  # Open-Meteo/ECMWF 모델 상한(지도 스크러버 최대치).
 STEP_HOURS = 3  # 3시간 간격으로 솎아 파일 크기를 줄인다(지도 스크러버에 충분).
@@ -61,7 +64,7 @@ def grid():
 
 def fetch_batch(lats, lons):
     params = {
-        # 소수 2자리로 URL을 줄인다(격자 간격 약 1°라 정밀도 충분).
+        # 소수 2자리로 URL을 줄인다(격자 간격 약 0.5°라 0.01° 정밀도로 충분).
         "latitude": ",".join(f"{v:.2f}" for v in lats),
         "longitude": ",".join(f"{v:.2f}" for v in lons),
         "hourly": "wind_speed_10m,wind_direction_10m",
