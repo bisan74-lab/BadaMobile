@@ -127,9 +127,10 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
-  // Windy처럼 가늘고 은은한 흐름선을 아주 촘촘하게: 개수를 1380으로 늘린다.
-  // 굵기·투명도는 페인터에서 더 얇고 투명하게 그린다.
-  static const _particleCount = 1380;
+  // Windy처럼 가늘고 은은한 흐름선을 아주 촘촘하게: 개수를 2760으로 늘린다
+  // (Windy 앱 밀도에 맞춰 이전 1380에서 2배). 굵기·투명도는 페인터에서 더
+  // 얇고 투명하게 그린다.
+  static const _particleCount = 2760;
   static const _maxAgeSeconds = 20.0;
 
   /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 짧은 선 →
