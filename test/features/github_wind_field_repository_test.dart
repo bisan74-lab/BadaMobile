@@ -106,6 +106,26 @@ void main() {
     expect(f0.v[4], closeTo(-2, 0.001)); // k=4 → -2
   });
 
+  test('parseWindFieldFile: 전부 0인 꼬리 스텝(모델 한계 밖 결측)을 잘라낸다', () {
+    // 6스텝 중 마지막 2스텝은 전부 0(예보 없는 날짜) → 4스텝만 남아야 한다.
+    final json =
+        jsonDecode(
+              encodeFile(
+                latSteps: 2,
+                lonSteps: 2,
+                steps: 6,
+                stepHours: 3,
+                u: (s, k) => s < 4 ? 3.0 : 0.0,
+                v: (s, k) => s < 4 ? -1.0 : 0.0,
+              ),
+            )
+            as Map<String, dynamic>;
+    final series = parseWindFieldFile(json);
+    expect(series.length, 4);
+    // 남은 마지막 스텝은 실데이터.
+    expect(series.hourly.last.u.first, closeTo(3, 0.001));
+  });
+
   test('서버 파일이 200이면 그걸 쓰고, 실패하면 direct로 폴백한다', () async {
     final body = encodeFile(
       latSteps: 2,

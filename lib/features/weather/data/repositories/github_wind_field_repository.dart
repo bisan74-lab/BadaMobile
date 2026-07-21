@@ -89,9 +89,28 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
     throw const FormatException('바람장 파일 배열 길이가 격자·스텝과 맞지 않음');
   }
 
+  // 모델 예보 한계를 넘어 0으로 채워진 꼬리 스텝(무풍=결측 날짜)을 잘라낸다.
+  // 실제 바람장은 수천 격자 중 하나라도 0이 아니므로, 한 스텝이 전부 정확히
+  // 0이면 그 시각은 예보가 없는 것이다(지도 스크러버에 빈 날짜가 안 뜨게).
+  // 서버(fetch_wind.py)도 같은 꼬리를 빼지만, 예전 파일·모델 변동에 대비해
+  // 앱에서도 방어적으로 자른다.
+  var realSteps = steps;
+  while (realSteps > 1) {
+    final base = (realSteps - 1) * pts;
+    var hasData = false;
+    for (var k = 0; k < pts; k++) {
+      if (u[base + k] != 0 || v[base + k] != 0) {
+        hasData = true;
+        break;
+      }
+    }
+    if (hasData) break;
+    realSteps--;
+  }
+
   return WindFieldSeries(
     hourly: [
-      for (var s = 0; s < steps; s++)
+      for (var s = 0; s < realSteps; s++)
         WindField(
           time: start.add(Duration(hours: s * stepHours)),
           minLat: minLat,

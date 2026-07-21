@@ -121,8 +121,27 @@ def main():
     if not all_times:
         raise SystemExit("응답에 시간 데이터가 없습니다.")
     sel = [i for i, t in enumerate(all_times) if _hour_of(t) % STEP_HOURS == 0]
+
+    # 모델 예보 한계를 넘는 꼬리 시각을 잘라낸다. Open-Meteo는 forecast_days로
+    # 요청한 범위를 다 돌려주되, 모델이 실제로 예보하지 않는 시각(대개 마지막
+    # 하루)은 null로 준다. 그대로 두면 우리가 0으로 저장 → 지도에 '무풍(전부
+    # 보라색) = 데이터 없는 날짜'로 뜬다. 어떤 지점이라도 값이 있는 마지막
+    # 스텝까지만 남긴다.
+    def _step_has_data(hi):
+        for r in results:
+            sp = (r.get("hourly") or {}).get("wind_speed_10m") or []
+            if hi < len(sp) and sp[hi] is not None:
+                return True
+        return False
+
+    while len(sel) > 1 and not _step_has_data(sel[-1]):
+        sel.pop()
     steps = len(sel)
     start_time = all_times[sel[0]]
+    print(
+        f"실데이터 마지막 시각: {all_times[sel[-1]]} ({steps}스텝)",
+        flush=True,
+    )
 
     u16 = bytearray(steps * total * 2)
     v16 = bytearray(steps * total * 2)
