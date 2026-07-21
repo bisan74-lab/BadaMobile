@@ -130,6 +130,19 @@ List<HourlyMarine> mergeOpenMeteoHourly({
   double last(List<double?> xs, int i, double prev) =>
       (i >= 0 && i < xs.length ? xs[i] : null) ?? prev;
 
+  // Marine(파고) 모델은 바람 예보(16일)보다 예보 한계가 짧다. Open-Meteo는
+  // 모델 범위를 넘어선 시각도 time 축엔 그대로 넣고 값만 null로 돌려주므로,
+  // 그냥 두면 파고 등이 직전 값으로 굳은 채(스테일) 표에 계속 노출된다.
+  // 파고가 실제로 있는 마지막 시각을 예보 한계로 잡아, 그 뒤 시각은
+  // 표에서 아예 뺀다(예보 불가 날짜 삭제).
+  DateTime? marineHorizon;
+  for (var mi = waveHeight.length - 1; mi >= 0; mi--) {
+    if (waveHeight[mi] != null && mi < marineTimes.length) {
+      marineHorizon = marineTimes[mi];
+      break;
+    }
+  }
+
   final result = <HourlyMarine>[];
   var pWind = 0.0, pGust = 0.0, pWindDir = 0.0, pAir = 0.0, pCode = 0.0;
   var pWave = 0.0, pPeriod = 0.0, pWaveDir = 0.0, pWater = 0.0;
@@ -137,6 +150,8 @@ List<HourlyMarine> mergeOpenMeteoHourly({
   var pWindWave = 0.0, pWindWaveDir = 0.0;
   var pSwell2 = 0.0, pSwell2Period = 0.0, pSwell2Dir = 0.0;
   for (var i = 0; i < times.length && result.length < maxHours; i++) {
+    // 파고 예보 한계를 넘는 시각은 표에서 제외한다(위 marineHorizon 참고).
+    if (marineHorizon != null && times[i].isAfter(marineHorizon)) break;
     final mi = marineIndex[times[i]] ?? -1;
     pWind = last(windSpeed, i, pWind);
     pGust = last(windGust, i, pGust);

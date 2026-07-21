@@ -1323,7 +1323,12 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                 child: Row(
                   children: [
-                    Icon(Icons.location_on, size: 18, color: scheme.primary),
+                    const Icon(
+                      Icons.location_on,
+                      size: 18,
+                      color: Color(0xFF8FD3FF),
+                      shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       // 밝은 지도 위에서도 보이도록 밝은(너무 희지 않은) 회백색
@@ -1408,10 +1413,13 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.schedule,
                               size: 18,
-                              color: scheme.primary,
+                              color: Color(0xFF8FD3FF),
+                              shadows: [
+                                Shadow(color: Colors.black, blurRadius: 4),
+                              ],
                             ),
                             const SizedBox(width: 6),
                             if (atIsNow)
@@ -1690,8 +1698,14 @@ class _MeteogramColumn extends StatelessWidget {
                               '${hour.time.month}/${hour.time.day}',
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
-                                    color: scheme.primary,
+                                    color: const Color(0xFF8FD3FF),
                                     fontWeight: FontWeight.bold,
+                                    shadows: const [
+                                      Shadow(
+                                        color: Colors.black,
+                                        blurRadius: 3,
+                                      ),
+                                    ],
                                   ),
                             ),
                           )

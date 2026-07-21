@@ -96,6 +96,32 @@ void main() {
     expect(merged[1].waveHeightM, merged[0].waveHeightM);
   });
 
+  test('파고 예보 한계를 넘는 시각은 표에서 제외한다', () {
+    // 바람(forecast)은 6시간, 파고(marine)는 마지막 2시각이 null(모델 한계 밖).
+    final marine = _hourlyBlock([
+      'wave_height',
+      'wave_period',
+      'wave_direction',
+      'sea_surface_temperature',
+    ], 6);
+    (marine['wave_height'] as List)[4] = null;
+    (marine['wave_height'] as List)[5] = null;
+    final forecast = _hourlyBlock([
+      'wind_speed_10m',
+      'wind_gusts_10m',
+      'wind_direction_10m',
+      'temperature_2m',
+    ], 6);
+
+    final merged = mergeOpenMeteoHourly(
+      marine: marine,
+      forecast: forecast,
+      maxHours: 6,
+    );
+    // 파고가 실제로 있는 마지막 시각(인덱스 3)까지만 남는다.
+    expect(merged, hasLength(4));
+  });
+
   test('API 오류 시 예외를 던진다 (폴백 래퍼가 처리)', () async {
     final repo = OpenMeteoMarineRepository(
       client: buildClient(marineStatus: 500),
