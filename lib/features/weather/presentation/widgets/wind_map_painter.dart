@@ -55,7 +55,8 @@ class WindMapPainter extends CustomPainter {
         s.add(trail[i].dy * h);
       }
     }
-    // Windy 앱처럼 가늘고 은은하게: 굵기 0.25~0.8, 알파는 낮게(최대 ~0.38).
+    // 가늘고 은은하되, 이동이 눈에 띄도록 머리 쪽을 조금 더 진하고 굵게:
+    // 굵기 0.3~0.95, 알파 최대 ~0.5(이전 0.38에서 상향).
     final paint = Paint()
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
@@ -64,8 +65,8 @@ class WindMapPainter extends CustomPainter {
       if (s.isEmpty) continue;
       final t = (b + 0.5) / _buckets;
       paint
-        ..color = color.withValues(alpha: t * (0.3 + 0.7 * t) * 0.38)
-        ..strokeWidth = 0.25 + t * 0.55;
+        ..color = color.withValues(alpha: t * (0.3 + 0.7 * t) * 0.5)
+        ..strokeWidth = 0.3 + t * 0.65;
       canvas.drawRawPoints(PointMode.lines, Float32List.fromList(s), paint);
     }
   }

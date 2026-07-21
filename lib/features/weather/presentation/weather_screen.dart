@@ -127,24 +127,23 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
-  // Windy 밀도에 맞춰 개수를 2760(이전 1380의 2배)으로 늘린다. 이 밀도가
-  // 부드럽게 돌아가는 건 페인터가 세그먼트를 단계별 drawRawPoints로 **한 번에**
-  // 그리기 때문이다(파티클수와 무관하게 캔버스 콜 상수). 굵기·투명도는
-  // 페인터에서 더 얇고 투명하게 그린다.
-  static const _particleCount = 2760;
+  // 개수를 1200으로 낮춘다(이전 2760에서). 개수보다 **이동이 잘 보이는 것**을
+  // 우선한 사용자 요청. 개수를 줄이고 궤적을 길게(꼬리 있는 유성처럼) 잡아
+  // 흐름 방향·이동이 또렷이 보이게 한다. 렌더는 단계별 drawRawPoints로 한 번에
+  // 그려(파티클수와 무관하게 캔버스 콜 상수) 이 정도는 가볍게 돌아간다.
+  static const _particleCount = 1200;
   static const _maxAgeSeconds = 20.0;
 
-  /// 궤적 길이(포인트 수)를 풍속에 비례해 늘려, 바람이 셀수록 짧은 선 →
-  /// 조금 긴 흐름선으로 보이게 한다(윈디식 잔상). 파티클을 2배로 늘린 만큼
-  /// 프레임당 세그먼트 총수(파티클수 × 궤적)를 억제하려고 궤적을 이전보다
-  /// 짧게(최대 67→28) 잡는다 — Windy 흐름선도 짧아 시각적으로도 자연스럽다.
-  static const _minTrail = 8;
-  static const _maxTrailCap = 28;
-  static const _trailSpeedFactor = 2.4;
+  /// 궤적 길이(포인트 수)를 풍속에 비례해 늘린다(윈디식 잔상). 개수를 줄인
+  /// 대신 길게(최대 52) 잡아 흐름선이 유성처럼 또렷이 흐르는 게 보이게 한다.
+  static const _minTrail = 12;
+  static const _maxTrailCap = 52;
+  static const _trailSpeedFactor = 4.2;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
-  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. 이동 속도를 0.8배로 늦춘다.
-  static const _degreesPerMps = 0.144;
+  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. 이동이 눈에 잘 띄도록
+  /// 이전(0.144)보다 조금 빠르게 흐르게 한다.
+  static const _degreesPerMps = 0.18;
 
   @override
   void initState() {
@@ -197,11 +196,16 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     final series = _series;
     if (series == null) return;
     final field = series.at(_hourOffset);
-    final dt = _lastElapsed == Duration.zero
+    var dt = _lastElapsed == Duration.zero
         ? 1 / 60
         : (elapsed - _lastElapsed).inMicroseconds / 1e6;
     _lastElapsed = elapsed;
-    if (dt <= 0 || dt > 0.25) return; // 첫 프레임/백그라운드 복귀 시 큰 점프 무시
+    if (dt <= 0) return;
+    // 예전엔 dt>0.25면 통째로 스킵했는데, 프레임이 무거워지면 매 틱 스킵돼
+    // 파티클이 "얼어" 바람 이동이 안 보였다(성능 저하의 증상이 정지로 나타남).
+    // 스킵 대신 한 스텝 상한(0.05초)만 둬서, 느린 프레임/백그라운드 복귀에도
+    // 큰 점프 없이 조금씩이라도 계속 흐르게 한다.
+    if (dt > 0.05) dt = 0.05;
 
     for (var i = 0; i < _particles.length; i++) {
       final p = _particles[i];
