@@ -132,16 +132,16 @@ const _stopB = <int>[
   );
 }
 
-/// 실제 Windy 앱과 **밝기·톤을 맞춘다**. 예전엔 명도를 ×0.88로 낮춰 전체가
-/// Windy보다 어두웠는데(특히 초록·청록이 가라앉음), 나란히 비교하니 Windy가
-/// 더 밝고 선명했다. 그래서 **명도는 그대로(×1.0) 두고** 채도만 아주 살짝
-/// (×1.05) 올려, 색상(hue)은 유지한 채 Windy의 밝은 톤에 일치시킨다.
+/// 실제 Windy 앱과 **밝기·톤을 맞춘다**. 명도는 그대로 두고 채도만 살짝 올려
+/// 색상(hue)은 유지한 채 Windy의 선명한 톤에 맞춘다. 범례 색을 JPEG 스샷에서
+/// 뽑아 채도가 약간 죽는 것도 보정할 겸, 파랑 단계가 더 또렷하게 살아나도록
+/// ×1.05 → ×1.14로 조금 더 올린다(사용자: "파랑 디테일이 더 살아있었으면").
 (int r, int g, int b) _vivid(double rf, double gf, double bf) {
   final hsv = HSVColor.fromColor(
     Color.fromARGB(255, rf.round(), gf.round(), bf.round()),
   );
   final c = hsv
-      .withSaturation((hsv.saturation * 1.05).clamp(0.0, 1.0))
+      .withSaturation((hsv.saturation * 1.14).clamp(0.0, 1.0))
       .toColor();
   return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }
@@ -157,8 +157,10 @@ Color windSpeedColor(double speedMs) {
 /// 정도로 잡는다(픽셀당 약 0.2°).
 Future<ui.Image> buildWindHeatmapImage(
   WindField field, {
-  int width = 216,
-  int height = 162,
+  // 더 깊은 확대(maxScale)에서도 히트맵이 과하게 블록지지 않도록 래스터를
+  // 조금 키운다. 격자(64×66)보다 훨씬 촘촘해 격자 디테일은 그대로 담는다.
+  int width = 300,
+  int height = 288,
 }) {
   final buffer = Uint8List(width * height * 4);
   var idx = 0;

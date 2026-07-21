@@ -76,23 +76,23 @@ class CoastlinePainter extends CustomPainter {
     final coast = _pathFor('해안선');
     final border = _pathFor('국경');
     final halo = Paint()
-      ..color = Colors.white.withValues(alpha: 0.12)
+      ..color = Colors.white.withValues(alpha: 0.14)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4 / s
+      ..strokeWidth = 2.0 / s
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 1.2 / s);
-    // 바다-육지 경계선은 더 진하고 살짝 굵게 그려 또렷하게 보이도록 한다.
+      ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 1.4 / s);
+    // 바다-육지 경계선은 더 진하고 굵게 그려 또렷하게 보이도록 한다(사용자 요청).
     final coastLine = Paint()
-      ..color = const Color(0xFF080C12).withValues(alpha: 0.92)
+      ..color = const Color(0xFF060A0F).withValues(alpha: 0.95)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.85 / s
+      ..strokeWidth = 1.3 / s
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final borderLine = Paint()
-      ..color = const Color(0xFF1B2430).withValues(alpha: 0.55)
+      ..color = const Color(0xFF1B2430).withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5 / s
+      ..strokeWidth = 0.7 / s
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 

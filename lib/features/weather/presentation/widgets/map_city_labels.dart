@@ -45,10 +45,10 @@ const List<CityLabel> mapCityLabels = [
   (name: '경주', lat: 35.8562, lon: 129.2247, rank: 2, island: false),
   (name: '속초', lat: 38.2070, lon: 128.5918, rank: 2, island: false),
 
-  // rank 2 — 대표 섬(조금 확대하면 표시).
-  (name: '강화도', lat: 37.7469, lon: 126.4880, rank: 2, island: true),
-  (name: '거제도', lat: 34.8806, lon: 128.6211, rank: 2, island: true),
-  (name: '울릉도', lat: 37.4843, lon: 130.9058, rank: 2, island: true),
+  // rank 1 — 큰 섬(기본 배율에서도 이름을 보인다).
+  (name: '강화도', lat: 37.7469, lon: 126.4880, rank: 1, island: true),
+  (name: '거제도', lat: 34.8806, lon: 128.6211, rank: 1, island: true),
+  (name: '울릉도', lat: 37.4843, lon: 130.9058, rank: 1, island: true),
 
   // rank 3 — 소도시·군(많이 확대해야 표시).
   (name: '서산', lat: 36.7848, lon: 126.4503, rank: 3, island: false),
@@ -117,8 +117,8 @@ class MapCityLabelLayer extends StatelessWidget {
     if (c.island) {
       return switch (c.rank) {
         1 => 1.0,
-        2 => 2.0,
-        _ => 3.2,
+        2 => 1.8,
+        _ => 2.8,
       };
     }
     return switch (c.rank) {
@@ -149,7 +149,7 @@ class MapCityLabelLayer extends StatelessWidget {
   }
 
   /// 한 화면에 보이는 최대 라벨 수(이 이상은 겹쳐 보이므로 자른다).
-  static const int _maxVisible = 28;
+  static const int _maxVisible = 34;
 
   /// 라벨끼리 화면상 최소 간격(px). 두 지점의 지도 좌표 거리 × scale이
   /// 화면 거리이므로, 지도 좌표 기준으로는 이 값 / scale 이상 떨어져야 한다.
@@ -243,13 +243,16 @@ class MapCityLabelLayer extends StatelessWidget {
               final label = Text(
                 c.name,
                 style: TextStyle(
-                  // 순백 대신 조금 어두운 회백색으로 덜 튀게.
+                  // 더 밝고 흰 글자(섬은 살짝 하늘빛만 남겨 구분). 글자는 더 작게.
                   color: c.island
-                      ? const Color(0xFFA9C4D8)
-                      : const Color(0xFFBCC5CE),
-                  fontSize: c.rank == 1 ? 12.5 : 11,
+                      ? const Color(0xFFDDEFFC)
+                      : const Color(0xFFF3F7FB),
+                  fontSize: c.rank == 1 ? 10.5 : 9,
                   fontWeight: FontWeight.w600,
-                  shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+                  shadows: const [
+                    Shadow(color: Colors.black, blurRadius: 3),
+                    Shadow(color: Colors.black87, blurRadius: 1.5),
+                  ],
                 ),
               );
               final row = Row(

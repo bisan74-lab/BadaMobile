@@ -551,8 +551,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
             // 세로 팬이 잠기는데(표가 떴을 때 아래로 못 내려가던 원인), 1.15면
             // 항상 약간의 팬 여유가 생겨 잠기지 않으면서도 검은 여백은 없다.
             minScale: 1.15,
-            // 섬·소지역 이름까지 보이도록 더 깊게 확대할 수 있게 한다.
-            maxScale: 21,
+            // 섬·소지역 이름·작은 섬까지 보이도록 더 깊게 확대할 수 있게 한다.
+            maxScale: 42,
             // 지도가 항상 뷰를 덮으므로 경계 여백은 두지 않는다(가장자리에 검은
             // 빈 부분이 올라오지 않게 한다).
             boundaryMargin: EdgeInsets.zero,
