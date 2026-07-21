@@ -127,23 +127,24 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
-  // 개수를 1200으로 낮춘다(이전 2760에서). 개수보다 **이동이 잘 보이는 것**을
-  // 우선한 사용자 요청. 개수를 줄이고 궤적을 길게(꼬리 있는 유성처럼) 잡아
-  // 흐름 방향·이동이 또렷이 보이게 한다. 렌더는 단계별 drawRawPoints로 한 번에
-  // 그려(파티클수와 무관하게 캔버스 콜 상수) 이 정도는 가볍게 돌아간다.
-  static const _particleCount = 1200;
+  // Windy 화면녹화와 프레임 단위로 비교한 결과에 맞춘다: Windy는 **짧고 빠른**
+  // 흐름선이 **더 촘촘히**(흰 픽셀 비율 ~1.04% vs 우리 0.80%) 흐른다. 그래서
+  // 개수를 1700으로 늘리고 궤적은 짧게(유성 꼬리보다 Windy식 짧은 선) 잡는다.
+  // 궤적이 짧아 세그먼트 총수는 오히려 v0.1.39(1200×긴꼬리)보다 적어 더 가볍다
+  // (렌더는 단계별 drawRawPoints로 파티클수와 무관하게 캔버스 콜 상수).
+  static const _particleCount = 1700;
   static const _maxAgeSeconds = 20.0;
 
-  /// 궤적 길이(포인트 수)를 풍속에 비례해 늘린다(윈디식 잔상). 개수를 줄인
-  /// 대신 길게(최대 52) 잡아 흐름선이 유성처럼 또렷이 흐르는 게 보이게 한다.
-  static const _minTrail = 12;
-  static const _maxTrailCap = 52;
-  static const _trailSpeedFactor = 4.2;
+  /// 궤적 길이(포인트 수)를 풍속에 비례해 늘린다(윈디식 잔상). Windy처럼 짧게
+  /// (최대 34) 잡아 짧고 빠른 흐름선이 많이 흐르는 느낌을 낸다.
+  static const _minTrail = 9;
+  static const _maxTrailCap = 34;
+  static const _trailSpeedFactor = 3.0;
 
   /// 위경도 이동 배율(도/초 per m/s) — 화면 안 흐름선의 이동 "속도"를 정하는
-  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. 이동이 눈에 잘 띄도록
-  /// 이전(0.144)보다 조금 빠르게 흐르게 한다.
-  static const _degreesPerMps = 0.18;
+  /// 시각적 배율이며 실제 지리 이동 속도가 아니다. Windy의 초당 화면변화가
+  /// 약 2배라, 이동을 더 또렷하게 0.24로 올린다(이전 0.18).
+  static const _degreesPerMps = 0.24;
 
   @override
   void initState() {
