@@ -51,6 +51,7 @@ String encodeFile({
   required int stepHours,
   required double Function(int s, int k) u,
   required double Function(int s, int k) v,
+  List<int>? valid,
 }) {
   final pts = latSteps * lonSteps;
   final ub = Int16List(steps * pts);
@@ -72,6 +73,7 @@ String encodeFile({
     'start': '2026-07-21T00:00',
     'stepHours': stepHours,
     'steps': steps,
+    if (valid != null) 'valid': valid,
     'u': base64Encode(ub.buffer.asUint8List()),
     'v': base64Encode(vb.buffer.asUint8List()),
   });
@@ -106,8 +108,10 @@ void main() {
     expect(f0.v[4], closeTo(-2, 0.001)); // k=4 → -2
   });
 
-  test('parseWindFieldFile: 전부 0인 꼬리 스텝(모델 한계 밖 결측)을 잘라낸다', () {
-    // 6스텝 중 마지막 2스텝은 전부 0(예보 없는 날짜) → 4스텝만 남아야 한다.
+  test('parseWindFieldFile: valid 없는 예전 파일은 전부 0인 스텝을 결측으로 '
+      '표시하되 자르지는 않는다(최신 데이터 우선, 지도가 회색 처리)', () {
+    // 6스텝 중 마지막 2스텝은 전부 0(예보 없는 날짜) — 길이는 6 그대로,
+    // 마지막 2개만 hasData=false여야 한다.
     final json =
         jsonDecode(
               encodeFile(
@@ -121,9 +125,37 @@ void main() {
             )
             as Map<String, dynamic>;
     final series = parseWindFieldFile(json);
+    expect(series.length, 6);
+    for (var s = 0; s < 4; s++) {
+      expect(series.hourly[s].hasData, isTrue, reason: 'step $s');
+    }
+    for (var s = 4; s < 6; s++) {
+      expect(series.hourly[s].hasData, isFalse, reason: 'step $s');
+    }
+    // 값 자체는 여전히 실데이터가 들어 있다(잘리지 않았으므로).
+    expect(series.hourly[3].u.first, closeTo(3, 0.001));
+  });
+
+  test('parseWindFieldFile: valid 배열이 있으면 그걸 그대로 hasData에 쓴다', () {
+    final json =
+        jsonDecode(
+              encodeFile(
+                latSteps: 2,
+                lonSteps: 2,
+                steps: 4,
+                stepHours: 3,
+                u: (s, k) => 5.0, // 전부 0이 아닌 값(휴리스틱과 무관함을 확인)
+                v: (s, k) => 0.5,
+                valid: [1, 1, 0, 0],
+              ),
+            )
+            as Map<String, dynamic>;
+    final series = parseWindFieldFile(json);
     expect(series.length, 4);
-    // 남은 마지막 스텝은 실데이터.
-    expect(series.hourly.last.u.first, closeTo(3, 0.001));
+    expect(series.hourly[0].hasData, isTrue);
+    expect(series.hourly[1].hasData, isTrue);
+    expect(series.hourly[2].hasData, isFalse);
+    expect(series.hourly[3].hasData, isFalse);
   });
 
   test('서버 파일이 200이면 그걸 쓰고, 실패하면 direct로 폴백한다', () async {

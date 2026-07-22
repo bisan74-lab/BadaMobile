@@ -365,7 +365,6 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                         location: fp,
                         roseHour: _roseHour,
                         onClose: _closeDetail,
-                        windHorizon: series.hourly.last.time,
                       ),
                     ),
                   ),
@@ -523,6 +522,17 @@ class _WindMapAreaState extends State<_WindMapArea> {
   Future<void> _rebuildHeatmap() async {
     final field = widget.field;
     final time = field.time;
+    // 데이터 없는 시각(u/v가 전부 0으로 채워진 결측 스텝)은 색을 입히면
+    // "무풍(보라색)"으로 오해되므로, 아예 히트맵을 만들지 않고 build()가
+    // 회색 오버레이를 그리게 한다.
+    if (!field.hasData) {
+      _heatmap?.dispose();
+      setState(() {
+        _heatmap = null;
+        _heatmapTime = time;
+      });
+      return;
+    }
     final image = await buildWindHeatmapImage(field);
     if (!mounted || widget.field.time != time) {
       image.dispose();
@@ -664,6 +674,14 @@ class _WindMapAreaState extends State<_WindMapArea> {
                           dstRect: fieldRect,
                         ),
                         size: mapSize,
+                      )
+                    else if (!field.hasData)
+                      // 모델의 실제 예보 범위를 넘는 시각(예: 요청한 16일 중
+                      // 실제로 예보가 없는 마지막 하루)엔 무풍(보라색)으로
+                      // 오해하지 않도록 회색으로 "데이터 없음"을 표시한다.
+                      Positioned.fromRect(
+                        rect: fieldRect,
+                        child: const ColoredBox(color: Color(0x993A3F46)),
                       ),
                     // RepaintBoundary로 감싸지 않는다 — 감싸면 base 해상도로
                     // 래스터화된 뒤 확대되어 흐려지고, 1/scale 두께가 사라진다.
@@ -679,22 +697,26 @@ class _WindMapAreaState extends State<_WindMapArea> {
                       ),
                       size: mapSize,
                     ),
-                    Positioned.fromRect(
-                      rect: fieldRect,
-                      // 파티클만 매 프레임 다시 그려지도록 경계를 둔다.
-                      child: RepaintBoundary(
-                        child: CustomPaint(
-                          painter: WindMapPainter(
-                            particles: widget.particles,
-                            // 순백이 아니라 살짝 어두운 회청색으로 은은하게
-                            // (Windy처럼 흰 선이 과하게 밝지 않게).
-                            color: const Color(0xFFAEB9C6),
-                            repaint: widget.repaint,
+                    // 데이터 없는(회색) 시각엔 흐름선도 함께 숨긴다 — 안 그러면
+                    // 이전 실데이터 시각의 흐름이 멈춘 채로 회색 위에 남아
+                    // "데이터 없음"이라는 신호와 모순돼 보인다.
+                    if (field.hasData)
+                      Positioned.fromRect(
+                        rect: fieldRect,
+                        // 파티클만 매 프레임 다시 그려지도록 경계를 둔다.
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            painter: WindMapPainter(
+                              particles: widget.particles,
+                              // 순백이 아니라 살짝 어두운 회청색으로 은은하게
+                              // (Windy처럼 흰 선이 과하게 밝지 않게).
+                              color: const Color(0xFFAEB9C6),
+                              repaint: widget.repaint,
+                            ),
+                            size: fieldRect.size,
                           ),
-                          size: fieldRect.size,
                         ),
                       ),
-                    ),
                     // 지도 앱처럼 도시 이름만 확대 단계별로 표시(항구 점 라벨은
                     // 제거해 깔끔하게). 지역 선택은 우측 상단 지역 선택 버튼으로 한다.
                     MapCityLabelLayer(
@@ -911,6 +933,35 @@ class _MapTimeBar extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 이 시각이 모델의 실제 예보 범위 밖(지도가 회색)이면 이유를
+              // 알려준다. synthetic(전체 폴백)과는 별개 상황이라 둘 다 뜰 수
+              // 있다.
+              if (!synthetic && !series.at(i).hasData)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.block,
+                        size: 14,
+                        color: Color(0xFFCBD3DB),
+                        shadows: shadow,
+                      ),
+                      const SizedBox(width: 5),
+                      const Expanded(
+                        child: Text(
+                          '이 시각은 아직 예보 범위 밖이라 데이터가 없습니다',
+                          style: TextStyle(
+                            color: Color(0xFFCBD3DB),
+                            fontSize: 11,
+                            shadows: shadow,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // 실데이터를 못 받아 합성 바람이 표시 중이면 명확히 알린다.
               if (synthetic)
                 Padding(
@@ -1302,7 +1353,6 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
     required this.location,
     required this.roseHour,
     required this.onClose,
-    required this.windHorizon,
   });
 
   final SeaLocation location;
@@ -1310,14 +1360,6 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
   /// 선택 중인 시각의 해양값을 지도 위 방향 나침반에 전달하는 통로.
   final ValueNotifier<HourlyMarine?> roseHour;
   final VoidCallback onClose;
-
-  /// 지도(바람장) 쪽이 실제로 예보를 가진 마지막 시각. 상세 예보(파고 등)의
-  /// 실제 모델 horizon이 이보다 길어도, 지도에서 이미 "예보 불가"로 끝난
-  /// 날짜를 상세 표에서 하루 더 보여주면(예: 지도는 8/5까지인데 표는 8/6까지)
-  /// 두 화면이 서로 다른 기준일처럼 보여 혼동을 준다. 이 값 이후는 상세
-  /// 표에서도 잘라 지도와 항상 같은 날짜까지만 보이게 한다. null이면(지도
-  /// 데이터가 아직 없으면) 마린 응답 자체의 horizon만 따른다.
-  final DateTime? windHorizon;
 
   @override
   ConsumerState<_PointForecastPanel> createState() =>
@@ -1489,15 +1531,13 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                     );
                   }
                   // 3시간 간격으로 향후 최대 16일(Open-Meteo 예보 상한)을 뽑는다.
-                  // 지도(바람장)가 실제로 예보를 가진 마지막 시각(windHorizon)
-                  // 이후는 상세 표에서도 잘라, 지도·상세 예보가 항상 같은
-                  // 날짜까지만 보이게 한다(마린 API 쪽 모델이 더 길게 나와도).
-                  final horizon = widget.windHorizon;
+                  // 마린/바람 API가 실제로 주는 만큼 그대로 보여준다(지도의
+                  // 바람장 horizon에 맞춰 자르지 않음 — 최신·최장 실데이터를
+                  // 우선한다). 지도 쪽은 데이터가 없는 미래 날짜를 회색으로
+                  // 표시해 상세 표와 별도로 처리한다.
                   final steps = [
                     for (final h in forecast.hourly)
-                      if (h.time.hour % 3 == 0 &&
-                          (horizon == null || !h.time.isAfter(horizon)))
-                        h,
+                      if (h.time.hour % 3 == 0) h,
                   ].take(16 * 8).toList();
                   if (steps.isEmpty) {
                     return const Padding(

@@ -89,28 +89,26 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
     throw const FormatException('바람장 파일 배열 길이가 격자·스텝과 맞지 않음');
   }
 
-  // 모델 예보 한계를 넘어 0으로 채워진 꼬리 스텝(무풍=결측 날짜)을 잘라낸다.
-  // 실제 바람장은 수천 격자 중 하나라도 0이 아니므로, 한 스텝이 전부 정확히
-  // 0이면 그 시각은 예보가 없는 것이다(지도 스크러버에 빈 날짜가 안 뜨게).
-  // 서버(fetch_wind.py)도 같은 꼬리를 빼지만, 예전 파일·모델 변동에 대비해
-  // 앱에서도 방어적으로 자른다.
-  var realSteps = steps;
-  while (realSteps > 1) {
-    final base = (realSteps - 1) * pts;
-    var hasData = false;
-    for (var k = 0; k < pts; k++) {
-      if (u[base + k] != 0 || v[base + k] != 0) {
-        hasData = true;
-        break;
-      }
+  // 모델 예보 한계를 넘어 0으로 채워진 스텝(=결측)은 **자르지 않고** 그대로
+  // 남겨(최신·최장 데이터 우선) hasData만 false로 표시한다 — 지도가 이
+  // 스텝을 회색(데이터 없음)으로 그릴 수 있게. valid 배열이 없는 예전 파일은
+  // 격자 전부가 정확히 0인 스텝을 결측으로 간주하는 이전 방식으로 대체한다
+  // (실제 바람장은 수천 격자 중 하나라도 0이 아니므로 이 휴리스틱이 안전하다).
+  final validRaw = json['valid'] as List?;
+  bool hasDataFor(int s) {
+    if (validRaw != null) {
+      return s < validRaw.length && (validRaw[s] as num) != 0;
     }
-    if (hasData) break;
-    realSteps--;
+    final base = s * pts;
+    for (var k = 0; k < pts; k++) {
+      if (u[base + k] != 0 || v[base + k] != 0) return true;
+    }
+    return false;
   }
 
   return WindFieldSeries(
     hourly: [
-      for (var s = 0; s < realSteps; s++)
+      for (var s = 0; s < steps; s++)
         WindField(
           time: start.add(Duration(hours: s * stepHours)),
           minLat: minLat,
@@ -121,6 +119,7 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
           lonSteps: lonSteps,
           u: [for (var k = 0; k < pts; k++) u[s * pts + k] / 100.0],
           v: [for (var k = 0; k < pts; k++) v[s * pts + k] / 100.0],
+          hasData: hasDataFor(s),
         ),
     ],
   );

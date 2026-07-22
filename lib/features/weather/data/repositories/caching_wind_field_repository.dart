@@ -97,6 +97,9 @@ class CachingWindFieldRepository implements WindFieldRepository {
       'maxLon': f0.maxLon,
       'latSteps': f0.latSteps,
       'lonSteps': f0.lonSteps,
+      // 스텝별 데이터 유무(회색 처리용). 캐시 왕복에도 보존해야 재요청 전엔
+      // 계속 정확하다.
+      'valid': [for (final h in series.hourly) h.hasData ? 1 : 0],
       'u': base64Encode(u.buffer.asUint8List()),
       'v': base64Encode(v.buffer.asUint8List()),
     });
@@ -136,6 +139,9 @@ class CachingWindFieldRepository implements WindFieldRepository {
       );
       final pts = latSteps * lonSteps;
       if (uAll.length != n * pts || vAll.length != n * pts) return null;
+      // 예전 캐시(필드 없음)는 전부 유효한 것으로 취급한다(당시엔 결측
+      // 스텝을 아예 잘라내고 저장했으므로 안전한 기본값).
+      final validRaw = json['valid'] as List?;
       final series = WindFieldSeries(
         hourly: [
           for (var h = 0; h < n; h++)
@@ -149,6 +155,9 @@ class CachingWindFieldRepository implements WindFieldRepository {
               lonSteps: lonSteps,
               u: [for (var k = 0; k < pts; k++) uAll[h * pts + k] / 100.0],
               v: [for (var k = 0; k < pts; k++) vAll[h * pts + k] / 100.0],
+              hasData:
+                  validRaw == null ||
+                  (h < validRaw.length && (validRaw[h] as num) != 0),
             ),
         ],
       );

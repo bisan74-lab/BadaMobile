@@ -16,6 +16,7 @@ class WindField {
     required this.lonSteps,
     required this.u,
     required this.v,
+    this.hasData = true,
   });
 
   final DateTime time;
@@ -26,6 +27,13 @@ class WindField {
 
   final List<double> u;
   final List<double> v;
+
+  /// 이 시각이 모델의 실제 예보 범위 안인지. 서버 파일은 요청한 기간(예:
+  /// 16일) 전체를 스텝으로 담지만, 모델(ecmwf_ifs025)의 실제 예보 한계를
+  /// 넘는 시각은 값이 없어 0으로 채워 넣는다 — 그 상태를 "무풍"과 구분하려고
+  /// 이 플래그를 둔다. false면 지도는 이 스텝을 회색(데이터 없음)으로 그린다.
+  /// Open-Meteo 직접 호출(폴백)은 항상 실시간이라 기본값 true를 쓴다.
+  final bool hasData;
 
   double get latStep => (maxLat - minLat) / (latSteps - 1);
   double get lonStep => (maxLon - minLon) / (lonSteps - 1);

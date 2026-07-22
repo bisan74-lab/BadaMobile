@@ -122,11 +122,12 @@ def main():
         raise SystemExit("응답에 시간 데이터가 없습니다.")
     sel = [i for i, t in enumerate(all_times) if _hour_of(t) % STEP_HOURS == 0]
 
-    # 모델 예보 한계를 넘는 꼬리 시각을 잘라낸다. Open-Meteo는 forecast_days로
-    # 요청한 범위를 다 돌려주되, 모델이 실제로 예보하지 않는 시각(대개 마지막
-    # 하루)은 null로 준다. 그대로 두면 우리가 0으로 저장 → 지도에 '무풍(전부
-    # 보라색) = 데이터 없는 날짜'로 뜬다. 어떤 지점이라도 값이 있는 마지막
-    # 스텝까지만 남긴다.
+    # 요청한 기간(forecast_days) 전체를 스텝으로 남긴다 — 최신·최장 실데이터를
+    # 우선한다(자르지 않음). 다만 모델(ecmwf_ifs025)이 실제로 예보하지 않는
+    # 시각(대개 마지막 하루)은 Open-Meteo가 null을 주는데, 그대로 두면 우리가
+    # 0으로 저장해 '무풍(전부 보라색)'과 '데이터 없음'이 구분이 안 된다.
+    # 그래서 스텝별로 "어떤 지점이라도 값이 있었는지"를 valid 배열에 남겨
+    # 앱이 데이터 없는 스텝을 회색으로 구분해 그릴 수 있게 한다.
     def _step_has_data(hi):
         for r in results:
             sp = (r.get("hourly") or {}).get("wind_speed_10m") or []
@@ -134,12 +135,12 @@ def main():
                 return True
         return False
 
-    while len(sel) > 1 and not _step_has_data(sel[-1]):
-        sel.pop()
     steps = len(sel)
     start_time = all_times[sel[0]]
+    valid = [1 if _step_has_data(hi) else 0 for hi in sel]
+    n_invalid = valid.count(0)
     print(
-        f"실데이터 마지막 시각: {all_times[sel[-1]]} ({steps}스텝)",
+        f"총 {steps}스텝, 실데이터 없는 꼬리 스텝 {n_invalid}개(회색 처리용 표시만, 삭제 안 함)",
         flush=True,
     )
 
@@ -172,6 +173,9 @@ def main():
         "start": start_time,
         "stepHours": STEP_HOURS,
         "steps": steps,
+        # 스텝별로 모델의 실제 예보 범위 안인지(1) 아닌지(0). 없으면(예전
+        # 포맷) 앱이 전부 유효한 것으로 취급한다.
+        "valid": valid,
         "u": base64.b64encode(bytes(u16)).decode(),
         "v": base64.b64encode(bytes(v16)).decode(),
     }
