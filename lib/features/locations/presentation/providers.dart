@@ -11,6 +11,11 @@ import '../data/sample_locations.dart';
 /// 전체 지점 목록. 추후 원격 목록/검색으로 대체.
 final locationsProvider = Provider<List<SeaLocation>>((ref) => sampleLocations);
 
+/// 저장된 선택이 없을 때(초기화 직후·첫 실행)의 기본 지점 — 무창포항.
+/// 목록에서 빠지는 경우를 대비해 없으면 첫 항목으로 대체한다.
+SeaLocation _defaultLocation(List<SeaLocation> all) =>
+    all.firstWhere((l) => l.id == 'muchangpo', orElse: () => all.first);
+
 /// 지오코딩(지명 검색) 리포지토리.
 final geocodingRepositoryProvider = Provider<GeocodingRepository>(
   (ref) => GeocodingRepository(),
@@ -78,7 +83,10 @@ class SelectedLocationNotifier extends Notifier<SeaLocation> {
     }
     // 구버전 키(id만 저장) 호환.
     final savedId = prefs.getString(_legacyIdKey);
-    return all.firstWhere((l) => l.id == savedId, orElse: () => all.first);
+    return all.firstWhere(
+      (l) => l.id == savedId,
+      orElse: () => _defaultLocation(all),
+    );
   }
 
   void select(SeaLocation location) {
@@ -107,8 +115,9 @@ class WeatherLocationNotifier extends Notifier<SeaLocation> {
       }
     }
     // 공용 지역(홈/물때/Windy)과 완전히 분리한다 — 저장값이 없으면 기본
-    // 지점으로 시작하고, 앱 시작 시 첫 실행이면 현재 위치로 대체된다.
-    return ref.read(locationsProvider).first;
+    // 지점(무창포항)으로 시작하고, 앱 시작 시 첫 실행이면 현재 위치로
+    // 대체된다.
+    return _defaultLocation(ref.read(locationsProvider));
   }
 
   void select(SeaLocation location) {

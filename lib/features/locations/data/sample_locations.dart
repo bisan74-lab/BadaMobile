@@ -163,6 +163,14 @@ const List<SeaLocation> sampleLocations = [
     longitude: 128.088,
   ),
   SeaLocation(
+    id: 'samcheonpo',
+    name: '삼천포항(사천)',
+    region: '남해',
+    latitude: 34.933,
+    longitude: 128.079,
+    rank: 1,
+  ),
+  SeaLocation(
     id: 'tongyeong',
     name: '통영',
     region: '남해',

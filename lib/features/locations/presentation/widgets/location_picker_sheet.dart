@@ -88,10 +88,13 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
     final filtered =
         all
             .where(
+              // 홈/물때/Windy(공용 지역)는 항구·해변 등 바다 지점만 고른다
+              // (내륙 도시는 날씨 탭 검색 전용).
               (l) =>
-                  _query.isEmpty ||
-                  l.name.contains(_query) ||
-                  l.region.contains(_query),
+                  (widget.forWeather || !l.inland) &&
+                  (_query.isEmpty ||
+                      l.name.contains(_query) ||
+                      l.region.contains(_query)),
             )
             .toList()
           ..sort((a, b) {
@@ -113,10 +116,12 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               autofocus: false,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: '동·읍·면·시 검색 (예: 마곡동, 오산 원동, 목포)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: widget.forWeather
+                    ? '동·읍·면·시 검색 (예: 마곡동, 오산 원동, 목포)'
+                    : '항구·해변 검색 (예: 목포, 삼천포항)',
+                border: const OutlineInputBorder(),
               ),
               onChanged: _onQueryChanged,
             ),
@@ -166,7 +171,9 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
                   ),
 
                 // 지명 검색 결과(읍/면/동 등 세분화 — Open-Meteo Geocoding).
-                if (_geoQuery.length >= 2)
+                // 홈/물때/Windy는 항구·해변 목록만 쓰므로(임의 내륙 지명이
+                // 나올 수 있는) 자유 지명 검색은 날씨 탭에서만 보여준다.
+                if (widget.forWeather && _geoQuery.length >= 2)
                   _GeoResults(query: _geoQuery, onPick: _choose),
               ],
             ),
