@@ -1736,6 +1736,7 @@ class _Meteogram extends StatelessWidget {
       '기온 °C',
       '바람 m/s',
       '돌풍 m/s',
+      '파도 m',
       '너울 m',
       '너울2 m',
       '파력 kW/m',
@@ -1832,6 +1833,7 @@ class _MeteogramColumn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final windC = windSpeedColor(hour.windSpeedMs);
     final gustC = windSpeedColor(hour.windGustMs);
+    final waveC = waveHeightColor(hour.waveHeightM);
     final swellC = waveHeightColor(hour.swellHeightM);
     final swell2C = waveHeightColor(hour.swell2HeightM);
     final isNight = hour.time.hour < 6 || hour.time.hour >= 19;
@@ -1963,6 +1965,13 @@ class _MeteogramColumn extends StatelessWidget {
             cell(
               '${hour.windGustMs.round()}',
               bg: gustC.withValues(alpha: 0.65),
+            ),
+            // 파도(유의파고=총 파고). Windy가 대표로 보여주는 값이라 함께
+            // 표시해 비교가 맞게 한다(너울/너울2는 그 성분 분해).
+            arrowCell(
+              hour.waveHeightM.toStringAsFixed(1),
+              hour.waveDirectionDeg,
+              bg: waveC.withValues(alpha: 0.9),
             ),
             arrowCell(
               hour.swellHeightM.toStringAsFixed(1),

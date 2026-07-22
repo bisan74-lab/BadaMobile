@@ -47,13 +47,12 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     // 파고는 두 모델을 함께 받아 병합한다:
     // - ECMWF WAM(Windy와 동일): 약 10일까지. 앞 구간을 Windy와 맞춘다.
     // - NOAA GFS Wave: 16일. WAM이 끝난 뒤(10일 이후) 꼬리를 채운다.
-    // 시각별로 WAM 우선, 없으면 GFS를 쓴다(아래 _mergeWaveModels). WAM은
-    // 2차 너울(secondary_swell)을 지원하지 않으므로 WAM엔 요청하지 않고
-    // GFS 값만 쓴다(GFS 전용 필드).
-    const wamFields =
-        'wave_height,wave_period,wave_direction,'
-        'wind_wave_height,wind_wave_direction,'
-        'swell_wave_height,swell_wave_period,swell_wave_direction';
+    // WAM에는 **총 파고(유의파고) 계열만** 요청한다: Open-Meteo의 ECMWF WAM은
+    // 성분 분해(wind_wave·swell·secondary_swell)를 지원하지 않을 수 있어,
+    // 그 필드까지 요청하면 요청 전체가 오류나 WAM 값(총 파고까지)을 다 잃는다.
+    // 그래서 총 파고만 WAM으로 받아 Windy의 '파도'와 맞추고, 성분(너울 등)은
+    // GFS 값을 쓴다(아래 _mergeWaveModels 병합 대상은 총 파고 3필드).
+    const wamFields = 'wave_height,wave_period,wave_direction';
     final marineWamUri = Uri.https(_marineHost, '/v1/marine', {
       ...common,
       'hourly': wamFields,
@@ -63,6 +62,8 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       ...common,
       'hourly':
           '$wamFields,'
+          'wind_wave_height,wind_wave_direction,'
+          'swell_wave_height,swell_wave_period,swell_wave_direction,'
           'secondary_swell_wave_height,secondary_swell_wave_period,'
           'secondary_swell_wave_direction',
       'models': 'ncep_gfswave025',
