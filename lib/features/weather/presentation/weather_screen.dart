@@ -365,6 +365,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                         location: fp,
                         roseHour: _roseHour,
                         onClose: _closeDetail,
+                        windHorizon: series.hourly.last.time,
                       ),
                     ),
                   ),
@@ -1301,6 +1302,7 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
     required this.location,
     required this.roseHour,
     required this.onClose,
+    required this.windHorizon,
   });
 
   final SeaLocation location;
@@ -1308,6 +1310,14 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
   /// 선택 중인 시각의 해양값을 지도 위 방향 나침반에 전달하는 통로.
   final ValueNotifier<HourlyMarine?> roseHour;
   final VoidCallback onClose;
+
+  /// 지도(바람장) 쪽이 실제로 예보를 가진 마지막 시각. 상세 예보(파고 등)의
+  /// 실제 모델 horizon이 이보다 길어도, 지도에서 이미 "예보 불가"로 끝난
+  /// 날짜를 상세 표에서 하루 더 보여주면(예: 지도는 8/5까지인데 표는 8/6까지)
+  /// 두 화면이 서로 다른 기준일처럼 보여 혼동을 준다. 이 값 이후는 상세
+  /// 표에서도 잘라 지도와 항상 같은 날짜까지만 보이게 한다. null이면(지도
+  /// 데이터가 아직 없으면) 마린 응답 자체의 horizon만 따른다.
+  final DateTime? windHorizon;
 
   @override
   ConsumerState<_PointForecastPanel> createState() =>
@@ -1479,9 +1489,15 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                     );
                   }
                   // 3시간 간격으로 향후 최대 16일(Open-Meteo 예보 상한)을 뽑는다.
+                  // 지도(바람장)가 실제로 예보를 가진 마지막 시각(windHorizon)
+                  // 이후는 상세 표에서도 잘라, 지도·상세 예보가 항상 같은
+                  // 날짜까지만 보이게 한다(마린 API 쪽 모델이 더 길게 나와도).
+                  final horizon = widget.windHorizon;
                   final steps = [
                     for (final h in forecast.hourly)
-                      if (h.time.hour % 3 == 0) h,
+                      if (h.time.hour % 3 == 0 &&
+                          (horizon == null || !h.time.isAfter(horizon)))
+                        h,
                   ].take(16 * 8).toList();
                   if (steps.isEmpty) {
                     return const Padding(
