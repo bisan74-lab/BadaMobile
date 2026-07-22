@@ -318,6 +318,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                     cursorLon: _cursorLon,
                     onPick: _onPick,
                     onOpenDetail: _openDetail,
+                    bottomBarHeight: _bottomBarHeight,
                   ),
                 ),
                 // 상단: 상세 예보 진입 전, 커서 지점의 바람 세기·방향 + 진입 버튼.
@@ -401,6 +402,7 @@ class _WindMapArea extends StatefulWidget {
     required this.cursorLon,
     required this.onPick,
     required this.onOpenDetail,
+    required this.bottomBarHeight,
   });
 
   final WindField field;
@@ -411,6 +413,11 @@ class _WindMapArea extends StatefulWidget {
 
   /// 현재 예보 모드로 켜진 지점(있으면 그 지점에 방향 나침반을 그린다).
   final SeaLocation? forecastPoint;
+
+  /// 하단 바(시간 슬라이더 또는 상세 예보 표)의 현재 높이. 상세 예보를 열 때
+  /// 이 높이만큼 뺀 "실제로 보이는" 영역 가운데에 탭 지점이 오도록 지도를
+  /// 다시 중앙 정렬하는 데 쓴다.
+  final double bottomBarHeight;
 
   /// 방향 나침반에 표시할 현재 선택 시각의 해양값(예보 표와 공유).
   final ValueNotifier<HourlyMarine?> roseHour;
@@ -441,6 +448,11 @@ class _WindMapAreaState extends State<_WindMapArea> {
   // 라벨 후보를 "현재 화면에 보이는 범위"로 좁히는 데 쓰는, 마지막으로
   // rebuild를 트리거한 시점의 이동량(child 좌표계, 즉 mapSize 기준 px).
   Offset _lastLabelTranslation = Offset.zero;
+  // 상세 예보를 열 때 탭 지점을 다시 중앙 정렬하는 데 쓰려고 build()에서
+  // 캐싱해 두는 최근 레이아웃 크기(화면 크기·지도 캔버스 크기는 didUpdateWidget
+  // 시점엔 LayoutBuilder 밖이라 직접 구할 수 없어 이렇게 저장해 둔다).
+  Size? _lastScreen;
+  Size? _lastMapSize;
 
   @override
   void initState() {
@@ -474,6 +486,37 @@ class _WindMapAreaState extends State<_WindMapArea> {
     if (widget.field.time != _heatmapTime) {
       _rebuildHeatmap();
     }
+    // 상세 예보를 새로 열었거나(새 지점 탭 포함) 하단 표 높이가 막
+    // 확정됐으면(패널 종류가 바뀌어 높이가 달라지는 첫 프레임엔 아직 이전
+    // 값이라 한 프레임 늦게 다시 옴), 그 지점이 표를 뺀 화면 가운데에
+    // 오도록 지도를 다시 중앙 정렬한다.
+    final fp = widget.forecastPoint;
+    if (fp != null &&
+        (fp != oldWidget.forecastPoint ||
+            (widget.bottomBarHeight - oldWidget.bottomBarHeight).abs() > 0.5)) {
+      _centerOnPoint(fp.latitude, fp.longitude);
+    }
+  }
+
+  /// (lat, lon)이 하단 바를 뺀 화면 영역 가운데에 오도록 현재 배율은 유지한
+  /// 채 지도를 다시 중앙 정렬한다.
+  void _centerOnPoint(double lat, double lon) {
+    final screen = _lastScreen;
+    final mapSize = _lastMapSize;
+    if (screen == null || mapSize == null) return;
+    final projection = MapProjection(mapViewBounds, mapSize);
+    final s = _scale <= 0 ? 1.0 : _scale;
+    final kx = projection.x(lon);
+    final ky = projection.y(lat);
+    final visibleH = (screen.height - widget.bottomBarHeight).clamp(
+      1.0,
+      screen.height,
+    );
+    final targetCx = screen.width / 2;
+    final targetCy = visibleH / 2;
+    _transformController.value = Matrix4.identity()
+      ..translate(targetCx - s * kx, targetCy - s * ky)
+      ..scale(s);
   }
 
   Future<void> _rebuildHeatmap() async {
@@ -531,6 +574,10 @@ class _WindMapAreaState extends State<_WindMapArea> {
             mapW = mapH * aspect;
           }
           final mapSize = Size(mapW, mapH);
+          // 상세 예보를 열 때(didUpdateWidget, LayoutBuilder 밖) 재중앙정렬에
+          // 쓰려고 최근 레이아웃 크기를 캐싱해 둔다.
+          _lastScreen = screen;
+          _lastMapSize = mapSize;
           // 모든 레이어가 같은 투영(mapSize 기준)을 공유해 서로 어긋나지 않는다.
           final projection = MapProjection(mapViewBounds, mapSize);
           // 현재 화면에 실제로 보이는 위경도 범위(뷰포트). InteractiveViewer의
@@ -680,12 +727,17 @@ class _WindMapAreaState extends State<_WindMapArea> {
                             child: Transform.scale(
                               scale: 1 / _scale,
                               alignment: Alignment.bottomCenter,
-                              child: Icon(
+                              // 예전엔 테마 primary(스킨에 따라 어두운 남색·
+                              // 회색 등)를 써서 지도 색 위에서 잘 안 보였다.
+                              // 스킨과 무관하게 항상 잘 보이도록 흰색+진한
+                              // 이중 그림자로 고정한다.
+                              child: const Icon(
                                 Icons.location_on,
                                 size: 36,
-                                color: Theme.of(context).colorScheme.primary,
-                                shadows: const [
-                                  Shadow(color: Colors.black54, blurRadius: 3),
+                                color: Colors.white,
+                                shadows: [
+                                  Shadow(color: Colors.black, blurRadius: 6),
+                                  Shadow(color: Colors.black87, blurRadius: 2),
                                 ],
                               ),
                             ),
