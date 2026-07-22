@@ -67,6 +67,24 @@ const List<CityLabel> mapCityLabels = [
   (name: '삼척', lat: 37.4497, lon: 129.1655, rank: 3, island: false),
   (name: '양양', lat: 38.0754, lon: 128.6190, rank: 3, island: false),
 
+  // rank 3 — 주요 낚시 항구(서해·남해·동해). 도시 라벨과 별도로, 실제 배가
+  // 드나드는 항구 이름을 확대하면 볼 수 있게 한다.
+  (name: '강릉항', lat: 37.766, lon: 128.951, rank: 3, island: false),
+  (name: '오천항', lat: 36.418, lon: 126.499, rank: 3, island: false),
+  (name: '무창포항', lat: 36.243, lon: 126.522, rank: 3, island: false),
+  (name: '대천항', lat: 36.325, lon: 126.508, rank: 3, island: false),
+  (name: '영목항', lat: 36.418, lon: 126.353, rank: 3, island: false),
+  (name: '군산항', lat: 35.975, lon: 126.563, rank: 3, island: false),
+  (name: '비응항', lat: 35.978, lon: 126.585, rank: 3, island: false),
+  (name: '여수항', lat: 34.747, lon: 127.739, rank: 3, island: false),
+  (name: '국동항', lat: 34.729, lon: 127.712, rank: 3, island: false),
+  (name: '삼천포항', lat: 34.933, lon: 128.079, rank: 3, island: false),
+  (name: '미조항', lat: 34.686, lon: 128.088, rank: 3, island: false),
+  (name: '녹동항', lat: 34.516, lon: 127.130, rank: 3, island: false),
+  (name: '나로도', lat: 34.485, lon: 127.487, rank: 3, island: false),
+  (name: '마산', lat: 35.196, lon: 128.570, rank: 3, island: false),
+  (name: '팽목항', lat: 34.418, lon: 125.964, rank: 3, island: false),
+
   // rank 3 — 바다 위 섬(많이 확대해야 표시).
   (name: '완도', lat: 34.3110, lon: 126.7550, rank: 3, island: true),
   (name: '진도', lat: 34.4867, lon: 126.2634, rank: 3, island: true),
