@@ -44,6 +44,7 @@ const List<CityLabel> mapCityLabels = [
   (name: '통영', lat: 34.8544, lon: 128.4331, rank: 2, island: false),
   (name: '경주', lat: 35.8562, lon: 129.2247, rank: 2, island: false),
   (name: '속초', lat: 38.2070, lon: 128.5918, rank: 2, island: false),
+  (name: '사천진항', lat: 37.836, lon: 128.877, rank: 2, island: false),
 
   // rank 1 — 큰 섬(기본 배율에서도 이름을 보인다).
   (name: '강화도', lat: 37.7469, lon: 126.4880, rank: 1, island: true),
@@ -119,22 +120,16 @@ class MapCityLabelLayer extends StatelessWidget {
   /// 후보가 하나도 안 남아 라벨이 전부 사라지는 문제가 있었다.
   final LatLonBounds visibleBounds;
 
-  /// rank·섬 여부별 시작 임계 배율. 기본 배율에서는 최상위 도시만 보이고,
-  /// 확대할수록 더 많은 지역이 드러난다.
-  static double _rankBase(CityLabel c) {
-    if (c.island) {
-      return switch (c.rank) {
-        1 => 1.0,
-        2 => 1.8,
-        _ => 2.8,
-      };
-    }
-    return switch (c.rank) {
-      1 => 1.0,
-      2 => 2.6,
-      _ => 4.4,
-    };
-  }
+  /// rank별 시작 임계 배율. 기본 배율(진입 시 약 2.1)에서 이미 15개 이상이
+  /// 보이고, 확대할수록 더 많은 지역이 드러나도록 rank2·rank3을 예전보다
+  /// 훨씬 낮췄다(섬·도시 구분 없이 rank로만 결정 — 섬 여부는 마커 모양에만
+  /// 영향). 예전엔 rank2가 2.6부터라 기본 배율(2.1)에서는 rank1(9개)만
+  /// 보여 15개에 못 미쳤다.
+  static double _rankBase(CityLabel c) => switch (c.rank) {
+    1 => 1.0,
+    2 => 1.25,
+    _ => 1.9,
+  };
 
   /// 같은 등급 안에서도 확대에 따라 라벨이 **한꺼번에가 아니라 하나씩** 늘어나게,
   /// 목록 순서(대략 중요도 순)대로 임계 배율을 조금씩 벌린 값(라벨별 캐시).
@@ -149,7 +144,7 @@ class MapCityLabelLayer extends StatelessWidget {
           final key = '${c.island}_${c.rank}';
           final n = seen[key] ?? 0;
           seen[key] = n + 1;
-          return _rankBase(c) + n * 0.12;
+          return _rankBase(c) + n * 0.08;
         }(),
     ];
     _cached = out;
