@@ -1417,6 +1417,15 @@ Color waveHeightColor(double m) {
 Color _readableOn(Color bg) =>
     bg.computeLuminance() > 0.55 ? Colors.black87 : Colors.white;
 
+/// 파고/너울 높이(m) 표시 문자열. 양수인데 소수1자리로 반올림하면 0.0이
+/// 되는 아주 작은 값(예: 0.03m)은 0.1로 올려 보여준다 — 0은 데이터 오류처럼
+/// 보인다는 피드백 반영. 실제 0(성분 없음)만 0.0으로 둔다.
+String _fmtWaveHeightM(double m) {
+  if (m <= 0) return '0.0';
+  final s = m.toStringAsFixed(1);
+  return s == '0.0' ? '0.1' : s;
+}
+
 /// forecast at this point 패널. "이 지점의 예보"를 누르면 바로 뜨는 2주
 /// 시간별 색상 표(윈디식 메테오그램). 상단에 시간 슬라이더를 두어 그래픽을
 /// 강화하고, 표는 하단에 붙여 3시간 간격으로 향후 2주를 가로 스크롤로 본다.
@@ -1966,14 +1975,14 @@ class _MeteogramColumn extends StatelessWidget {
               bg: gustC.withValues(alpha: 0.65),
             ),
             // 파도(유의파고=총 파고). Windy가 대표로 보여주는 값이라 함께
-            // 표시해 비교가 맞게 한다(너울/너울2는 그 성분 분해).
+            // 표시해 비교가 맞게 한다(너울1은 그 성분 분해).
             arrowCell(
-              hour.waveHeightM.toStringAsFixed(1),
+              _fmtWaveHeightM(hour.waveHeightM),
               hour.waveDirectionDeg,
               bg: waveC.withValues(alpha: 0.9),
             ),
             arrowCell(
-              hour.swellHeightM.toStringAsFixed(1),
+              _fmtWaveHeightM(hour.swellHeightM),
               hour.swellDirectionDeg,
               bg: swellC.withValues(alpha: 0.85),
             ),
