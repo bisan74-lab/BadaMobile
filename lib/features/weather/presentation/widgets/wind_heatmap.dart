@@ -213,6 +213,14 @@ const _turbMaxWarpDeg = 0.16;
 // (k=0.18에서 "뚜렷" 14.3% vs Windy 15.1%, "평탄" 58% vs 61%).
 const _speedModAmp = 0.18; // 변조 진폭(풍속의 ±18%)
 const _speedModFreq = 8.0; // 얼룩 크기 감(클수록 잘게, 약 1/8° 스케일)
+// 위 배율(×) 변조만으로는 저풍속(파란) 해역이 절대량으로 거의 안 흔들려
+// (예: 2m/s×18%=0.36m/s) 팔레트 단계 경계를 잘 못 넘어, 초록·강풍대만
+// 얼룩지고 파랑대는 밋밋해 보였다(사용자 피드백: "파란색 디테일 부족").
+// 그래서 풍속 크기와 무관한 절대 변조(±1.0m/s)를 더한다 — 저속에서도
+// 팔레트 단계를 넘나들 만큼은 흔들리면서, 고속에서는 배율 항에 묻힌다.
+// 실측: 저속(0~6m/s) 구간 8px "뚜렷" 비율 12.7%→25.1%로 개선.
+const _speedModAddMs = 1.0;
+const _speedModAddFreq = 6.0;
 
 /// [field]를 풍속 기준 색상 래스터([width]×[height])로 구운 이미지를 만든다.
 /// 매 프레임이 아니라 필드(시간대)가 바뀔 때만 호출해야 한다.
@@ -296,7 +304,14 @@ Uint8List _fillHeatmapPixels(
           lon * _speedModFreq + 113.7,
           lat * _speedModFreq + 113.7,
         );
-        speed = math.max(0.0, speed * (1 + _speedModAmp * m));
+        speed *= 1 + _speedModAmp * m;
+        // 절대 변조(저속대 디테일용) — 별도 주파수/오프셋 노이즈로 배율
+        // 변조와 상관을 끊는다.
+        final mAdd = _turbulence.fbm(
+          lon * _speedModAddFreq + 271.1,
+          lat * _speedModAddFreq + 271.1,
+        );
+        speed = math.max(0.0, speed + _speedModAddMs * mAdd);
         final rgb = windSpeedRgb(speed);
         r = rgb.$1;
         g = rgb.$2;
