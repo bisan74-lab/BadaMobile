@@ -134,4 +134,130 @@ void main() {
       throwsA(isA<http.ClientException>()),
     );
   });
+
+  test('파고는 앞 구간 ECMWF WAM, WAM 예보 한계 뒤는 GFS로 병합한다', () async {
+    // WAM(Windy와 동일)은 앞 240시간(10일)만 값이 있고 그 뒤는 null,
+    // GFS는 16일 전체에 값이 있다. 병합 결과는 앞구간=WAM, 뒷구간=GFS여야.
+    const wamHorizon = 240;
+    final client = MockClient((request) async {
+      final times = List.generate(
+        hours,
+        (i) => DateTime(
+          2026,
+          7,
+          15,
+        ).add(Duration(hours: i)).toIso8601String().substring(0, 16),
+      );
+      if (request.url.host == 'marine-api.open-meteo.com') {
+        final models = request.url.queryParameters['models'];
+        if (models == 'ecmwf_wam025') {
+          return http.Response(
+            jsonEncode({
+              'hourly': {
+                'time': times,
+                'wave_height': [
+                  for (var i = 0; i < hours; i++) i < wamHorizon ? 5.0 : null,
+                ],
+              },
+            }),
+            200,
+          );
+        }
+        if (models == 'ncep_gfswave025') {
+          return http.Response(
+            jsonEncode({
+              'hourly': {'time': times, 'wave_height': List.filled(hours, 9.0)},
+            }),
+            200,
+          );
+        }
+        // 모델 미지정 = 수온 호출.
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              'sea_surface_temperature': List.filled(hours, 20.0),
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'hourly': {
+            'time': times,
+            'wind_speed_10m': List.filled(hours, 3.0),
+            'wind_gusts_10m': List.filled(hours, 6.0),
+            'wind_direction_10m': List.filled(hours, 180.0),
+            'temperature_2m': List.filled(hours, 25.0),
+          },
+        }),
+        200,
+      );
+    });
+
+    final repo = OpenMeteoMarineRepository(client: client);
+    final forecast = await repo.fetchForecast(sampleLocations.first);
+    // 앞 구간(0, 100시간): WAM 5.0.
+    expect(forecast.hourly[0].waveHeightM, 5.0);
+    expect(forecast.hourly[100].waveHeightM, 5.0);
+    // WAM 한계(240) 뒤: GFS 9.0 — 16일 예보가 잘리지 않고 이어진다.
+    expect(forecast.hourly[wamHorizon].waveHeightM, 9.0);
+    expect(forecast.hourly[300].waveHeightM, 9.0);
+    expect(forecast.hourly, hasLength(hours));
+  });
+
+  test('WAM 호출이 실패해도 GFS만으로 정상 동작한다', () async {
+    final client = MockClient((request) async {
+      final times = List.generate(
+        6,
+        (i) => DateTime(
+          2026,
+          7,
+          15,
+        ).add(Duration(hours: i)).toIso8601String().substring(0, 16),
+      );
+      if (request.url.host == 'marine-api.open-meteo.com') {
+        final models = request.url.queryParameters['models'];
+        if (models == 'ecmwf_wam025') {
+          return http.Response('boom', 500); // WAM만 실패.
+        }
+        if (models == 'ncep_gfswave025') {
+          return http.Response(
+            jsonEncode({
+              'hourly': {'time': times, 'wave_height': List.filled(6, 7.0)},
+            }),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              'sea_surface_temperature': List.filled(6, 20.0),
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'hourly': {
+            'time': times,
+            'wind_speed_10m': List.filled(6, 3.0),
+            'wind_gusts_10m': List.filled(6, 6.0),
+            'wind_direction_10m': List.filled(6, 180.0),
+            'temperature_2m': List.filled(6, 25.0),
+          },
+        }),
+        200,
+      );
+    });
+
+    final repo = OpenMeteoMarineRepository(client: client);
+    final forecast = await repo.fetchForecast(sampleLocations.first, hours: 6);
+    // WAM이 죽었으니 전 구간 GFS 값(7.0).
+    expect(forecast.hourly.first.waveHeightM, 7.0);
+    expect(forecast.hourly, hasLength(6));
+  });
 }

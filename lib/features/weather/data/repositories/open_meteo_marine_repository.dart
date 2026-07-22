@@ -8,10 +8,16 @@ import 'marine_weather_repository.dart';
 
 /// Open-Meteo 실데이터 리포지토리.
 ///
-/// 무료 API(키 불필요)를 좌표 기준으로 세 번 호출해 시간축으로 병합한다:
-/// - Marine API(파고, `models=ncep_gfswave025`): 파고·파주기·파향·너울 (16일)
+/// 무료 API(키 불필요)를 좌표 기준으로 네 번 호출해 시간축으로 병합한다:
+/// - Marine API(파고, `models=ecmwf_wam025`): Windy와 같은 ECMWF WAM 파고
+///   (약 10일까지) — 앞 구간은 이 값으로 Windy와 맞춘다.
+/// - Marine API(파고, `models=ncep_gfswave025`): NOAA GFS Wave 파고(16일) —
+///   ECMWF WAM 예보가 끝나는 10일 이후 꼬리 구간을 이 값으로 채운다.
 /// - Marine API(수온, 기본 모델): sea_surface_temperature만 별도 호출
-/// - Forecast API: 풍속·돌풍·풍향·기온 (최대 16일)
+/// - Forecast API(`models=ecmwf_ifs025`): 풍속·돌풍·풍향·기온 (최대 16일)
+///
+/// 파고 필드는 시각별로 **ECMWF WAM 우선, 없으면 GFS Wave**로 병합한다
+/// (사용자 요구: 10일까진 Windy와 값 맞추고, 그 뒤는 기존 16일 예보 유지).
 ///
 /// https://open-meteo.com/en/docs/marine-weather-api
 class OpenMeteoMarineRepository implements MarineWeatherRepository {
@@ -38,19 +44,25 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       if (pastDays > 0) 'past_days': pastDays.clamp(0, 92).toString(),
     };
 
-    // 파고(wave)와 수온(SST)을 **따로** 요청한다. 기본(best_match/
-    // ecmwf_wam025)은 파고 예보가 10일뿐이라 forecast_days 16을 줘도 뒤쪽은
-    // null로 잘린다(그래서 8/6 무렵부터 표에서 파고가 사라졌다). 16일을
-    // 지원하는 ncep_gfswave025(NOAA GFS Wave)로 바람 예보(16일)와 기간을
-    // 맞춘다. 다만 이 모델이 sea_surface_temperature까지 지원하는지는
-    // 불확실해, 그 필드는 안전하게 기본 모델로 **별도 호출**한다(한쪽이
-    // 실패해도 다른 쪽엔 영향 없게).
-    final marineWaveUri = Uri.https(_marineHost, '/v1/marine', {
+    // 파고는 두 모델을 함께 받아 병합한다:
+    // - ECMWF WAM(Windy와 동일): 약 10일까지. 앞 구간을 Windy와 맞춘다.
+    // - NOAA GFS Wave: 16일. WAM이 끝난 뒤(10일 이후) 꼬리를 채운다.
+    // 시각별로 WAM 우선, 없으면 GFS를 쓴다(아래 _mergeWaveModels). WAM은
+    // 2차 너울(secondary_swell)을 지원하지 않으므로 WAM엔 요청하지 않고
+    // GFS 값만 쓴다(GFS 전용 필드).
+    const wamFields =
+        'wave_height,wave_period,wave_direction,'
+        'wind_wave_height,wind_wave_direction,'
+        'swell_wave_height,swell_wave_period,swell_wave_direction';
+    final marineWamUri = Uri.https(_marineHost, '/v1/marine', {
+      ...common,
+      'hourly': wamFields,
+      'models': 'ecmwf_wam025',
+    });
+    final marineGfsUri = Uri.https(_marineHost, '/v1/marine', {
       ...common,
       'hourly':
-          'wave_height,wave_period,wave_direction,'
-          'wind_wave_height,wind_wave_direction,'
-          'swell_wave_height,swell_wave_period,swell_wave_direction,'
+          '$wamFields,'
           'secondary_swell_wave_height,secondary_swell_wave_period,'
           'secondary_swell_wave_direction',
       'models': 'ncep_gfswave025',
@@ -75,15 +87,18 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     });
 
     final responses = await Future.wait([
-      _client.get(marineWaveUri),
+      _client.get(marineGfsUri),
+      _client.get(marineWamUri),
       _client.get(marineSstUri),
       _client.get(forecastUri),
     ]);
-    final marineWave = _hourlyJson(responses[0], marineWaveUri);
-    final marineSst = _hourlyJson(responses[1], marineSstUri);
-    final forecast = _hourlyJson(responses[2], forecastUri);
+    final marineGfs = _hourlyJson(responses[0], marineGfsUri);
+    // WAM은 부가 소스라 실패해도 전체를 막지 않는다(그러면 GFS만으로 동작).
+    final marineWam = _hourlyJsonOrEmpty(responses[1]);
+    final marineSst = _hourlyJson(responses[2], marineSstUri);
+    final forecast = _hourlyJson(responses[3], forecastUri);
     final marine = {
-      ...marineWave,
+      ..._mergeWaveModels(marineGfs, marineWam, wamFields.split(',')),
       'sea_surface_temperature': marineSst['sea_surface_temperature'],
     };
 
@@ -108,6 +123,53 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     }
     return hourly;
   }
+
+  /// 실패(오류 응답·잘못된 형식)해도 예외를 던지지 않고 빈 맵을 돌려준다 —
+  /// 부가 소스(ECMWF WAM)가 죽어도 필수 소스(GFS)만으로 계속 동작하게.
+  Map<String, dynamic> _hourlyJsonOrEmpty(http.Response res) {
+    try {
+      if (res.statusCode != 200) return const {};
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final hourly = body['hourly'];
+      return hourly is Map<String, dynamic> ? hourly : const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+}
+
+/// 파고 두 모델(우선 [primary]=ECMWF WAM, 대체 [secondary]=GFS Wave)을 시각별로
+/// 병합한다. [keys] 각 필드에 대해, 같은 시각의 WAM 값이 있으면 그걸, 없으면
+/// (WAM 예보 한계 밖·필드 미지원 등) GFS 값을 쓴다. 반환 맵은 [secondary]의
+/// 시간축(GFS, 16일 전체)을 기준으로 삼고 GFS 전용 필드(2차 너울 등)도 그대로
+/// 담는다. 두 모델은 같은 좌표·timezone·forecast_days로 요청하지만, 안전하게
+/// 인덱스가 아니라 시각 문자열로 맞춘다.
+Map<String, dynamic> _mergeWaveModels(
+  Map<String, dynamic> secondary,
+  Map<String, dynamic> primary,
+  List<String> keys,
+) {
+  final baseTimes = (secondary['time'] as List?) ?? const [];
+  final primTimes = (primary['time'] as List?) ?? const [];
+  final primIndex = {
+    for (var i = 0; i < primTimes.length; i++) primTimes[i]: i,
+  };
+
+  final out = Map<String, dynamic>.from(secondary);
+  for (final key in keys) {
+    final primVals = (primary[key] as List?) ?? const [];
+    if (primVals.isEmpty) continue; // WAM이 이 필드를 안 주면 GFS 그대로.
+    final baseVals = (secondary[key] as List?) ?? const [];
+    out[key] = [
+      for (var i = 0; i < baseTimes.length; i++)
+        () {
+          final pi = primIndex[baseTimes[i]];
+          final pv = (pi != null && pi < primVals.length) ? primVals[pi] : null;
+          return pv ?? (i < baseVals.length ? baseVals[i] : null);
+        }(),
+    ];
+  }
+  return out;
 }
 
 /// Marine/Forecast 두 응답의 `hourly` 블록을 시간축 기준으로 병합한다.
