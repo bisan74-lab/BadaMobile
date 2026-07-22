@@ -445,6 +445,15 @@ class _WindMapAreaState extends State<_WindMapArea> {
   // 이전과 비슷한 크기로 보이게 한다.
   double _scale = 2.1;
   bool _didInitTransform = false;
+
+  /// "남한 중앙" 기준점(대전 인근) — 진입 시, 그리고 상세 예보를 닫아
+  /// 지도 모드로 돌아올 때 항상 이 위경도가 화면 정가운데에 오게 한다.
+  /// 상세 예보 중엔 탭한 지점이 중앙에 오도록 [_centerOnPoint]가 대신
+  /// 화면을 옮기므로(하단 표 높이만큼 세로 중심도 달라짐), 표를 닫으면
+  /// 이 기본 위치로 되돌려야 다음에 지도만 볼 때도 항상 남한이 가운데다.
+  static const _defaultCenterLon = 127.8;
+  static const _defaultCenterLat = 36.3;
+  static const _defaultScale = 2.1;
   // 라벨 후보를 "현재 화면에 보이는 범위"로 좁히는 데 쓰는, 마지막으로
   // rebuild를 트리거한 시점의 이동량(child 좌표계, 즉 mapSize 기준 px).
   Offset _lastLabelTranslation = Offset.zero;
@@ -495,7 +504,28 @@ class _WindMapAreaState extends State<_WindMapArea> {
         (fp != oldWidget.forecastPoint ||
             (widget.bottomBarHeight - oldWidget.bottomBarHeight).abs() > 0.5)) {
       _centerOnPoint(fp.latitude, fp.longitude);
+    } else if (fp == null && oldWidget.forecastPoint != null) {
+      // 상세 예보를 닫아 지도 모드로 돌아왔다 — 탭한 지점 중심으로 옮겨져
+      // 있던 화면을 남한 중앙 기본 위치로 되돌린다.
+      _resetToDefaultCenter();
     }
+  }
+
+  /// 진입 시, 그리고 상세 예보를 닫을 때 남한 중앙을 화면 가운데 두고
+  /// 기본 배율로 되돌린다.
+  void _resetToDefaultCenter() {
+    final screen = _lastScreen;
+    final mapSize = _lastMapSize;
+    if (screen == null || mapSize == null) return;
+    final projection = MapProjection(mapViewBounds, mapSize);
+    final kx = projection.x(_defaultCenterLon);
+    final ky = projection.y(_defaultCenterLat);
+    _transformController.value = Matrix4.identity()
+      ..translate(
+        screen.width / 2 - _defaultScale * kx,
+        screen.height / 2 - _defaultScale * ky,
+      )
+      ..scale(_defaultScale);
   }
 
   /// (lat, lon)이 하단 바를 뺀 화면 영역 가운데에 오도록 현재 배율은 유지한
@@ -622,20 +652,12 @@ class _WindMapAreaState extends State<_WindMapArea> {
               maxLon: field.maxLon,
             ),
           );
-          // 진입 시 남한을 화면 중앙에 두고 1.5배 확대해서 시작한다.
+          // 진입 시 남한을 화면 중앙에 두고 기본 배율로 시작한다.
           if (!_didInitTransform) {
             _didInitTransform = true;
-            final kx = projection.x(127.8); // 남한 중앙 경도
-            final ky = projection.y(36.3); // 남한 중앙 위도
-            const s = 2.1;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-              _transformController.value = Matrix4.identity()
-                ..translate(
-                  screen.width / 2 - s * kx,
-                  screen.height / 2 - s * ky,
-                )
-                ..scale(s);
+              _resetToDefaultCenter();
             });
           }
           return InteractiveViewer(

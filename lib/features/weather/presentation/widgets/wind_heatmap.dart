@@ -151,6 +151,57 @@ Color windSpeedColor(double speedMs) {
   return Color.fromARGB(255, r, g, b);
 }
 
+/// 고정 시드 값 노이즈(fractal Brownian motion). Windy 특유의 잘게
+/// 소용돌이치는 텍스처는 실제 모델 격자로는 다 담기 힘든 중규모 난류
+/// (mesoscale turbulence)까지 시각적으로 표현한 것에 가깝다. 실제 바람장
+/// 값은 바꾸지 않고, 색을 뽑을 좌표만 풍속에 비례해 이 노이즈로 살짝
+/// 뒤트는(domain warp) 방식으로 같은 효과를 낸다. 시드가 고정이라 같은
+/// 위치는 항상 같은 방식으로 뒤틀려 시간이 지나도 지글거리지 않는다.
+class _TurbulenceNoise {
+  const _TurbulenceNoise(this.seed);
+  final int seed;
+
+  double _hash(int x, int y) {
+    var h = x * 374761393 + y * 668265263 + seed * 2654435761;
+    h = (h ^ (h >> 13)) * 1274126177;
+    h = h ^ (h >> 16);
+    return ((h & 0x7fffffff) / 0x7fffffff) * 2 - 1;
+  }
+
+  double _smooth(double t) => t * t * (3 - 2 * t);
+
+  double _valueNoise(double x, double y) {
+    final xi = x.floor(), yi = y.floor();
+    final xf = x - xi, yf = y - yi;
+    final n00 = _hash(xi, yi);
+    final n10 = _hash(xi + 1, yi);
+    final n01 = _hash(xi, yi + 1);
+    final n11 = _hash(xi + 1, yi + 1);
+    final u = _smooth(xf), v = _smooth(yf);
+    double lerp(double a, double b, double t) => a + (b - a) * t;
+    return lerp(lerp(n00, n10, u), lerp(n01, n11, u), v);
+  }
+
+  /// 옥타브를 겹쳐(fbm) 크고 작은 소용돌이가 함께 섞이게 한다.
+  double fbm(double x, double y) {
+    var sum = 0.0, amp = 0.6, freq = 1.0;
+    for (var i = 0; i < 3; i++) {
+      sum += amp * _valueNoise(x * freq, y * freq);
+      freq *= 2.15;
+      amp *= 0.55;
+    }
+    return sum;
+  }
+}
+
+const _turbulence = _TurbulenceNoise(20260722);
+// 노이즈 한 주기가 대략 이 경도/위도(°)가 되게 하는 주파수(중규모 소용돌이
+// 크기 감). 값이 클수록 더 잘게 소용돌이친다.
+const _turbNoiseFreq = 2.6;
+// 최대 뒤틀림 거리(°) — 풍속이 빠를수록(난류가 강할수록) 이 값에 가까워지고,
+// 약풍·무풍 지역은 거의 뒤틀리지 않아 매끈하게 남는다.
+const _turbMaxWarpDeg = 0.16;
+
 /// [field]를 풍속 기준 색상 래스터([width]×[height])로 구운 이미지를 만든다.
 /// 매 프레임이 아니라 필드(시간대)가 바뀔 때만 호출해야 한다.
 /// 해상도는 격자(약 1.4° 간격)를 부드럽게 보간해 색 경계가 세밀하게 보이는
@@ -159,8 +210,9 @@ Future<ui.Image> buildWindHeatmapImage(
   WindField field, {
   // 더 깊은 확대(maxScale)에서도 히트맵이 과하게 블록지지 않도록 래스터를
   // 조금 키운다. 격자(64×66)보다 훨씬 촘촘해 격자 디테일은 그대로 담는다.
-  int width = 300,
-  int height = 288,
+  // 난류 텍스처(도메인 워프)가 보일 자리를 주려고 이전(300×288)보다 키웠다.
+  int width = 420,
+  int height = 404,
 }) {
   final buffer = Uint8List(width * height * 4);
   var idx = 0;
@@ -170,9 +222,23 @@ Future<ui.Image> buildWindHeatmapImage(
     for (var x = 0; x < width; x++) {
       final tx = width == 1 ? 0.0 : x / (width - 1);
       final lon = field.minLon + tx * (field.maxLon - field.minLon);
-      final uv = field.sample(lat, lon);
+      final uv0 = field.sample(lat, lon);
       var r = 0, g = 0, b = 0, a = 0;
-      if (uv != null) {
+      if (uv0 != null) {
+        final (u0, v0) = uv0;
+        final speed0 = math.sqrt(u0 * u0 + v0 * v0);
+        // 풍속이 빠를수록 뒤틀림을 키운다(0 m/s→0, 8 m/s 근방부터 최대치에
+        // 가까워짐) — 실제 난류가 강한 곳일수록 더 세밀하게 흔들리게 한다.
+        final warpAmp =
+            _turbMaxWarpDeg * (speed0 / (speed0 + 8)).clamp(0.0, 1.0);
+        final nx = _turbulence.fbm(lon * _turbNoiseFreq, lat * _turbNoiseFreq);
+        final ny = _turbulence.fbm(
+          lon * _turbNoiseFreq + 57.3,
+          lat * _turbNoiseFreq + 57.3,
+        );
+        final wLat = lat + ny * warpAmp;
+        final wLon = lon + nx * warpAmp;
+        final uv = field.sample(wLat, wLon) ?? uv0;
         final (u, v) = uv;
         final speed = math.sqrt(u * u + v * v);
         final rgb = windSpeedRgb(speed);
