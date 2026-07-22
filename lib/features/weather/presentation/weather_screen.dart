@@ -1737,8 +1737,8 @@ class _Meteogram extends StatelessWidget {
       '바람 m/s',
       '돌풍 m/s',
       '파도 m',
-      '너울 m',
-      '너울2 m',
+      '너울1 m',
+      '너울주기 s',
       '파력 kW/m',
       '수온 °C',
     ];
@@ -1835,7 +1835,6 @@ class _MeteogramColumn extends StatelessWidget {
     final gustC = windSpeedColor(hour.windGustMs);
     final waveC = waveHeightColor(hour.waveHeightM);
     final swellC = waveHeightColor(hour.swellHeightM);
-    final swell2C = waveHeightColor(hour.swell2HeightM);
     final isNight = hour.time.hour < 6 || hour.time.hour >= 19;
 
     Widget cell(
@@ -1978,10 +1977,11 @@ class _MeteogramColumn extends StatelessWidget {
               hour.swellDirectionDeg,
               bg: swellC.withValues(alpha: 0.85),
             ),
-            arrowCell(
-              hour.swell2HeightM.toStringAsFixed(1),
-              hour.swell2DirectionDeg,
-              bg: swell2C.withValues(alpha: 0.7),
+            // 너울 주기(s). 성분(너울)의 주기라 방향 화살표 없이 숫자만.
+            cell(
+              hour.swellPeriodS > 0
+                  ? hour.swellPeriodS.toStringAsFixed(1)
+                  : '-',
             ),
             cell(formatWavePower(hour.wavePowerKw)),
             cell('${hour.waterTempC.round()}'),

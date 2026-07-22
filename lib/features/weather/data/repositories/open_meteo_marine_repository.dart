@@ -44,26 +44,33 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       if (pastDays > 0) 'past_days': pastDays.clamp(0, 92).toString(),
     };
 
-    // 파고는 두 모델을 함께 받아 병합한다:
-    // - ECMWF WAM(Windy와 동일): 약 10일까지. 앞 구간을 Windy와 맞춘다.
-    // - NOAA GFS Wave: 16일. WAM이 끝난 뒤(10일 이후) 꼬리를 채운다.
-    // WAM에는 **총 파고(유의파고) 계열만** 요청한다: Open-Meteo의 ECMWF WAM은
-    // 성분 분해(wind_wave·swell·secondary_swell)를 지원하지 않을 수 있어,
-    // 그 필드까지 요청하면 요청 전체가 오류나 WAM 값(총 파고까지)을 다 잃는다.
-    // 그래서 총 파고만 WAM으로 받아 Windy의 '파도'와 맞추고, 성분(너울 등)은
-    // GFS 값을 쓴다(아래 _mergeWaveModels 병합 대상은 총 파고 3필드).
-    const wamFields = 'wave_height,wave_period,wave_direction';
-    final marineWamUri = Uri.https(_marineHost, '/v1/marine', {
+    // 파고는 Windy와 같은 ECMWF WAM을 우선 쓰고, WAM 예보 한계(약 10일) 뒤는
+    // 16일까지 있는 NOAA GFS Wave로 채운다. WAM 요청은 **두 개로 쪼갠다**:
+    // - 총 파고(유의파고): wave_height/period/direction — 거의 확실히 지원.
+    //   Windy의 '파도'와 맞추는 핵심.
+    // - 너울 성분: swell_wave_height/period/direction — Open-Meteo의 ECMWF WAM이
+    //   지원하면 Windy의 '너울1/주기'와도 맞고, 지원 안 하면(400) 조용히
+    //   GFS 너울로 폴백한다(부가 소스).
+    // 한 요청에 묶으면 한 필드라도 미지원 시 요청 전체가 실패해 총 파고까지
+    // 잃으므로 분리한다. wind_wave·2차 너울은 GFS 전용으로 둔다.
+    const wamTotalFields = 'wave_height,wave_period,wave_direction';
+    const wamSwellFields =
+        'swell_wave_height,swell_wave_period,swell_wave_direction';
+    final marineWamTotalUri = Uri.https(_marineHost, '/v1/marine', {
       ...common,
-      'hourly': wamFields,
+      'hourly': wamTotalFields,
+      'models': 'ecmwf_wam025',
+    });
+    final marineWamSwellUri = Uri.https(_marineHost, '/v1/marine', {
+      ...common,
+      'hourly': wamSwellFields,
       'models': 'ecmwf_wam025',
     });
     final marineGfsUri = Uri.https(_marineHost, '/v1/marine', {
       ...common,
       'hourly':
-          '$wamFields,'
+          '$wamTotalFields,$wamSwellFields,'
           'wind_wave_height,wind_wave_direction,'
-          'swell_wave_height,swell_wave_period,swell_wave_direction,'
           'secondary_swell_wave_height,secondary_swell_wave_period,'
           'secondary_swell_wave_direction',
       'models': 'ncep_gfswave025',
@@ -89,17 +96,30 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
 
     final responses = await Future.wait([
       _client.get(marineGfsUri),
-      _client.get(marineWamUri),
+      _client.get(marineWamTotalUri),
+      _client.get(marineWamSwellUri),
       _client.get(marineSstUri),
       _client.get(forecastUri),
     ]);
     final marineGfs = _hourlyJson(responses[0], marineGfsUri);
     // WAM은 부가 소스라 실패해도 전체를 막지 않는다(그러면 GFS만으로 동작).
-    final marineWam = _hourlyJsonOrEmpty(responses[1]);
-    final marineSst = _hourlyJson(responses[2], marineSstUri);
-    final forecast = _hourlyJson(responses[3], forecastUri);
+    final marineWamTotal = _hourlyJsonOrEmpty(responses[1]);
+    final marineWamSwell = _hourlyJsonOrEmpty(responses[2]);
+    final marineSst = _hourlyJson(responses[3], marineSstUri);
+    final forecast = _hourlyJson(responses[4], forecastUri);
+    // GFS를 바탕으로 WAM 총 파고 → WAM 너울을 차례로 덮는다(둘 다 없으면 GFS).
+    var mergedWave = _mergeWaveModels(
+      marineGfs,
+      marineWamTotal,
+      wamTotalFields.split(','),
+    );
+    mergedWave = _mergeWaveModels(
+      mergedWave,
+      marineWamSwell,
+      wamSwellFields.split(','),
+    );
     final marine = {
-      ..._mergeWaveModels(marineGfs, marineWam, wamFields.split(',')),
+      ...mergedWave,
       'sea_surface_temperature': marineSst['sea_surface_temperature'],
     };
 
