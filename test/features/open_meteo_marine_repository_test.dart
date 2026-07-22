@@ -42,6 +42,9 @@ void main() {
       }
       expect(request.url.host, 'api.open-meteo.com');
       expect(request.url.queryParameters['wind_speed_unit'], 'ms');
+      // 바람은 지도 바람장·Windy와 같은 ECMWF IFS로 고정한다(best_match면
+      // 연안 지역모델이 선택돼 지속풍이 낮게 나와 표·지도·Windy가 어긋난다).
+      expect(request.url.queryParameters['models'], 'ecmwf_ifs025');
       return http.Response(
         jsonEncode({
           'hourly': _hourlyBlock([

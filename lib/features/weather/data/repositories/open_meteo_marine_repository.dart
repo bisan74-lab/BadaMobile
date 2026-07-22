@@ -59,12 +59,19 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       ...common,
       'hourly': 'sea_surface_temperature',
     });
+    // 바람은 지도 바람장(OpenMeteoWindFieldRepository·fetch_wind.py)과 **같은
+    // 모델(ecmwf_ifs025)**로 고정한다. 모델을 안 주면 best_match가 되는데,
+    // 다도해 같은 연안점에선 고해상도 지역모델을 골라 국지 차폐로 지속풍이
+    // 낮게(예: 2~3m/s) 나오는 반면 돌풍은 비슷해, Windy(ECMWF) 및 우리 지도
+    // 커서값과 표의 '바람' 수치가 어긋났다(사용자 지적). ECMWF로 맞추면
+    // Windy와도, 우리 지도와도 일관된다.
     final forecastUri = Uri.https(_forecastHost, '/v1/forecast', {
       ...common,
       'hourly':
           'wind_speed_10m,wind_gusts_10m,wind_direction_10m,'
           'temperature_2m,weather_code',
       'wind_speed_unit': 'ms',
+      'models': 'ecmwf_ifs025',
     });
 
     final responses = await Future.wait([
