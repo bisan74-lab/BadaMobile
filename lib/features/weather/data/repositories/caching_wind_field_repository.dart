@@ -80,10 +80,17 @@ class CachingWindFieldRepository implements WindFieldRepository {
         v[h * pts + k] = (fv[k] * 100).clamp(-32000.0, 32000.0).round();
       }
     }
+    // 스텝 간격(시간)도 저장한다 — 서버 파일은 3시간 간격이라, 이걸 안 쓰고
+    // 복원 시 1시간 간격으로 가정하면(예전 버그) 15일치 시계열이 5일로
+    // 압축돼 지도 스크러버가 실제보다 훨씬 일찍 끝나 보인다.
+    final stepHours = n > 1
+        ? series.hourly[1].time.difference(f0.time).inHours
+        : 1;
     await cache.writeJson(_key, {
       'fetchedAt': nowKst().toIso8601String(),
       'start': f0.time.toIso8601String(),
       'hours': n,
+      'stepHours': stepHours <= 0 ? 1 : stepHours,
       'minLat': f0.minLat,
       'maxLat': f0.maxLat,
       'minLon': f0.minLon,
@@ -101,9 +108,16 @@ class CachingWindFieldRepository implements WindFieldRepository {
     try {
       // 격자 구성은 데이터마다 다를 수 있다(서버 파일 vs 직접 호출). 크기를
       // 강제하지 않고, 배열 길이가 스텝×격자와 맞는지로만 무결성을 검증한다.
+      // stepHours가 없는 캐시는 이 필드를 추가하기 전(버그 있던 버전)에 쓰인
+      // 것이다. 1로 기본값을 주면 3시간 간격 데이터를 1시간 간격으로 잘못
+      // 복원하는 예전 버그가 새 코드에서도 재현된다(수정한 빌드를 설치해도
+      // 기존 캐시가 3시간 안(freshFor)엔 계속 쓰여 바로 고쳐지지 않음).
+      // 그래서 이런 캐시는 아예 "없는 것"으로 취급해 즉시 재요청하게 한다.
+      if (json['stepHours'] == null) return null;
       final fetchedAt = DateTime.parse(json['fetchedAt'] as String);
       final start = DateTime.parse(json['start'] as String);
       final n = json['hours'] as int;
+      final stepHours = json['stepHours'] as int;
       final latSteps = json['latSteps'] as int;
       final lonSteps = json['lonSteps'] as int;
       final minLat = (json['minLat'] as num).toDouble();
@@ -126,7 +140,7 @@ class CachingWindFieldRepository implements WindFieldRepository {
         hourly: [
           for (var h = 0; h < n; h++)
             WindField(
-              time: start.add(Duration(hours: h)),
+              time: start.add(Duration(hours: h * stepHours)),
               minLat: minLat,
               maxLat: maxLat,
               minLon: minLon,

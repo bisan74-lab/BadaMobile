@@ -103,6 +103,7 @@ class MapCityLabelLayer extends StatelessWidget {
     super.key,
     required this.projection,
     required this.scale,
+    required this.visibleBounds,
   });
 
   final MapProjection projection;
@@ -110,6 +111,13 @@ class MapCityLabelLayer extends StatelessWidget {
   /// 지도의 현재 확대 배율(`InteractiveViewer`). 라벨은 지도와 함께
   /// 확대되지 않고 항상 같은 화면 크기로 보이도록 반대로 축소해 그린다.
   final double scale;
+
+  /// 현재 화면에 실제로 보이는 위경도 범위(전체 지도 bbox가 아니라 뷰포트).
+  /// 라벨 표시 개수 제한([_maxVisible])이 이 범위 안의 후보끼리만 경쟁하게
+  /// 한다 — 안 그러면(예전처럼 전체 지도 bbox로 필터링하면) 깊이 확대했을 때
+  /// 서울·부산 같은 원거리 상위 랭크 도시가 예산을 다 차지해, 정작 화면에는
+  /// 후보가 하나도 안 남아 라벨이 전부 사라지는 문제가 있었다.
+  final LatLonBounds visibleBounds;
 
   /// rank·섬 여부별 시작 임계 배율. 기본 배율에서는 최상위 도시만 보이고,
   /// 확대할수록 더 많은 지역이 드러난다.
@@ -157,7 +165,7 @@ class MapCityLabelLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final b = projection.bounds;
+    final b = visibleBounds;
     final th = _thresholds;
 
     // 1) 후보: 임계 배율 통과 + 뷰 범위 안.

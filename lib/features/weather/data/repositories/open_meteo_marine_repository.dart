@@ -8,8 +8,9 @@ import 'marine_weather_repository.dart';
 
 /// Open-Meteo 실데이터 리포지토리.
 ///
-/// 두 개의 무료 API(키 불필요)를 좌표 기준으로 호출해 시간축으로 병합한다:
-/// - Marine API: 파고·파주기·파향·수온 (최대 16일)
+/// 무료 API(키 불필요)를 좌표 기준으로 세 번 호출해 시간축으로 병합한다:
+/// - Marine API(파고, `models=ncep_gfswave025`): 파고·파주기·파향·너울 (16일)
+/// - Marine API(수온, 기본 모델): sea_surface_temperature만 별도 호출
 /// - Forecast API: 풍속·돌풍·풍향·기온 (최대 16일)
 ///
 /// https://open-meteo.com/en/docs/marine-weather-api
@@ -37,14 +38,26 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       if (pastDays > 0) 'past_days': pastDays.clamp(0, 92).toString(),
     };
 
-    final marineUri = Uri.https(_marineHost, '/v1/marine', {
+    // 파고(wave)와 수온(SST)을 **따로** 요청한다. 기본(best_match/
+    // ecmwf_wam025)은 파고 예보가 10일뿐이라 forecast_days 16을 줘도 뒤쪽은
+    // null로 잘린다(그래서 8/6 무렵부터 표에서 파고가 사라졌다). 16일을
+    // 지원하는 ncep_gfswave025(NOAA GFS Wave)로 바람 예보(16일)와 기간을
+    // 맞춘다. 다만 이 모델이 sea_surface_temperature까지 지원하는지는
+    // 불확실해, 그 필드는 안전하게 기본 모델로 **별도 호출**한다(한쪽이
+    // 실패해도 다른 쪽엔 영향 없게).
+    final marineWaveUri = Uri.https(_marineHost, '/v1/marine', {
       ...common,
       'hourly':
-          'wave_height,wave_period,wave_direction,sea_surface_temperature,'
+          'wave_height,wave_period,wave_direction,'
           'wind_wave_height,wind_wave_direction,'
           'swell_wave_height,swell_wave_period,swell_wave_direction,'
           'secondary_swell_wave_height,secondary_swell_wave_period,'
           'secondary_swell_wave_direction',
+      'models': 'ncep_gfswave025',
+    });
+    final marineSstUri = Uri.https(_marineHost, '/v1/marine', {
+      ...common,
+      'hourly': 'sea_surface_temperature',
     });
     final forecastUri = Uri.https(_forecastHost, '/v1/forecast', {
       ...common,
@@ -55,11 +68,17 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     });
 
     final responses = await Future.wait([
-      _client.get(marineUri),
+      _client.get(marineWaveUri),
+      _client.get(marineSstUri),
       _client.get(forecastUri),
     ]);
-    final marine = _hourlyJson(responses[0], marineUri);
-    final forecast = _hourlyJson(responses[1], forecastUri);
+    final marineWave = _hourlyJson(responses[0], marineWaveUri);
+    final marineSst = _hourlyJson(responses[1], marineSstUri);
+    final forecast = _hourlyJson(responses[2], forecastUri);
+    final marine = {
+      ...marineWave,
+      'sea_surface_temperature': marineSst['sea_surface_temperature'],
+    };
 
     return MarineForecast(
       locationId: location.id,

@@ -438,6 +438,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
   // 이전과 비슷한 크기로 보이게 한다.
   double _scale = 2.1;
   bool _didInitTransform = false;
+  // 라벨 후보를 "현재 화면에 보이는 범위"로 좁히는 데 쓰는, 마지막으로
+  // rebuild를 트리거한 시점의 이동량(child 좌표계, 즉 mapSize 기준 px).
+  Offset _lastLabelTranslation = Offset.zero;
 
   @override
   void initState() {
@@ -447,8 +450,20 @@ class _WindMapAreaState extends State<_WindMapArea> {
   }
 
   void _onTransformChanged() {
-    final newScale = _transformController.value.getMaxScaleOnAxis();
-    if ((newScale - _scale).abs() > 0.02) {
+    final m = _transformController.value;
+    final newScale = m.getMaxScaleOnAxis();
+    final t = m.getTranslation();
+    final translation = Offset(t.x, t.y);
+    // 확대뿐 아니라 **이동(팬)도** 일정량 이상이면 다시 그린다 — 안 그러면
+    // 화면에 보이는 지역이 바뀌어도 라벨 후보(뷰포트 기준 필터)가 갱신되지
+    // 않는다. 임계값을 둬 드래그 중 매 프레임 rebuild하지 않게 한다.
+    final scaleChanged = (newScale - _scale).abs() > 0.02;
+    // 팬은 드래그 중 프레임마다 계속 바뀌므로 문턱을 넉넉히 둬(스케일보다
+    // 훨씬 큼) 드래그 내내 매 프레임 rebuild하지 않게 한다 — 라벨 갱신은
+    // 드래그가 어느 정도 진행되거나 멈춘 뒤 반영돼도 충분하다.
+    final panChanged = (translation - _lastLabelTranslation).distance > 120;
+    if (scaleChanged || panChanged) {
+      _lastLabelTranslation = translation;
       setState(() => _scale = newScale);
     }
   }
@@ -518,6 +533,29 @@ class _WindMapAreaState extends State<_WindMapArea> {
           final mapSize = Size(mapW, mapH);
           // 모든 레이어가 같은 투영(mapSize 기준)을 공유해 서로 어긋나지 않는다.
           final projection = MapProjection(mapViewBounds, mapSize);
+          // 현재 화면에 실제로 보이는 위경도 범위(뷰포트). InteractiveViewer의
+          // 변환(이동+배율)을 역산해 화면 네 모서리가 mapSize 좌표계에서
+          // 어디에 해당하는지 구한 뒤 위경도로 바꾼다. 라벨 표시 개수 제한이
+          // 이 범위 "안"에서만 경쟁하게 해, 깊이 확대해도(먼 지역의 높은
+          // 랭크 도시가 예산을 다 써버려 화면엔 아무 라벨도 안 남는 문제 없이)
+          // 화면 안의 지역명이 항상 채워지게 한다.
+          final tm = _transformController.value;
+          final txy = tm.getTranslation();
+          final vs = tm.getMaxScaleOnAxis() <= 0 ? 1.0 : tm.getMaxScaleOnAxis();
+          Offset toChild(Offset screenPt) =>
+              Offset((screenPt.dx - txy.x) / vs, (screenPt.dy - txy.y) / vs);
+          final vTopLeft = toChild(Offset.zero);
+          final vBottomRight = toChild(Offset(screen.width, screen.height));
+          final visibleBounds = LatLonBounds(
+            minLat: projection.latFor(
+              vBottomRight.dy.clamp(0.0, mapSize.height),
+            ),
+            maxLat: projection.latFor(vTopLeft.dy.clamp(0.0, mapSize.height)),
+            minLon: projection.lonFor(vTopLeft.dx.clamp(0.0, mapSize.width)),
+            maxLon: projection.lonFor(
+              vBottomRight.dx.clamp(0.0, mapSize.width),
+            ),
+          );
           final fieldRect = projection.rectFor(
             LatLonBounds(
               minLat: field.minLat,
@@ -611,7 +649,11 @@ class _WindMapAreaState extends State<_WindMapArea> {
                     ),
                     // 지도 앱처럼 도시 이름만 확대 단계별로 표시(항구 점 라벨은
                     // 제거해 깔끔하게). 지역 선택은 우측 상단 지역 선택 버튼으로 한다.
-                    MapCityLabelLayer(projection: projection, scale: _scale),
+                    MapCityLabelLayer(
+                      projection: projection,
+                      scale: _scale,
+                      visibleBounds: visibleBounds,
+                    ),
                     // 예보 표가 열려 있으면 그 지점에 윈디식 방향 나침반(로즈)을,
                     // 아니면 탭한 지점에 "상세 예보" 말풍선을 띄운다.
                     if (widget.forecastPoint case final fp?)

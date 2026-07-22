@@ -99,6 +99,48 @@ void main() {
     expect(inner.calls, 1); // freshFor(기본 3시간) 안이라 재요청 없음
   });
 
+  test('3시간 간격 시계열(서버 파일)의 시각이 캐시 왕복에도 보존된다', () async {
+    // 회귀 테스트: 예전엔 캐시 write에 stepHours를 안 담아, read 시 무조건
+    // 1시간 간격으로 복원해(Duration(hours: h)) 3시간 간격 15일치가 5일로
+    // 압축되던 버그가 있었다(지도 스크러버가 실제보다 훨씬 일찍 끝나 보임).
+    const latSteps = OpenMeteoWindFieldRepository.latSteps;
+    const lonSteps = OpenMeteoWindFieldRepository.lonSteps;
+    const pts = latSteps * lonSteps;
+    final threeHourly = WindFieldSeries(
+      hourly: [
+        for (var h = 0; h < 4; h++)
+          WindField(
+            time: DateTime(2026, 7, 22).add(Duration(hours: h * 3)),
+            minLat: 18,
+            maxLat: 57,
+            minLon: 108,
+            maxLon: 148,
+            latSteps: latSteps,
+            lonSteps: lonSteps,
+            u: [for (var k = 0; k < pts; k++) 1.0],
+            v: [for (var k = 0; k < pts; k++) 0.0],
+          ),
+      ],
+    );
+    final cache = await freshCache();
+    final inner = _FakeInner(threeHourly);
+    final repo = CachingWindFieldRepository(
+      inner: inner,
+      cache: cache,
+      freshFor: const Duration(seconds: -1), // 항상 실요청 → 캐시 write
+    );
+    await repo.fetchSeries(hours: 12);
+    inner.series = null; // 다음 호출은 캐시 폴백을 타게 한다.
+    final fromCache = await repo.fetchSeries(hours: 12);
+
+    expect(fromCache.length, 4);
+    // 3시간 간격이 그대로 복원돼야 한다(1시간 간격으로 잘못 복원되면 실패).
+    expect(
+      fromCache.hourly.last.time.difference(fromCache.hourly.first.time),
+      const Duration(hours: 9),
+    );
+  });
+
   test('캐시도 없이 실패하면 예외를 던진다(상위 합성 폴백으로 넘어감)', () async {
     final cache = await freshCache();
     final inner = _FakeInner(null);
