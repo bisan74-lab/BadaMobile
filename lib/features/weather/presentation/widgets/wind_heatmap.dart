@@ -3,9 +3,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 
 import '../../data/models/wind_field.dart';
+import 'map_projection.dart';
 
 /// Windy.com 기본 바람 레이어 색상 스케일(m/s → RGB).
 ///
@@ -201,27 +203,74 @@ const _turbNoiseFreq = 2.6;
 // 최대 뒤틀림 거리(°) — 풍속이 빠를수록(난류가 강할수록) 이 값에 가까워지고,
 // 약풍·무풍 지역은 거의 뒤틀리지 않아 매끈하게 남는다.
 const _turbMaxWarpDeg = 0.16;
+// **풍속 변조**: 좌표 워프와 별개로, 색을 정할 풍속 자체를 고주파 FBM으로
+// ±(k×풍속)만큼 흔든다. 0.25~0.87° 격자를 bicubic으로 매끈하게 보간한 장에는
+// Windy처럼 1~3m/s짜리 국지 얼룩(중규모 난류)이 원천적으로 없어서, 좌표만
+// 비틀어서는(부드러운 장을 부드럽게 비틀 뿐) 화면 질감이 거의 안 변한다 —
+// 실측으로 확인(8px 색차 "뚜렷" 비율: Windy 15% vs 우리 7%). 풍속에
+// 비례하므로 무풍 해역은 여전히 매끈하다. u/v 원본·지점 예보 수치는 불변.
+// 실측 튜닝: 실배포 데이터 렌더로 8px 색차 분포를 Windy와 맞춘 값
+// (k=0.18에서 "뚜렷" 14.3% vs Windy 15.1%, "평탄" 58% vs 61%).
+const _speedModAmp = 0.18; // 변조 진폭(풍속의 ±18%)
+const _speedModFreq = 8.0; // 얼룩 크기 감(클수록 잘게, 약 1/8° 스케일)
 
 /// [field]를 풍속 기준 색상 래스터([width]×[height])로 구운 이미지를 만든다.
 /// 매 프레임이 아니라 필드(시간대)가 바뀔 때만 호출해야 한다.
-/// 해상도는 격자(약 1.4° 간격)를 부드럽게 보간해 색 경계가 세밀하게 보이는
-/// 정도로 잡는다(픽셀당 약 0.2°).
+/// [crop]을 주면 그 위경도 범위만 굽는다(한반도 핵심영역 고해상도 오버레이용,
+/// null이면 필드 전체 bbox — 기존 호출과 동일). 픽셀 루프는 [compute]
+/// 아이솔레이트에서 돌아 큰 래스터도 UI 프레임을 막지 않는다.
 Future<ui.Image> buildWindHeatmapImage(
   WindField field, {
+  LatLonBounds? crop,
   // 더 깊은 확대(maxScale)에서도 히트맵이 과하게 블록지지 않도록 래스터를
   // 조금 키운다. 격자(64×66)보다 훨씬 촘촘해 격자 디테일은 그대로 담는다.
-  // 난류 텍스처(도메인 워프)가 보일 자리를 주려고 이전(300×288)보다 키웠다.
   int width = 420,
   int height = 404,
-}) {
+}) async {
+  final buffer = await compute(_fillHeatmapPixels, (
+    field: field,
+    minLat: crop?.minLat ?? field.minLat,
+    maxLat: crop?.maxLat ?? field.maxLat,
+    minLon: crop?.minLon ?? field.minLon,
+    maxLon: crop?.maxLon ?? field.maxLon,
+    width: width,
+    height: height,
+  ));
+  final completer = Completer<ui.Image>();
+  ui.decodeImageFromPixels(
+    buffer,
+    width,
+    height,
+    ui.PixelFormat.rgba8888,
+    completer.complete,
+  );
+  return completer.future;
+}
+
+/// 픽셀 채우기(아이솔레이트에서 실행). [WindField]는 프리미티브 리스트로만
+/// 구성돼 isolate 경계를 그대로 넘는다.
+Uint8List _fillHeatmapPixels(
+  ({
+    WindField field,
+    double minLat,
+    double maxLat,
+    double minLon,
+    double maxLon,
+    int width,
+    int height,
+  })
+  args,
+) {
+  final field = args.field;
+  final width = args.width, height = args.height;
   final buffer = Uint8List(width * height * 4);
   var idx = 0;
   for (var y = 0; y < height; y++) {
     final ty = height == 1 ? 0.0 : y / (height - 1);
-    final lat = field.maxLat - ty * (field.maxLat - field.minLat);
+    final lat = args.maxLat - ty * (args.maxLat - args.minLat);
     for (var x = 0; x < width; x++) {
       final tx = width == 1 ? 0.0 : x / (width - 1);
-      final lon = field.minLon + tx * (field.maxLon - field.minLon);
+      final lon = args.minLon + tx * (args.maxLon - args.minLon);
       final uv0 = field.sample(lat, lon);
       var r = 0, g = 0, b = 0, a = 0;
       if (uv0 != null) {
@@ -240,7 +289,14 @@ Future<ui.Image> buildWindHeatmapImage(
         final wLon = lon + nx * warpAmp;
         final uv = field.sample(wLat, wLon) ?? uv0;
         final (u, v) = uv;
-        final speed = math.sqrt(u * u + v * v);
+        var speed = math.sqrt(u * u + v * v);
+        // 풍속 변조(위 상수 주석 참고): 고주파 FBM으로 국지 얼룩을 만든다.
+        // 좌표 워프 노이즈와 시드 좌표를 어긋나게(오프셋) 해 상관을 끊는다.
+        final m = _turbulence.fbm(
+          lon * _speedModFreq + 113.7,
+          lat * _speedModFreq + 113.7,
+        );
+        speed = math.max(0.0, speed * (1 + _speedModAmp * m));
         final rgb = windSpeedRgb(speed);
         r = rgb.$1;
         g = rgb.$2;
@@ -253,45 +309,57 @@ Future<ui.Image> buildWindHeatmapImage(
       buffer[idx++] = a;
     }
   }
-  final completer = Completer<ui.Image>();
-  ui.decodeImageFromPixels(
-    buffer,
-    width,
-    height,
-    ui.PixelFormat.rgba8888,
-    completer.complete,
-  );
-  return completer.future;
+  return buffer;
 }
 
 /// 미리 구운 풍속 색상 래스터를 [dstRect] 영역에 맞춰 확대해 그린다.
 /// [dstRect]는 지도 전체 투영 위에서 바람장 격자가 차지하는 위치다
 /// (지도 뷰가 바람장보다 넓을 수 있어 전체 캔버스를 채우지 않을 수 있다).
+///
+/// [coreImage]가 있으면 그 위에 한반도 핵심영역 고해상도 래스터를
+/// [coreDstRect] 위치에 덧그린다 — 전체 bbox 래스터(420×404)는 남한을
+/// ~63×62px로만 담아 확대 시 뭉개지므로, 사용자가 실제로 보는 핵심영역만
+/// 따로 촘촘하게 구워 그 위에 겹친다(밖으로 팬하면 배경 래스터가 보인다).
 class WindHeatmapPainter extends CustomPainter {
-  WindHeatmapPainter({required this.image, required this.dstRect});
+  WindHeatmapPainter({
+    required this.image,
+    required this.dstRect,
+    this.coreImage,
+    this.coreDstRect,
+  });
 
   final ui.Image image;
   final Rect dstRect;
+  final ui.Image? coreImage;
+  final Rect? coreDstRect;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final src = Rect.fromLTWH(
-      0,
-      0,
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
+    final paint = Paint()..filterQuality = FilterQuality.high;
     canvas.drawImageRect(
       image,
-      src,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       dstRect,
-      Paint()..filterQuality = FilterQuality.high,
+      paint,
     );
+    final core = coreImage;
+    final coreRect = coreDstRect;
+    if (core != null && coreRect != null) {
+      canvas.drawImageRect(
+        core,
+        Rect.fromLTWH(0, 0, core.width.toDouble(), core.height.toDouble()),
+        coreRect,
+        paint,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant WindHeatmapPainter oldDelegate) =>
-      oldDelegate.image != image || oldDelegate.dstRect != dstRect;
+      oldDelegate.image != image ||
+      oldDelegate.dstRect != dstRect ||
+      oldDelegate.coreImage != coreImage ||
+      oldDelegate.coreDstRect != coreDstRect;
 }
 
 /// 지도 아래 붙는 풍속 색상 범례(0~30+ m/s), 윈디 하단 스케일바 스타일.

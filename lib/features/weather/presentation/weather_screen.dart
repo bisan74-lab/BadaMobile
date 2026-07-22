@@ -438,13 +438,40 @@ class _WindMapArea extends StatefulWidget {
 
 class _WindMapAreaState extends State<_WindMapArea> {
   ui.Image? _heatmap;
+
+  /// 한반도 핵심영역([_coreBounds])만 따로 촘촘하게 구운 고해상도 래스터.
+  /// 전체 bbox 래스터는 남한을 ~63×62px로만 담아 확대 시 뭉개지므로, 이
+  /// 오버레이가 실제 보이는 디테일을 책임진다([WindHeatmapPainter]가 배경
+  /// 위에 덧그림).
+  ui.Image? _heatmapCore;
   DateTime? _heatmapTime;
+
+  /// 진행 중인 히트맵 빌드의 최신성 토큰 — 시간 스크럽 등으로 빌드가 겹치면
+  /// 낡은 결과를 버린다(시간 비교만으로는 같은 시각의 재빌드 경쟁을 못 거름).
+  int _heatmapRequestId = 0;
+
+  /// 고해상도 오버레이 범위: 남한 전역 + 서해·남해·동해·대한해협·규슈 연안.
+  /// 약 50px/°로 구워 전체 bbox 래스터(10.5px/°)의 5배² 밀도.
+  static const _coreBounds = LatLonBounds(
+    minLat: 28.0,
+    maxLat: 44.0,
+    minLon: 116.0,
+    maxLon: 138.0,
+  );
+  static const _coreTexW = 1100;
+  static const _coreTexH = 800;
+
   final TransformationController _transformController =
       TransformationController();
   // 지도 범위를 동서남북으로 넓힌 만큼, 진입 기본 배율도 조금 올려 남한이
   // 이전과 비슷한 크기로 보이게 한다.
   double _scale = 2.1;
-  bool _didInitTransform = false;
+
+  /// 사용자가 지도를 직접 조작(팬/줌)했는지. 하기 전까지는 매 build마다
+  /// 남한 중앙 기본 위치를 다시 적용한다 — 앱 시작 직후 시스템 인셋이
+  /// 정착하기 전의 일시적 레이아웃 크기로 중심이 계산·고정돼 서해가
+  /// 가운데로 오던 버그의 수정(1회성 플래그로는 첫 잘못된 값이 박제됨).
+  bool _userInteracted = false;
 
   /// "남한 중앙" 기준점(대전 인근) — 진입 시, 그리고 상세 예보를 닫아
   /// 지도 모드로 돌아올 때 항상 이 위경도가 화면 정가운데에 오게 한다.
@@ -552,19 +579,23 @@ class _WindMapAreaState extends State<_WindMapArea> {
   Future<void> _rebuildHeatmap() async {
     final field = widget.field;
     final time = field.time;
+    final requestId = ++_heatmapRequestId;
     // 데이터 없는 시각(u/v가 전부 0으로 채워진 결측 스텝)은 색을 입히면
     // "무풍(보라색)"으로 오해되므로, 아예 히트맵을 만들지 않고 build()가
     // 회색 오버레이를 그리게 한다.
     if (!field.hasData) {
       _heatmap?.dispose();
+      _heatmapCore?.dispose();
       setState(() {
         _heatmap = null;
+        _heatmapCore = null;
         _heatmapTime = time;
       });
       return;
     }
+    // 전체 bbox 배경(작고 빠름)을 먼저 띄우고, 핵심영역 고해상도는 이어서.
     final image = await buildWindHeatmapImage(field);
-    if (!mounted || widget.field.time != time) {
+    if (!mounted || requestId != _heatmapRequestId) {
       image.dispose();
       return;
     }
@@ -573,6 +604,18 @@ class _WindMapAreaState extends State<_WindMapArea> {
       _heatmap = image;
       _heatmapTime = time;
     });
+    final core = await buildWindHeatmapImage(
+      field,
+      crop: _coreBounds,
+      width: _coreTexW,
+      height: _coreTexH,
+    );
+    if (!mounted || requestId != _heatmapRequestId) {
+      core.dispose();
+      return;
+    }
+    _heatmapCore?.dispose();
+    setState(() => _heatmapCore = core);
   }
 
   @override
@@ -580,6 +623,7 @@ class _WindMapAreaState extends State<_WindMapArea> {
     _transformController.removeListener(_onTransformChanged);
     _transformController.dispose();
     _heatmap?.dispose();
+    _heatmapCore?.dispose();
     super.dispose();
   }
 
@@ -652,16 +696,21 @@ class _WindMapAreaState extends State<_WindMapArea> {
               maxLon: field.maxLon,
             ),
           );
-          // 진입 시 남한을 화면 중앙에 두고 기본 배율로 시작한다.
-          if (!_didInitTransform) {
-            _didInitTransform = true;
+          // 사용자가 지도를 직접 만지기 전까지는 매 레이아웃마다 남한 중앙
+          // 기본 위치를 다시 적용한다 — 앱 시작 초기 프레임의 일시적 화면
+          // 크기(시스템 인셋 정착 전)로 계산된 중심이 박제되지 않게, 항상
+          // "현재" 크기 기준으로 재계산한다(행렬 대입은 멱등이라 부담 없음).
+          // 단 상세 예보가 열려 있는 동안은 _centerOnPoint가 맞춘 탭 지점
+          // 중심을 존중한다.
+          if (!_userInteracted && widget.forecastPoint == null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
+              if (!mounted || _userInteracted) return;
               _resetToDefaultCenter();
             });
           }
           return InteractiveViewer(
             transformationController: _transformController,
+            onInteractionStart: (_) => _userInteracted = true,
             // 캔버스를 화면보다 크게(cover) 잡으므로 constrained를 끈다.
             constrained: false,
             // 완전히 축소해도 지도가 뷰를 덮도록(=검은 여백 없음) 최소 배율을
@@ -694,6 +743,8 @@ class _WindMapAreaState extends State<_WindMapArea> {
                         painter: WindHeatmapPainter(
                           image: heatmap,
                           dstRect: fieldRect,
+                          coreImage: _heatmapCore,
+                          coreDstRect: projection.rectFor(_coreBounds),
                         ),
                         size: mapSize,
                       )
