@@ -81,6 +81,13 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
   final start = DateTime.parse(json['start'] as String);
   final pts = latSteps * lonSteps;
 
+  // fmt 2+: 적응형(비균일) 격자의 실제 축 좌표. 없으면(구버전 fmt 1 파일)
+  // WindField가 minLat/maxLat/latSteps로 균일 격자를 재구성한다.
+  final latsRaw = json['lats'] as List?;
+  final lonsRaw = json['lons'] as List?;
+  final lats = latsRaw?.map((e) => (e as num).toDouble()).toList();
+  final lons = lonsRaw?.map((e) => (e as num).toDouble()).toList();
+
   final uBytes = base64Decode(json['u'] as String);
   final vBytes = base64Decode(json['v'] as String);
   final u = uBytes.buffer.asInt16List(uBytes.offsetInBytes, uBytes.length ~/ 2);
@@ -117,6 +124,8 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
           maxLon: maxLon,
           latSteps: latSteps,
           lonSteps: lonSteps,
+          lats: lats,
+          lons: lons,
           u: [for (var k = 0; k < pts; k++) u[s * pts + k] / 100.0],
           v: [for (var k = 0; k < pts; k++) v[s * pts + k] / 100.0],
           hasData: hasDataFor(s),

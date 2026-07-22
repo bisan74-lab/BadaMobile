@@ -30,6 +30,15 @@ dart format lib test       # 커밋 전 포맷
   뽑을 수 있다. 파일 실패 시 앱이 Open-Meteo 직접 호출→캐시→합성으로 폴백한다.
   파일 포맷을 바꾸면 `fetch_wind.py`와 `parseWindFieldFile`(및 그 테스트)을 함께
   맞춘다.
+- **서버 격자는 적응형(비균일)**: `fetch_wind.py`의 `_density_axis()`가 위·경도
+  축마다 대한해협·서해·남해 연안(`LAT_FOCUS`/`LON_FOCUS`)에 밀도를 더 준
+  비균일 좌표를 만든다(총점은 그대로, 핵심 해역만 더 촘촘히 재배치). 그래서
+  파일엔 `latSteps`/`lonSteps` 외에 실제 축 좌표 배열 `lats`/`lons`(fmt 2)가
+  들어 있고, `WindField`는 이걸 그대로 받아 **쌍3차(bicubic, 비균일 간격
+  지원)**로 보간한다(`sample()`). `lats`/`lons`가 없는 구버전 파일·캐시는
+  `WindField`가 `minLat`/`maxLat`/`latSteps`로 균일 격자를 재구성해 그대로
+  동작한다(폴백 호환). 핵심 해역 범위를 바꾸면 `LAT_FOCUS`/`LON_FOCUS`/
+  `DENSITY_BOOST`만 조정하면 된다.
 - **앱이 Open-Meteo를 직접 호출하는 경로(폴백)의 격자 총 좌표 수는 600 미만
   유지**(현재 21×24=504): 무료 한도가 분당 600콜이고 다지점 요청은 좌표
   1개=1콜이라, 넘기면 요청 한 번에 한도를 초과해 **매번 429 → 합성 폴백**이

@@ -6,7 +6,7 @@ import 'dart:math' as math;
 /// 값은 row-major(위도 증가 순 × 경도 증가 순)로 저장된다:
 ///   index = latIndex * lonSteps + lonIndex
 class WindField {
-  const WindField({
+  WindField({
     required this.time,
     required this.minLat,
     required this.maxLat,
@@ -17,13 +17,28 @@ class WindField {
     required this.u,
     required this.v,
     this.hasData = true,
-  });
+    List<double>? lats,
+    List<double>? lons,
+  }) : lats = lats ?? _uniformAxis(minLat, maxLat, latSteps),
+       lons = lons ?? _uniformAxis(minLon, maxLon, lonSteps);
+
+  static List<double> _uniformAxis(double lo, double hi, int steps) {
+    if (steps <= 1) return [lo];
+    return [for (var i = 0; i < steps; i++) lo + i * (hi - lo) / (steps - 1)];
+  }
 
   final DateTime time;
   final double minLat, maxLat, minLon, maxLon;
 
   /// 위도·경도 방향 격자점 개수.
   final int latSteps, lonSteps;
+
+  /// 각 축의 실제 좌표값(오름차순). 서버가 적응형(비균일) 격자를 보내면
+  /// 그 값을, 없으면(구버전 파일·앱 직접호출 폴백) 균일 간격을 채워 넣는다.
+  /// 대한해협·서해·남해 연안처럼 바람이 촘촘히 변하는 핵심 해역은 간격이
+  /// 더 좁고, 먼 바다·내륙 쪽은 더 넓다(같은 총 격자점 수 안에서 재배치).
+  final List<double> lats;
+  final List<double> lons;
 
   final List<double> u;
   final List<double> v;
@@ -35,38 +50,121 @@ class WindField {
   /// Open-Meteo 직접 호출(폴백)은 항상 실시간이라 기본값 true를 쓴다.
   final bool hasData;
 
-  double get latStep => (maxLat - minLat) / (latSteps - 1);
-  double get lonStep => (maxLon - minLon) / (lonSteps - 1);
-
   bool contains(double lat, double lon) =>
       lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
 
-  /// (lat, lon)에서의 바람 벡터를 쌍선형 보간한다. 범위 밖이면 null.
+  /// 오름차순 [axis]에서 x를 감싸는 하한 인덱스(즉 axis[i] <= x <= axis[i+1]),
+  /// 경계 밖이면 가장 가까운 끝 구간으로 clamp.
+  static int _bracketLow(List<double> axis, double x) {
+    final n = axis.length;
+    if (n < 2) return 0;
+    if (x <= axis[0]) return 0;
+    if (x >= axis[n - 1]) return n - 2;
+    var lo = 0, hi = n - 1;
+    while (hi - lo > 1) {
+      final mid = (lo + hi) >> 1;
+      if (axis[mid] <= x) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
+  /// 비균일 축의 3점(xa,xb,xc)에 대한 [xb]에서의 유한차분 접선(비균일
+  /// Catmull-Rom 스타일). 경계(xa==xb 또는 xc==xb)면 한쪽 시컨트로 대체한다.
+  static double _tangent(
+    double xa,
+    double xb,
+    double xc,
+    double pa,
+    double pb,
+    double pc,
+  ) {
+    final hasLeft = xb - xa > 0;
+    final hasRight = xc - xb > 0;
+    if (!hasLeft && !hasRight) return 0;
+    if (!hasLeft) return (pc - pb) / (xc - xb);
+    if (!hasRight) return (pb - pa) / (xb - xa);
+    final d1 = (pb - pa) / (xb - xa);
+    final d2 = (pc - pb) / (xc - xb);
+    return ((xc - xb) * d1 + (xb - xa) * d2) / (xc - xa);
+  }
+
+  /// (x1,p1)~(x2,p2) 사이 [x]에서의 3차 Hermite 보간(비균일 간격 지원).
+  /// (x0,p0), (x3,p3)는 접선 추정용 이웃점(경계에선 x1==x0 또는 x3==x2로
+  /// 넘겨 한쪽 시컨트로 자동 대체됨).
+  static double _hermite(
+    double x0,
+    double x1,
+    double x2,
+    double x3,
+    double p0,
+    double p1,
+    double p2,
+    double p3,
+    double x,
+  ) {
+    final h = x2 - x1;
+    if (h <= 0) return p1;
+    final t = ((x - x1) / h).clamp(0.0, 1.0);
+    final m1 = _tangent(x0, x1, x2, p0, p1, p2);
+    final m2 = _tangent(x1, x2, x3, p1, p2, p3);
+    final t2 = t * t, t3 = t2 * t;
+    final h00 = 2 * t3 - 3 * t2 + 1;
+    final h10 = t3 - 2 * t2 + t;
+    final h01 = -2 * t3 + 3 * t2;
+    final h11 = t3 - t2;
+    return h00 * p1 + h10 * h * m1 + h01 * p2 + h11 * h * m2;
+  }
+
+  /// (lat, lon)에서의 바람 벡터를 쌍3차(bicubic) 보간한다. 범위 밖이면 null.
+  /// 격자가 비균일(적응형)이어도 각 축 실제 좌표([lats]/[lons])를 그대로
+  /// 써서 보간하므로 정확하다. 인접 4×4점을 축별 3차 Hermite로 두 번(경도→
+  /// 위도) 적용하는 방식이라, 예전 쌍선형보다 바람 줄기·소용돌이 경계가
+  /// 부드럽고 세밀하게 드러난다(Windy 지도와의 텍스처 차이 개선).
   (double u, double v)? sample(double lat, double lon) {
     if (!contains(lat, lon)) return null;
-    final fi = (lat - minLat) / latStep;
-    final fj = (lon - minLon) / lonStep;
-    final i0 = fi.floor().clamp(0, latSteps - 1);
-    final j0 = fj.floor().clamp(0, lonSteps - 1);
+    final i0 = _bracketLow(lats, lat);
+    final j0 = _bracketLow(lons, lon);
     final i1 = (i0 + 1).clamp(0, latSteps - 1);
     final j1 = (j0 + 1).clamp(0, lonSteps - 1);
-    final ti = (fi - i0).clamp(0.0, 1.0);
-    final tj = (fj - j0).clamp(0.0, 1.0);
+    final im1 = (i0 - 1).clamp(0, latSteps - 1);
+    final ip1 = (i1 + 1).clamp(0, latSteps - 1);
+    final jm1 = (j0 - 1).clamp(0, lonSteps - 1);
+    final jp1 = (j1 + 1).clamp(0, lonSteps - 1);
 
-    double at(List<double> arr, int i, int j) => arr[i * lonSteps + j];
-    double lerp(double a, double b, double t) => a + (b - a) * t;
+    double interp(List<double> arr) {
+      double rowAt(int i) {
+        final base = i * lonSteps;
+        return _hermite(
+          lons[jm1],
+          lons[j0],
+          lons[j1],
+          lons[jp1],
+          arr[base + jm1],
+          arr[base + j0],
+          arr[base + j1],
+          arr[base + jp1],
+          lon,
+        );
+      }
 
-    final uu = lerp(
-      lerp(at(u, i0, j0), at(u, i0, j1), tj),
-      lerp(at(u, i1, j0), at(u, i1, j1), tj),
-      ti,
-    );
-    final vv = lerp(
-      lerp(at(v, i0, j0), at(v, i0, j1), tj),
-      lerp(at(v, i1, j0), at(v, i1, j1), tj),
-      ti,
-    );
-    return (uu, vv);
+      return _hermite(
+        lats[im1],
+        lats[i0],
+        lats[i1],
+        lats[ip1],
+        rowAt(im1),
+        rowAt(i0),
+        rowAt(i1),
+        rowAt(ip1),
+        lat,
+      );
+    }
+
+    return (interp(u), interp(v));
   }
 }
 

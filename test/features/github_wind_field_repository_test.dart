@@ -52,6 +52,8 @@ String encodeFile({
   required double Function(int s, int k) u,
   required double Function(int s, int k) v,
   List<int>? valid,
+  List<double>? lats,
+  List<double>? lons,
 }) {
   final pts = latSteps * lonSteps;
   final ub = Int16List(steps * pts);
@@ -63,13 +65,15 @@ String encodeFile({
     }
   }
   return jsonEncode({
-    'fmt': 1,
-    'minLat': 18.0,
-    'maxLat': 57.0,
-    'minLon': 108.0,
-    'maxLon': 148.0,
+    'fmt': lats != null || lons != null ? 2 : 1,
+    'minLat': lats?.first ?? 18.0,
+    'maxLat': lats?.last ?? 57.0,
+    'minLon': lons?.first ?? 108.0,
+    'maxLon': lons?.last ?? 148.0,
     'latSteps': latSteps,
     'lonSteps': lonSteps,
+    if (lats != null) 'lats': lats,
+    if (lons != null) 'lons': lons,
     'start': '2026-07-21T00:00',
     'stepHours': stepHours,
     'steps': steps,
@@ -156,6 +160,34 @@ void main() {
     expect(series.hourly[1].hasData, isTrue);
     expect(series.hourly[2].hasData, isFalse);
     expect(series.hourly[3].hasData, isFalse);
+  });
+
+  test('parseWindFieldFile: fmt 2(적응형 격자)의 lats/lons 배열을 그대로 '
+      'WindField 축 좌표로 쓴다(균일 재구성 안 함)', () {
+    // 비균일(적응형) 축: lat은 0,1,4(끝쪽으로 갈수록 넓어짐), lon은 10,11,13.
+    const lats = [0.0, 1.0, 4.0];
+    const lons = [10.0, 11.0, 13.0];
+    final json =
+        jsonDecode(
+              encodeFile(
+                latSteps: 3,
+                lonSteps: 3,
+                steps: 1,
+                stepHours: 3,
+                u: (s, k) => k.toDouble(),
+                v: (s, k) => 0,
+                lats: lats,
+                lons: lons,
+              ),
+            )
+            as Map<String, dynamic>;
+    final series = parseWindFieldFile(json);
+    final f0 = series.hourly.first;
+    expect(f0.lats, lats);
+    expect(f0.lons, lons);
+    // 격자점 좌표에서는 보간 없이 그 값 그대로 나와야 한다.
+    expect(f0.sample(0, 10)!.$1, closeTo(0, 0.001));
+    expect(f0.sample(4, 13)!.$1, closeTo(8, 0.001));
   });
 
   test('서버 파일이 200이면 그걸 쓰고, 실패하면 direct로 폴백한다', () async {

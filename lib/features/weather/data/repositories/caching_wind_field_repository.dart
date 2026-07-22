@@ -97,6 +97,10 @@ class CachingWindFieldRepository implements WindFieldRepository {
       'maxLon': f0.maxLon,
       'latSteps': f0.latSteps,
       'lonSteps': f0.lonSteps,
+      // 적응형(비균일) 격자의 실제 축 좌표 — 왕복하지 않으면 복원 시 균일
+      // 격자로 잘못 재구성돼 캐시에서 읽은 필드만 보간이 다시 뭉개진다.
+      'lats': f0.lats,
+      'lons': f0.lons,
       // 스텝별 데이터 유무(회색 처리용). 캐시 왕복에도 보존해야 재요청 전엔
       // 계속 정확하다.
       'valid': [for (final h in series.hourly) h.hasData ? 1 : 0],
@@ -139,6 +143,12 @@ class CachingWindFieldRepository implements WindFieldRepository {
       );
       final pts = latSteps * lonSteps;
       if (uAll.length != n * pts || vAll.length != n * pts) return null;
+      // 적응형 격자 축 좌표 — 없으면(구버전 캐시) WindField가 균일 격자로
+      // 재구성한다.
+      final latsRaw = json['lats'] as List?;
+      final lonsRaw = json['lons'] as List?;
+      final lats = latsRaw?.map((e) => (e as num).toDouble()).toList();
+      final lons = lonsRaw?.map((e) => (e as num).toDouble()).toList();
       // 예전 캐시(필드 없음)는 전부 유효한 것으로 취급한다(당시엔 결측
       // 스텝을 아예 잘라내고 저장했으므로 안전한 기본값).
       final validRaw = json['valid'] as List?;
@@ -153,6 +163,8 @@ class CachingWindFieldRepository implements WindFieldRepository {
               maxLon: maxLon,
               latSteps: latSteps,
               lonSteps: lonSteps,
+              lats: lats,
+              lons: lons,
               u: [for (var k = 0; k < pts; k++) uAll[h * pts + k] / 100.0],
               v: [for (var k = 0; k < pts; k++) vAll[h * pts + k] / 100.0],
               hasData:

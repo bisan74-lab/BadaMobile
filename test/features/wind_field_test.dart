@@ -69,6 +69,55 @@ void main() {
     });
   });
 
+  group('WindField.sample (적응형/비균일 격자 + bicubic)', () {
+    // 4x4 비균일 격자(적응형 격자를 흉내): 위·경도 간격이 점점 넓어진다.
+    const lats = [0.0, 1.0, 3.0, 6.0];
+    const lons = [0.0, 2.0, 3.0, 7.0];
+    // u(i,j) = i*10 + j로 둬서 각 격자점의 정확한 기대값을 바로 계산한다.
+    final u = [
+      for (final _ in lats)
+        for (final _ in lons) 0.0,
+    ];
+    for (var i = 0; i < lats.length; i++) {
+      for (var j = 0; j < lons.length; j++) {
+        u[i * lons.length + j] = i * 10.0 + j;
+      }
+    }
+    final field = WindField(
+      time: DateTime(2026, 7, 22),
+      minLat: lats.first,
+      maxLat: lats.last,
+      minLon: lons.first,
+      maxLon: lons.last,
+      latSteps: lats.length,
+      lonSteps: lons.length,
+      lats: lats,
+      lons: lons,
+      u: u,
+      v: List.filled(u.length, 0),
+    );
+
+    test('격자점(비균일 간격)에서는 그 값과 정확히 일치한다', () {
+      for (var i = 0; i < lats.length; i++) {
+        for (var j = 0; j < lons.length; j++) {
+          final (uu, _) = field.sample(lats[i], lons[j])!;
+          expect(uu, closeTo(i * 10.0 + j, 1e-6), reason: 'i=$i j=$j');
+        }
+      }
+    });
+
+    test('격자 사이 값은 주변 값들 사이 범위 안에 있다(과도한 오버슈트 없음)', () {
+      final (uu, _) = field.sample(2.0, 2.5)!;
+      expect(uu, greaterThan(0));
+      expect(uu, lessThan(field.u.reduce((a, b) => a > b ? a : b)));
+    });
+
+    test('범위 밖은 null', () {
+      expect(field.sample(-1, 0), isNull);
+      expect(field.sample(0, 8), isNull);
+    });
+  });
+
   group('OpenMeteoWindFieldRepository', () {
     test('격자점 수만큼 요청하고 u/v로 변환해 반환한다', () async {
       const latSteps = OpenMeteoWindFieldRepository.latSteps;

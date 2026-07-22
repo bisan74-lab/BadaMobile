@@ -31,20 +31,25 @@ import urllib.request
 MIN_LAT, MAX_LAT = 18.0, 57.0
 MIN_LON, MAX_LON = 108.0, 148.0
 
-# 약 0.62° 간격(39°/63, 40°/65) — 앱 직접호출(504점, 약 2°)보다 훨씬 촘촘하고,
-# 예전 1°(40×41=1640점)보다 2.6배 촘촘해 바람장의 가는 줄기·소용돌이 구조가
-# 덜 뭉개지고 Windy에 가깝게 드러난다.
-#
-# **한 실행당 격자 총점은 5000 미만으로 유지**(현재 64×66=4224): Open-Meteo
-# 무료는 분당 600콜뿐 아니라 **시간당 약 5000콜** 한도도 있고, 다지점=좌표
-# 1개=1콜이라 한 실행(≈15분, 한 시간 안)이 5000점을 넘으면 도중에 429가
-# 나 실패한다(0.5°/6399점으로 올렸다가 배치 5100 근처에서 실제로 겪음 —
-# 분당 페이싱은 통과했는데 시간당 한도에 걸렸다). GitHub 러너는 실행마다
-# IP가 달라 일일 한도는 실행마다 초기화되므로, 제약은 이 시간당(5000)과
-# 분당(600, SLEEP로 페이싱) 두 가지다. 모델 자체가 0.25°(ecmwf_ifs025)라
-# 이보다 훨씬 더 촘촘히 뽑을 실익도 적다.
+# 총점(64×66=4224)은 그대로 두되, **적응형(비균일) 격자**로 바꿔 같은 예산
+# 안에서 재배치한다: 대한해협·서해·남해 연안처럼 바람이 국지적으로 빠르게
+# 변하는 핵심 해역(LAT/LON_FOCUS)은 더 촘촘히, 먼 바다·내륙 쪽은 더 성기게
+# 뽑는다. 예전 균일 0.62° 격자는 핵심 해역도 먼 바다와 같은 간격이라 Windy
+# (더 촘촘한 원본 모델 해상도)보다 줄기·소용돌이가 뭉개져 보였다 — 총점을
+# 올리지 않고도(호출 한도 그대로) 핵심 해역 실효 해상도를 끌어올리는 방향.
+# 격자는 각 축(lat/lon)별로 독립적인 비균일 좌표 배열(위 아래 순, `lats`/
+# `lons`)이고 outer product(=텐서 격자)로 좌표를 만든다 — 인덱스 규칙
+# (index = i*lonSteps+j)은 그대로다. 앱(WindField)은 이 실제 좌표 배열을
+# 그대로 받아 보간하므로 균일/비균일 여부와 무관하게 정확하다.
 LAT_STEPS = 64
 LON_STEPS = 66
+
+# 핵심 해역: 대한해협을 포함한 한반도 서·남·동해 연안 전체.
+LAT_FOCUS = (32.0, 40.0)
+LON_FOCUS = (122.0, 132.0)
+# 핵심 해역 중심의 밀도가 먼 바다 기본 밀도의 약 (1+DENSITY_BOOST)배가 되게
+# 한다(격자점 간격은 그 역수만큼 좁아진다).
+DENSITY_BOOST = 2.5
 
 FORECAST_DAYS = 16  # Open-Meteo/ECMWF 모델 상한(지도 스크러버 최대치).
 STEP_HOURS = 3  # 3시간 간격으로 솎아 파일 크기를 줄인다(지도 스크러버에 충분).
@@ -58,15 +63,54 @@ SLEEP = 20  # 배치 사이 대기(초).
 TIMEOUT = 60
 
 
+def _density_axis(lo, hi, n, focus_lo, focus_hi, boost):
+    """[lo,hi] 구간을 n개 점으로 나누되, (focus_lo,focus_hi) 근방에 밀도를
+    더 준 비균일 오름차순 좌표를 만든다. 양 끝은 정확히 lo, hi로 고정된다.
+
+    구현: 가우시안 밀도 가중치의 누적분포(CDF)를 촘촘한 균일 메시로 근사한
+    뒤, CDF를 n등분한 분위점을 역보간(inverse-CDF sampling)해 좌표로 쓴다.
+    """
+    if n <= 1:
+        return [lo]
+    mesh_n = 2000
+    xs = [lo + i * (hi - lo) / (mesh_n - 1) for i in range(mesh_n)]
+    center = (focus_lo + focus_hi) / 2
+    sigma = max((focus_hi - focus_lo) / 2.2, 1e-6)
+    weights = [1.0 + boost * math.exp(-(((x - center) / sigma) ** 2)) for x in xs]
+    cdf = [0.0] * mesh_n
+    for i in range(1, mesh_n):
+        cdf[i] = cdf[i - 1] + (weights[i] + weights[i - 1]) / 2 * (xs[i] - xs[i - 1])
+    total = cdf[-1]
+    cdf = [c / total for c in cdf]
+
+    result = []
+    for k in range(n):
+        target = k / (n - 1)
+        lo_i, hi_i = 0, mesh_n - 1
+        while hi_i - lo_i > 1:
+            mid = (lo_i + hi_i) // 2
+            if cdf[mid] <= target:
+                lo_i = mid
+            else:
+                hi_i = mid
+        c0, c1 = cdf[lo_i], cdf[hi_i]
+        x0, x1 = xs[lo_i], xs[hi_i]
+        t = 0.0 if c1 == c0 else (target - c0) / (c1 - c0)
+        result.append(x0 + t * (x1 - x0))
+    result[0] = lo
+    result[-1] = hi
+    return result
+
+
 def grid():
+    lat_axis = _density_axis(MIN_LAT, MAX_LAT, LAT_STEPS, *LAT_FOCUS, DENSITY_BOOST)
+    lon_axis = _density_axis(MIN_LON, MAX_LON, LON_STEPS, *LON_FOCUS, DENSITY_BOOST)
     lats, lons = [], []
-    for i in range(LAT_STEPS):
-        lat = MIN_LAT + i * (MAX_LAT - MIN_LAT) / (LAT_STEPS - 1)
-        for j in range(LON_STEPS):
-            lon = MIN_LON + j * (MAX_LON - MIN_LON) / (LON_STEPS - 1)
+    for lat in lat_axis:
+        for lon in lon_axis:
             lats.append(round(lat, 3))
             lons.append(round(lon, 3))
-    return lats, lons
+    return lats, lons, lat_axis, lon_axis
 
 
 def fetch_batch(lats, lons):
@@ -99,9 +143,13 @@ def wind_to_uv(speed, direction):
 
 
 def main():
-    lats, lons = grid()
+    lats, lons, lat_axis, lon_axis = grid()
     total = len(lats)
-    print(f"격자 {LAT_STEPS}x{LON_STEPS} = {total}점, {FORECAST_DAYS}일 요청", flush=True)
+    print(
+        f"격자 {LAT_STEPS}x{LON_STEPS} = {total}점(적응형, 핵심해역 밀도 "
+        f"x{1 + DENSITY_BOOST:.1f}), {FORECAST_DAYS}일 요청",
+        flush=True,
+    )
 
     results = [None] * total
     for start in range(0, total, BATCH):
@@ -161,7 +209,10 @@ def main():
             struct.pack_into("<h", v16, pos, _q(v))
 
     out = {
-        "fmt": 1,
+        # fmt 2: 격자가 균일 간격이 아닐 수 있어(적응형) 각 축 실제 좌표
+        # 배열(lats/lons)을 담는다. 구버전(fmt 1) 앱도 minLat/maxLat/
+        # latSteps 등 기존 필드는 그대로 있어 최소한 bbox는 맞게 동작한다.
+        "fmt": 2,
         "generatedAt": _now_kst_iso(),
         "model": MODEL,
         "minLat": MIN_LAT,
@@ -170,6 +221,8 @@ def main():
         "maxLon": MAX_LON,
         "latSteps": LAT_STEPS,
         "lonSteps": LON_STEPS,
+        "lats": [round(x, 3) for x in lat_axis],
+        "lons": [round(x, 3) for x in lon_axis],
         "start": start_time,
         "stepHours": STEP_HOURS,
         "steps": steps,
