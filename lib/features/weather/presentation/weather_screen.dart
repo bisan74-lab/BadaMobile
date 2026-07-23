@@ -1755,8 +1755,7 @@ class _Meteogram extends StatelessWidget {
       '기온 °C',
       '바람 m/s',
       '돌풍 m/s',
-      if (hasWaveData) ...['파도 m', '너울1 m', '너울주기 s', '파력 kW/m'],
-      '수온 °C',
+      if (hasWaveData) ...['파도 m', '너울1 m', '너울주기 s', '파력 kW/m', '수온 °C'],
     ];
     // 단위(m/s 등)까지 잘리지 않도록 라벨 글씨를 조금 작게 한다.
     final labelStyle = Theme.of(
@@ -1986,7 +1985,7 @@ class _MeteogramColumn extends StatelessWidget {
               '${hour.windGustMs.round()}',
               bg: gustC.withValues(alpha: 0.65),
             ),
-            // 육지 지점이면 파도·너울·너울주기·파력을 아예 뺀다(라벨 열과 동일).
+            // 육지 지점이면 파도·너울·너울주기·파력·수온을 아예 뺀다(라벨 열과 동일).
             if (hasWaveData) ...[
               // 파도(유의파고=총 파고). Windy가 대표로 보여주는 값이라 함께
               // 표시해 비교가 맞게 한다(너울1은 그 성분 분해).
@@ -2007,8 +2006,8 @@ class _MeteogramColumn extends StatelessWidget {
                     : '-',
               ),
               cell(formatWavePower(hour.wavePowerKw)),
+              cell('${hour.waterTempC.round()}'),
             ],
-            cell('${hour.waterTempC.round()}'),
           ],
         ),
       ),
