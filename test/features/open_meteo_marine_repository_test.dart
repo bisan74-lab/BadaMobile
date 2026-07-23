@@ -323,6 +323,61 @@ void main() {
     expect(forecast.hourly.first.windSpeedMs, closeTo(3.0, 1e-9));
   });
 
+  test('바다가 멀리(재조회 반경 밖)에만 있으면 그 먼바다를 끌어오지 않고 육지로 '
+      '판정한다(회귀 방지: 예전엔 반경 1.0°까지 찾아 내륙도 먼바다 값을 보여줬다)', () async {
+    // 원점(경도 127.5)은 파고 0.0. "바다"는 재조회 반경(최대 0.4°) 훨씬
+    // 밖인 경도 128.6(=1.1° 차이)에만 있다 — 예전 반경(최대 1.0°)이었다면
+    // 여전히 찾아냈을 거리.
+    final client = MockClient((request) async {
+      final lon = double.parse(request.url.queryParameters['longitude']!);
+      final wet = (lon - 127.5).abs() > 1.0;
+      final n = int.parse(request.url.queryParameters['forecast_days']!) * 24;
+      final times = List.generate(
+        n,
+        (i) => DateTime(
+          2026,
+          7,
+          25,
+        ).add(Duration(hours: i)).toIso8601String().substring(0, 16),
+      );
+      if (request.url.host == 'marine-api.open-meteo.com') {
+        final keys = request.url.queryParameters['hourly']!.split(',');
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              for (final k in keys) k: List.filled(n, wet ? 0.5 : 0.0),
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'hourly': {
+            'time': times,
+            'wind_speed_10m': List.filled(n, 3.0),
+            'wind_gusts_10m': List.filled(n, 5.0),
+            'wind_direction_10m': List.filled(n, 180.0),
+            'temperature_2m': List.filled(n, 25.0),
+          },
+        }),
+        200,
+      );
+    });
+
+    final repo = OpenMeteoMarineRepository(client: client);
+    const deepInland = SeaLocation(
+      id: 'deep',
+      name: '내륙 깊은 곳',
+      region: '내륙',
+      latitude: 37.5,
+      longitude: 127.5,
+    );
+    final forecast = await repo.fetchForecast(deepInland, hours: 24);
+    expect(forecast.hasWaveData, isFalse);
+  });
+
   test('WAM 호출이 실패해도 GFS만으로 정상 동작한다', () async {
     final client = MockClient((request) async {
       final times = List.generate(

@@ -44,6 +44,28 @@ class CoastlinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final s = scale <= 0 ? 1.0 : scale;
 
+    // 육지에 옅은 지형(그라데이션) 틴트를 얹어 바다(바람 색상)와 구분되는
+    // "육지 느낌"을 준다(사용자 요청 — 실제 산악 지형까지는 아니어도 됨).
+    // 해안선 폴리라인을 그대로 채움 규칙(nonZero)으로 채운다: 한반도·일본처럼
+    // bbox 안에서 완전히 닫히는 육지 덩어리는 정확히 채워지고, bbox 경계에서
+    // 잘리는 대륙(중국·러시아 안쪽)은 열린 선이 직선으로 암묵적 폐합되며
+    // 다소 뭉개질 수 있다 — 사용자 관심 지역(한반도 연안)은 정확하고, 지도
+    // 주변부의 근사 오차는 허용 범위로 판단했다. 바람 히트맵 위, 해안선
+    // 선보다 아래에 그려 선은 그대로 또렷하다.
+    final land = _pathFor('해안선')..fillType = PathFillType.nonZero;
+    canvas.drawPath(
+      land,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(size.width, size.height),
+          const [
+            Color(0x40C9B183), // 옅은 황토(저지대)
+            Color(0x3A8FA06B), // 옅은 올리브그린(고지대 느낌)
+          ],
+        ),
+    );
+
     // 확대할수록(행정경계·하천 등) 지형의 디테일한 선이 드러나게 한다.
     // 각 레이어는 하나의 Path로 합쳐 한 번에 그려 성능을 유지한다.
 
