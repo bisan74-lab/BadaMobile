@@ -208,9 +208,10 @@ void main() {
     expect(forecast.hourly, hasLength(hours));
   });
 
-  test('연안 육지 마스킹 지점은 가장 가까운 앞바다로 옮겨 재조회한다', () async {
-    // 원점(경도 128.8)은 파고 null(육지 마스킹), 앞바다(경도>128.9)는 값이
-    // 있다. 원점 조회 → 파고 없음 → 동쪽 앞바다로 옮겨 파고·바람을 재조회.
+  test('연안 육지 마스킹 지점(파고 0.0)은 가장 가까운 앞바다로 옮겨 재조회한다', () async {
+    // 원점(경도 128.8)은 파고 0.0(육지 마스킹 — null이 아니라 0을 준다),
+    // 앞바다(경도>128.9)는 값이 있다. 원점 조회 → 양의 파고 없음 → 동쪽
+    // 앞바다로 옮겨 파고·바람을 재조회한다.
     final client = MockClient((request) async {
       final lon = double.parse(request.url.queryParameters['longitude']!);
       final wet = lon > 128.9;
@@ -234,7 +235,7 @@ void main() {
                   n,
                   (i) => wet
                       ? (k == 'sea_surface_temperature' ? 20.0 : 0.5)
-                      : null,
+                      : 0.0, // 육지 마스킹: null이 아니라 0.0
                 ),
             },
           }),

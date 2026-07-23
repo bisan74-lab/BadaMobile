@@ -157,11 +157,14 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       'sea_surface_temperature': marineSst['sea_surface_temperature'],
     };
 
-    // 이 지점에 실제 파고 데이터가 하나라도 있었는지(GFS 또는 WAM 총 파고).
-    // 전부 null이면 격자가 육지로 마스킹된 연안 지점이다.
-    bool anyNonNull(Map<String, dynamic> m) =>
-        (m['wave_height'] as List?)?.any((v) => v != null) ?? false;
-    final wavesPresent = anyNonNull(marineGfs) || anyNonNull(marineWamTotal);
+    // 이 지점에 **양(+)의 파고**가 하나라도 있었는지(GFS 또는 WAM 총 파고).
+    // 연안 육지 마스킹 셀은 null이 아니라 **0.0**을 돌려주기도 해서, null만
+    // 거르면(≠null) 0.0을 유효 데이터로 오인해 앞바다 재조회가 안 됐다
+    // (동해 연안 파도 계속 0.0). 그래서 '0보다 큰 값'이 있는지로 판정한다.
+    bool anyPositive(Map<String, dynamic> m) =>
+        (m['wave_height'] as List?)?.any((v) => v != null && (v as num) > 0) ??
+        false;
+    final wavesPresent = anyPositive(marineGfs) || anyPositive(marineWamTotal);
 
     return (
       MarineForecast(
@@ -206,14 +209,15 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
   }
 
   /// (lat, lon)의 파랑모델 격자에 실제 파고 데이터가 있는지(=바다) 가볍게
-  /// 확인한다. 1일치 wave_height 단일 필드만 받아 non-null이 있으면 true.
+  /// 확인한다. 1일치 wave_height 단일 필드만 받아 **0보다 큰 값**이 하나라도
+  /// 있으면 true(육지 마스킹 셀은 0.0을 주므로 0은 바다로 치지 않는다).
+  /// 어떤 모델이든 데이터가 있으면 잡도록 모델을 지정하지 않는다(best_match).
   /// 실패는 false로 처리(없는 것으로 간주).
   Future<bool> _hasWaves(double lat, double lon) async {
     final uri = Uri.https(_marineHost, '/v1/marine', {
       'latitude': lat.toStringAsFixed(3),
       'longitude': lon.toStringAsFixed(3),
       'hourly': 'wave_height',
-      'models': 'ncep_gfswave025',
       'forecast_days': '1',
       'timezone': 'Asia/Seoul',
     });
@@ -223,7 +227,7 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       final body = jsonDecode(res.body);
       final hourly = body is Map ? body['hourly'] : null;
       final wh = hourly is Map ? hourly['wave_height'] as List? : null;
-      return wh != null && wh.any((v) => v != null);
+      return wh != null && wh.any((v) => v != null && (v as num) > 0);
     } catch (_) {
       return false;
     }
