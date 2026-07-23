@@ -26,6 +26,8 @@ void main() {
     return MockClient((request) async {
       if (request.url.host == 'marine-api.open-meteo.com') {
         expect(request.url.queryParameters['forecast_days'], '16');
+        // 연안 지점이 육지 셀로 마스킹돼 파고 0 나오던 문제 방지.
+        expect(request.url.queryParameters['cell_selection'], 'sea');
         return http.Response(
           jsonEncode({
             'hourly': _hourlyBlock([

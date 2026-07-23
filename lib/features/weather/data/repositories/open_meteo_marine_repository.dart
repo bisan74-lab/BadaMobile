@@ -42,6 +42,12 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       'timezone': 'Asia/Seoul',
       'forecast_days': days.toString(),
       if (pastDays > 0) 'past_days': pastDays.clamp(0, 92).toString(),
+      // **가장 가까운 바다 격자셀**을 강제한다. 연안(강릉·사천진 등)처럼
+      // 해안에 붙은 지점은 파랑모델 0.25°(≈25km) 격자에서 가장 가까운 셀이
+      // 육지로 마스킹돼 파고·너울이 전부 null→0으로 나왔다(동해 연안에서
+      // 파도 0.0). sea를 주면 앞바다 셀 값을 써 실제 파랑이 나오고, 바람도
+      // 육지풍이 아니라 앞바다 바람이 잡혀 Windy(해양 기준)와 맞는다.
+      'cell_selection': 'sea',
     };
 
     // 파고는 Windy와 같은 ECMWF WAM을 우선 쓰고, WAM 예보 한계(약 10일) 뒤는
