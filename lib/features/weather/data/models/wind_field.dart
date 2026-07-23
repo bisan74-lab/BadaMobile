@@ -135,6 +135,13 @@ class WindField {
     final jm1 = (j0 - 1).clamp(0, lonSteps - 1);
     final jp1 = (j1 + 1).clamp(0, lonSteps - 1);
 
+    // 인접 4×4 격자점의 최소·최대. 쌍3차(Hermite)는 급격한 변화 근처에서
+    // 과잉(overshoot)·링잉을 일으켜 실제엔 없는 곧은 띠(예: 적응형 격자 밀도
+    // 전환 경계 ~위도 36°)나 홱 뒤틀린 풍향을 만든다. 보간값을 이 4×4 이웃의
+    // 범위로 클램프하면 부드러움은 유지하면서 가짜 띠·이상 풍향만 억제한다.
+    final iis = [im1, i0, i1, ip1];
+    final jjs = [jm1, j0, j1, jp1];
+
     double interp(List<double> arr) {
       double rowAt(int i) {
         final base = i * lonSteps;
@@ -151,7 +158,7 @@ class WindField {
         );
       }
 
-      return _hermite(
+      final raw = _hermite(
         lats[im1],
         lats[i0],
         lats[i1],
@@ -162,6 +169,17 @@ class WindField {
         rowAt(ip1),
         lat,
       );
+      var lo = arr[iis[0] * lonSteps + jjs[0]];
+      var hi = lo;
+      for (final i in iis) {
+        final base = i * lonSteps;
+        for (final j in jjs) {
+          final v = arr[base + j];
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+      }
+      return raw.clamp(lo, hi);
     }
 
     return (interp(u), interp(v));

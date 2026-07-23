@@ -200,7 +200,12 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
   /// 지적: "육지인데 모든 정보가 다 남는다"). 반경을 격자 보정 수준으로
   /// 좁혀야 진짜 내륙은 hasWaveData=false로 정확히 걸러진다.
   Future<(double, double)?> _nearestWetPoint(double lat, double lon) async {
-    const radii = [0.2, 0.4];
+    // 단일 작은 반경(≈0.2°/22km)만 본다. 0.4°(≈44km)까지 넓혔더니 전주·대전·
+    // 천안처럼 서해안에서 30~40km 떨어진 내륙 지점도 앞바다에 닿아 파도가
+    // 나왔다(사용자 지적). 이 재조회는 "해안 바로 위 지점이 격자 마스킹으로
+    // 육지 취급된 것"만 보정하는 용도라 22km면 충분하고, 그보다 안쪽 내륙은
+    // hasWaveData=false로 정확히 걸러진다.
+    const radii = [0.2];
     // (dLat, dLon): 동·서·북·남 먼저(대개 연안의 앞바다 방향), 그다음 대각.
     const dirs = [
       (0.0, 1.0),
