@@ -1265,13 +1265,18 @@ class _ForecastRose extends StatelessWidget {
     );
   }
 
-  /// 진행(불어가는) 방향(dir+180)으로 뻗는 가늘고 긴 캡슐 막대. 글자를 막대
-  /// 안에 넣고, 막대가 어느 방향이든 글씨가 뒤집히지 않도록 캡슐 중심을
-  /// 축으로 필요하면 180° 돌려 항상 바로 읽히게 한다(막대 위치는 그대로).
+  /// 방향 막대. **윈디식 관례**로 그린다: 바람/너울이 **불어오는 쪽(source)**에
+  /// 막대를 두고, 뾰족한 화살촉이 **가운데 점(dot)을 향하게** 한다. 예를 들어
+  /// 남풍(남쪽에서 붐)은 막대가 점 아래(남쪽)에 놓이고 화살촉이 위(점)로
+  /// 간다. [dirDeg]는 기상 관례의 불어오는 방향이다.
+  /// 글자는 막대가 어느 방향이든 뒤집히지 않도록 필요하면 180° 돌려 항상
+  /// 바로 읽히게 한다.
   Widget _bar(double dirDeg, Color color, String label, String value) {
     final rad = (dirDeg + 180) * math.pi / 180;
-    final u = Offset(math.sin(rad), -math.cos(rad)); // 화면상 진행 방향 단위벡터
-    final mid = _c + u * (_len / 2); // 캡슐 중심(중심→끝 구간의 중점)
+    final u = Offset(math.sin(rad), -math.cos(rad)); // 화면상 진행(가는) 방향
+    // 막대는 불어오는 쪽(-u, source)에 둔다. 화살촉은 그대로 진행 방향(+u)을
+    // 가리키므로, 결과적으로 화살촉이 가운데 점을 향한다(윈디와 동일).
+    final mid = _c - u * (_len / 2);
     var angle = math.atan2(u.dy, u.dx); // 캡슐 장축의 화면 각도
     // 글씨가 위를 향하도록: 왼쪽(cos<0)으로 향하면 같은 직선 위에서 180° 회전.
     var flip = false;
