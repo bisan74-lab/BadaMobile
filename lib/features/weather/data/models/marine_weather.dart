@@ -115,12 +115,21 @@ class HourlyMarine {
 
 /// 특정 지점의 해양 기상 예보 묶음.
 class MarineForecast {
-  const MarineForecast({required this.locationId, required this.hourly});
+  const MarineForecast({
+    required this.locationId,
+    required this.hourly,
+    this.hasWaveData = true,
+  });
 
   final String locationId;
 
   /// 현재 시각부터 시간순.
   final List<HourlyMarine> hourly;
+
+  /// 이 지점에 바다 데이터(파도·너울)가 있는지. false면 **육지 지점**(주변에
+  /// 앞바다 격자도 없음)이라, 상세 예보 표에서 파도·너울·너울주기·파력 행을
+  /// 아예 숨긴다(육지에선 무의미). 바람·기온 등 육상값만 보여준다.
+  final bool hasWaveData;
 
   HourlyMarine get current => hourly.first;
 
@@ -133,11 +142,13 @@ class MarineForecast {
 
   Map<String, dynamic> toJson() => {
     'locationId': locationId,
+    'hasWaveData': hasWaveData,
     'hourly': hourly.map((h) => h.toJson()).toList(),
   };
 
   factory MarineForecast.fromJson(Map<String, dynamic> json) => MarineForecast(
     locationId: json['locationId'] as String,
+    hasWaveData: json['hasWaveData'] as bool? ?? true,
     hourly: (json['hourly'] as List)
         .map((h) => HourlyMarine.fromJson(h as Map<String, dynamic>))
         .toList(),

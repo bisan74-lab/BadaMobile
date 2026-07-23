@@ -270,6 +270,59 @@ void main() {
     expect(forecast.hourly.first.windSpeedMs, closeTo(2.0, 1e-9));
   });
 
+  test('주변에 앞바다가 없는 육지 지점은 hasWaveData=false', () async {
+    // 모든 지점(원점·재조회 후보)에서 파고가 0.0 → 앞바다를 못 찾음 → 육지.
+    final client = MockClient((request) async {
+      final n = int.parse(request.url.queryParameters['forecast_days']!) * 24;
+      final times = List.generate(
+        n,
+        (i) => DateTime(
+          2026,
+          7,
+          25,
+        ).add(Duration(hours: i)).toIso8601String().substring(0, 16),
+      );
+      if (request.url.host == 'marine-api.open-meteo.com') {
+        final keys = request.url.queryParameters['hourly']!.split(',');
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              for (final k in keys) k: List.filled(n, 0.0),
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'hourly': {
+            'time': times,
+            'wind_speed_10m': List.filled(n, 3.0),
+            'wind_gusts_10m': List.filled(n, 5.0),
+            'wind_direction_10m': List.filled(n, 180.0),
+            'temperature_2m': List.filled(n, 25.0),
+          },
+        }),
+        200,
+      );
+    });
+
+    final repo = OpenMeteoMarineRepository(client: client);
+    const inland = SeaLocation(
+      id: 'land',
+      name: '내륙',
+      region: '내륙',
+      latitude: 37.5,
+      longitude: 127.5,
+      inland: true,
+    );
+    final forecast = await repo.fetchForecast(inland, hours: 24);
+    expect(forecast.hasWaveData, isFalse);
+    // 바람 등 육상값은 그대로 있다.
+    expect(forecast.hourly.first.windSpeedMs, closeTo(3.0, 1e-9));
+  });
+
   test('WAM 호출이 실패해도 GFS만으로 정상 동작한다', () async {
     final client = MockClient((request) async {
       final times = List.generate(

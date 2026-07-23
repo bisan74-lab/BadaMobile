@@ -49,7 +49,15 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     // 다시 받는다 — Windy가 앞바다 값을 보여주는 것과 같은 효과.
     if (wavesPresent) return forecast;
     final wet = await _nearestWetPoint(location.latitude, location.longitude);
-    if (wet == null) return forecast; // 앞바다를 못 찾으면(내륙 등) 원래 결과.
+    if (wet == null) {
+      // 주변에 앞바다 격자가 전혀 없다 = 육지 지점. 파도·너울을 숨기도록
+      // 표시한다(상세 표에서 해당 행을 아예 뺀다).
+      return MarineForecast(
+        locationId: forecast.locationId,
+        hourly: forecast.hourly,
+        hasWaveData: false,
+      );
+    }
     final (wetForecast, _) = await _fetchAt(
       wet.$1,
       wet.$2,
