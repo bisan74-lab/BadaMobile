@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:bada_mobile/features/locations/data/models/sea_location.dart';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:bada_mobile/features/weather/data/repositories/open_meteo_marine_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,8 +27,6 @@ void main() {
     return MockClient((request) async {
       if (request.url.host == 'marine-api.open-meteo.com') {
         expect(request.url.queryParameters['forecast_days'], '16');
-        // 연안 지점이 육지 셀로 마스킹돼 파고 0 나오던 문제 방지.
-        expect(request.url.queryParameters['cell_selection'], 'sea');
         return http.Response(
           jsonEncode({
             'hourly': _hourlyBlock([
@@ -207,6 +206,67 @@ void main() {
     expect(forecast.hourly[wamHorizon].waveHeightM, 9.0);
     expect(forecast.hourly[300].waveHeightM, 9.0);
     expect(forecast.hourly, hasLength(hours));
+  });
+
+  test('연안 육지 마스킹 지점은 가장 가까운 앞바다로 옮겨 재조회한다', () async {
+    // 원점(경도 128.8)은 파고 null(육지 마스킹), 앞바다(경도>128.9)는 값이
+    // 있다. 원점 조회 → 파고 없음 → 동쪽 앞바다로 옮겨 파고·바람을 재조회.
+    final client = MockClient((request) async {
+      final lon = double.parse(request.url.queryParameters['longitude']!);
+      final wet = lon > 128.9;
+      final n = int.parse(request.url.queryParameters['forecast_days']!) * 24;
+      final times = List.generate(
+        n,
+        (i) => DateTime(
+          2026,
+          7,
+          25,
+        ).add(Duration(hours: i)).toIso8601String().substring(0, 16),
+      );
+      if (request.url.host == 'marine-api.open-meteo.com') {
+        final keys = request.url.queryParameters['hourly']!.split(',');
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              for (final k in keys)
+                k: List.generate(
+                  n,
+                  (i) => wet
+                      ? (k == 'sea_surface_temperature' ? 20.0 : 0.5)
+                      : null,
+                ),
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'hourly': {
+            'time': times,
+            'wind_speed_10m': List.filled(n, wet ? 2.0 : 4.0),
+            'wind_gusts_10m': List.filled(n, 5.0),
+            'wind_direction_10m': List.filled(n, 180.0),
+            'temperature_2m': List.filled(n, 25.0),
+          },
+        }),
+        200,
+      );
+    });
+
+    final repo = OpenMeteoMarineRepository(client: client);
+    const coastal = SeaLocation(
+      id: 'tap',
+      name: '탭 지점',
+      region: '동해',
+      latitude: 37.796,
+      longitude: 128.8,
+    );
+    final forecast = await repo.fetchForecast(coastal, hours: 24);
+    // 앞바다(129.1)로 옮겨져 파고·바람이 앞바다 값으로 나온다.
+    expect(forecast.hourly.first.waveHeightM, closeTo(0.5, 1e-9));
+    expect(forecast.hourly.first.windSpeedMs, closeTo(2.0, 1e-9));
   });
 
   test('WAM 호출이 실패해도 GFS만으로 정상 동작한다', () async {

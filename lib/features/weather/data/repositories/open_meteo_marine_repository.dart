@@ -35,19 +35,47 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     int hours = defaultForecastHours,
     int pastDays = 0,
   }) async {
+    final (forecast, wavesPresent) = await _fetchAt(
+      location.latitude,
+      location.longitude,
+      location.id,
+      hours,
+      pastDays,
+    );
+    // 파랑모델 0.25°(≈25km) 격자에서 탭 지점의 가장 가까운 셀이 육지로
+    // 마스킹돼 파고가 전부 null→0으로 나오는 연안 지점(강릉·사천진 등)이
+    // 있다(Open-Meteo cell_selection=sea가 이 파랑모델엔 안 먹힌다). 그러면
+    // 가장 가까운 **실제 바다 격자**를 찾아 그 지점으로 예보 전체(파고·바람)를
+    // 다시 받는다 — Windy가 앞바다 값을 보여주는 것과 같은 효과.
+    if (wavesPresent) return forecast;
+    final wet = await _nearestWetPoint(location.latitude, location.longitude);
+    if (wet == null) return forecast; // 앞바다를 못 찾으면(내륙 등) 원래 결과.
+    final (wetForecast, _) = await _fetchAt(
+      wet.$1,
+      wet.$2,
+      location.id,
+      hours,
+      pastDays,
+    );
+    return wetForecast;
+  }
+
+  /// (lat, lon)에서 예보를 받아 [MarineForecast]와 **실제 파고 데이터가
+  /// 있었는지**(false면 연안 육지 마스킹)를 함께 돌려준다.
+  Future<(MarineForecast, bool)> _fetchAt(
+    double lat,
+    double lon,
+    String locationId,
+    int hours,
+    int pastDays,
+  ) async {
     final days = ((hours - pastDays * 24) / 24).ceil().clamp(1, 16);
     final common = {
-      'latitude': location.latitude.toString(),
-      'longitude': location.longitude.toString(),
+      'latitude': lat.toString(),
+      'longitude': lon.toString(),
       'timezone': 'Asia/Seoul',
       'forecast_days': days.toString(),
       if (pastDays > 0) 'past_days': pastDays.clamp(0, 92).toString(),
-      // **가장 가까운 바다 격자셀**을 강제한다. 연안(강릉·사천진 등)처럼
-      // 해안에 붙은 지점은 파랑모델 0.25°(≈25km) 격자에서 가장 가까운 셀이
-      // 육지로 마스킹돼 파고·너울이 전부 null→0으로 나왔다(동해 연안에서
-      // 파도 0.0). sea를 주면 앞바다 셀 값을 써 실제 파랑이 나오고, 바람도
-      // 육지풍이 아니라 앞바다 바람이 잡혀 Windy(해양 기준)와 맞는다.
-      'cell_selection': 'sea',
     };
 
     // 파고는 Windy와 같은 ECMWF WAM을 우선 쓰고, WAM 예보 한계(약 10일) 뒤는
@@ -129,14 +157,76 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       'sea_surface_temperature': marineSst['sea_surface_temperature'],
     };
 
-    return MarineForecast(
-      locationId: location.id,
-      hourly: mergeOpenMeteoHourly(
-        marine: marine,
-        forecast: forecast,
-        maxHours: hours,
+    // 이 지점에 실제 파고 데이터가 하나라도 있었는지(GFS 또는 WAM 총 파고).
+    // 전부 null이면 격자가 육지로 마스킹된 연안 지점이다.
+    bool anyNonNull(Map<String, dynamic> m) =>
+        (m['wave_height'] as List?)?.any((v) => v != null) ?? false;
+    final wavesPresent = anyNonNull(marineGfs) || anyNonNull(marineWamTotal);
+
+    return (
+      MarineForecast(
+        locationId: locationId,
+        hourly: mergeOpenMeteoHourly(
+          marine: marine,
+          forecast: forecast,
+          maxHours: hours,
+        ),
       ),
+      wavesPresent,
     );
+  }
+
+  /// 오름차순 반경으로 8방위를 넓혀가며, 파고 데이터가 있는(=실제 바다 격자)
+  /// 가장 가까운 지점을 찾는다. 못 찾으면 null(내륙 등). 한 반경의 8방위는
+  /// 병렬로 재빨리 탐색하고, 먼저 걸리는 방위(연안 기준 대개 앞바다 쪽)를
+  /// 고른다. 파고 유무만 보는 가벼운 단일 필드 요청이라 부담이 작다.
+  Future<(double, double)?> _nearestWetPoint(double lat, double lon) async {
+    const radii = [0.3, 0.6, 1.0];
+    // (dLat, dLon): 동·서·북·남 먼저(대개 연안의 앞바다 방향), 그다음 대각.
+    const dirs = [
+      (0.0, 1.0),
+      (0.0, -1.0),
+      (1.0, 0.0),
+      (-1.0, 0.0),
+      (1.0, 1.0),
+      (1.0, -1.0),
+      (-1.0, 1.0),
+      (-1.0, -1.0),
+    ];
+    for (final r in radii) {
+      final cands = [
+        for (final (dLat, dLon) in dirs) (lat + dLat * r, lon + dLon * r),
+      ];
+      final wet = await Future.wait(cands.map((c) => _hasWaves(c.$1, c.$2)));
+      for (var i = 0; i < cands.length; i++) {
+        if (wet[i]) return cands[i];
+      }
+    }
+    return null;
+  }
+
+  /// (lat, lon)의 파랑모델 격자에 실제 파고 데이터가 있는지(=바다) 가볍게
+  /// 확인한다. 1일치 wave_height 단일 필드만 받아 non-null이 있으면 true.
+  /// 실패는 false로 처리(없는 것으로 간주).
+  Future<bool> _hasWaves(double lat, double lon) async {
+    final uri = Uri.https(_marineHost, '/v1/marine', {
+      'latitude': lat.toStringAsFixed(3),
+      'longitude': lon.toStringAsFixed(3),
+      'hourly': 'wave_height',
+      'models': 'ncep_gfswave025',
+      'forecast_days': '1',
+      'timezone': 'Asia/Seoul',
+    });
+    try {
+      final res = await _client.get(uri);
+      if (res.statusCode != 200) return false;
+      final body = jsonDecode(res.body);
+      final hourly = body is Map ? body['hourly'] : null;
+      final wh = hourly is Map ? hourly['wave_height'] as List? : null;
+      return wh != null && wh.any((v) => v != null);
+    } catch (_) {
+      return false;
+    }
   }
 
   Map<String, dynamic> _hourlyJson(http.Response res, Uri uri) {
