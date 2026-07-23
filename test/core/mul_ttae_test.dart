@@ -103,4 +103,29 @@ void main() {
       expect((b - a).abs() <= 1 || (b - a).abs() >= 28, isTrue);
     });
   });
+
+  group('천문 신월 기반 정확한 음력·물때 (실제 물때표 대조)', () {
+    // KST 자정을 UTC로: 2026-07-24 00:00 KST = 2026-07-23 15:00 UTC.
+    DateTime kstMidnightUtc(int y, int m, int d) =>
+        DateTime.utc(y, m, d).subtract(const Duration(hours: 9));
+
+    test('녹동항 2026-07-24는 음력 11일·3물(바다타임 물때표와 일치)', () {
+      // 예전 평균삭망월 근사는 음력 9일·1물로 어긋났다(신월이 평균에서
+      // 벗어난 달이라 날짜 경계를 넘음). 실제 신월은 2026-07-14 18:45 KST라
+      // 7월24일은 음력 11일이 맞고, 8물때식으로 3물이다.
+      final day = approximateLunarDay(kstMidnightUtc(2026, 7, 24));
+      expect(day, 11);
+      expect(mulTtaeForLunarDay(day, system: MulTtaeSystem.south8).label, '3물');
+    });
+
+    test('신월이 든 KST 날짜(2026-07-14)는 음력 1일', () {
+      // 신월 2026-07-14 18:45 KST — 그날 이른 시각(정오)도 같은 음력 1일.
+      expect(approximateLunarDay(DateTime.utc(2026, 7, 14, 3)), 1);
+    });
+
+    test('신월 전날(2026-07-13)은 직전 달 그믐(29~30일)', () {
+      final day = approximateLunarDay(kstMidnightUtc(2026, 7, 13));
+      expect(day, inInclusiveRange(29, 30));
+    });
+  });
 }
