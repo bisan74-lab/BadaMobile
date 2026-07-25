@@ -29,12 +29,30 @@ jobs:
       - name: 의존성 설치
         run: flutter pub get
 
-      - name: 릴리스 APK 빌드 (합성 데이터 — 실 API 키는 저장소에 두지 않음)
-        run: flutter build apk --release
+      # 저장소 Secret `DATA_GO_KR_API_KEY`가 설정돼 있으면 그 키를 dart-define으로
+      # 주입해 조석·낚시지수 실데이터로 빌드한다. Secret이 없으면 빈 값이 되어
+      # 앱이 기존대로 합성(mock) 데이터로 동작한다(Env가 빈 키를 '없음'으로 취급).
+      # 키는 저장소에 커밋하지 않고 GitHub Secret에서만 주입한다(로그도 자동 마스킹).
+      - name: 릴리스 APK 빌드
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: |
+          flutter build apk --release \
+            --dart-define=DATA_GO_KR_API_KEY="$DATA_GO_KR_API_KEY"
 
-      - name: 태그 계산
+      - name: 태그·데이터모드 계산
         id: vars
-        run: echo "tag=test-build-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: |
+          echo "tag=test-build-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          if [ -n "$DATA_GO_KR_API_KEY" ]; then
+            echo "mode=실데이터(data.go.kr 키 적용): 조위관측소 실측·예측 조위·낚시지수" \
+              >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=합성(mock) 데이터: 실 API 키(Secret DATA_GO_KR_API_KEY) 미설정" \
+              >> "$GITHUB_OUTPUT"
+          fi
 
       - name: GitHub Release 생성 및 APK 첨부
         uses: softprops/action-gh-release@v2
@@ -42,8 +60,12 @@ jobs:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: 테스트 빌드 ${{ steps.vars.outputs.tag }}
           body: |
-            수동 트리거 테스트 빌드입니다. 합성(mock) 데이터로 동작하며,
-            조석·낚시지수 실데이터는 `--dart-define=DATA_GO_KR_API_KEY=...` 로
-            직접 빌드해야 확인할 수 있습니다.
+            수동 트리거 테스트 빌드입니다.
+            데이터 모드: ${{ steps.vars.outputs.mode }}
+
+            실데이터로 받으려면 저장소 Settings → Secrets and variables →
+            Actions에 `DATA_GO_KR_API_KEY`(data.go.kr 일반 인증키)를 추가한 뒤
+            이 워크플로를 다시 실행하세요. 조석 실데이터는 지점에
+            조위관측소 코드(khoaStationCode)가 등록된 곳만 적용됩니다.
           files: build/app/outputs/flutter-apk/app-release.apk
           prerelease: true
