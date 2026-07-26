@@ -44,6 +44,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.966,
     longitude: 126.823,
+    khoaStationCode: 'DT_0002',
   ),
   SeaLocation(
     id: 'seosan',
@@ -65,6 +66,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.325,
     longitude: 126.508,
+    khoaStationCode: 'DT_0025',
   ),
   SeaLocation(
     id: 'jangheang',
@@ -72,6 +74,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.005,
     longitude: 126.688,
+    khoaStationCode: 'DT_0024',
   ),
   SeaLocation(
     id: 'gunsan',
@@ -101,6 +104,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 35.373,
     longitude: 126.451,
+    khoaStationCode: 'DT_0003',
   ),
   SeaLocation(
     id: 'mokpo',
@@ -116,6 +120,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 34.685,
     longitude: 125.435,
+    khoaStationCode: 'DT_0035',
   ),
 
   // ── 남해 ──────────────────────────────────────────────
@@ -139,6 +144,7 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.311,
     longitude: 126.755,
+    khoaStationCode: 'DT_0027',
   ),
   SeaLocation(
     id: 'narado',
@@ -153,7 +159,7 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.747,
     longitude: 127.766,
-    khoaStationCode: 'DT_0041',
+    khoaStationCode: 'DT_0016',
   ),
   SeaLocation(
     id: 'namhae_mijo',
@@ -176,6 +182,7 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.846,
     longitude: 128.433,
+    khoaStationCode: 'DT_0014',
   ),
   SeaLocation(
     id: 'geoje',
@@ -183,6 +190,7 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.878,
     longitude: 128.719,
+    khoaStationCode: 'DT_0029',
   ),
   SeaLocation(
     id: 'masan',
@@ -190,6 +198,7 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 35.196,
     longitude: 128.570,
+    khoaStationCode: 'DT_0062',
   ),
   SeaLocation(
     id: 'busan',
@@ -208,6 +217,7 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 35.500,
     longitude: 129.417,
+    khoaStationCode: 'DT_0020',
   ),
   SeaLocation(
     id: 'gampo',
@@ -222,7 +232,7 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 36.047,
     longitude: 129.384,
-    khoaStationCode: 'DT_0022',
+    khoaStationCode: 'DT_0091',
   ),
   SeaLocation(
     id: 'yeongdeok',
@@ -237,6 +247,7 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 36.677,
     longitude: 129.453,
+    khoaStationCode: 'DT_0011',
   ),
   SeaLocation(
     id: 'samcheok',
@@ -251,6 +262,7 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 37.550,
     longitude: 129.115,
+    khoaStationCode: 'DT_0006',
   ),
   SeaLocation(
     id: 'jumunjin',
@@ -319,6 +331,7 @@ const List<SeaLocation> sampleLocations = [
     region: '제주',
     latitude: 33.458,
     longitude: 126.927,
+    khoaStationCode: 'DT_0022',
   ),
   SeaLocation(
     id: 'pyoseon',
@@ -341,6 +354,7 @@ const List<SeaLocation> sampleLocations = [
     region: '제주',
     latitude: 33.213,
     longitude: 126.251,
+    khoaStationCode: 'DT_0023',
   ),
 
   // ── 서해 충남 주요 낚시 항구 (추가) ─────────────────────
@@ -382,6 +396,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 37.245,
     longitude: 126.489,
+    khoaStationCode: 'DT_0043',
     rank: 1,
   ),
   SeaLocation(
@@ -390,6 +405,10 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.516,
     longitude: 127.130,
+    // 녹동/소록도 조위관측소는 이 API 목록에 없어, 같은 고흥반도의 가장 가까운
+    // 공식 관측소인 고흥발포(DT_0026, 약 20km)로 대신한다. 합성보다 훨씬
+    // 가깝지만 녹동 정확값과는 십수 분 차이가 날 수 있다.
+    khoaStationCode: 'DT_0026',
     rank: 1,
   ),
   SeaLocation(

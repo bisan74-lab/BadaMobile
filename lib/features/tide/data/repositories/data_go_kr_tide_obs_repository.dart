@@ -7,25 +7,26 @@ import '../models/tide_data.dart';
 import 'tide_repository.dart';
 
 /// 공공데이터포털 「해양수산부 국립해양조사원_조위관측소 실측·예측 조위 조회」
-/// 리포지토리 (data.go.kr 데이터셋 15142507, 활용신청 승인).
+/// (서비스ID SV-AP-02-009, 데이터셋 15142507) 리포지토리.
 ///
-/// 이 API는 관측소별 **1시간 간격 1일치** 조위 시계열을 준다 — 실측(과거)과
-/// 예측(미래·오늘)이 함께 온다. 조석예보(고,저조) API가 극값만 주는 것과 달리
-/// 연속 곡선을 주므로, 우리는 **예측 조위 시계열**을 받아
-/// (1) 조위 곡선(hourlyHeightsCm)은 그대로,
-/// (2) 만조/간조(극값)는 시계열의 국소 최대/최소를 **포물선 보간으로 시분까지
-///     정밀화**해 만든다(1시간 격자보다 촘촘한 실제 극값 시각·조위).
-/// 미래 날짜엔 실측이 비어 예측만 오므로, 과거·미래를 일관되게 다루려고 값은
-/// **예측 우선, 없으면 실측**으로 고른다.
+/// 이 API는 관측소별 조위 시계열(실측·예측)을 [min]분 간격으로 준다. 조석예보
+/// (고,저조) API가 극값만 주는 것과 달리 연속 곡선을 주므로, **예측 조위 시계열**을
+/// 받아 (1) 조위 곡선(hourlyHeightsCm)과 (2) 만조/간조 극값을 만든다. 극값은
+/// 시계열의 국소 최대/최소를 이웃 3점 포물선(2차)으로 시·분까지 정밀화한다
+/// (격자보다 촘촘한 실제 극값 시각·조위). 값은 과거·미래 일관성을 위해
+/// **예측(tdlvHgt) 우선, 없으면 실측(bscTdlvHgt)**으로 고른다.
 ///
-/// 요청변수(포털 상세기능 규격): ServiceKey / ObsCode / Date(yyyyMMdd) /
-/// ResultType(json). 응답 봉투·필드명은 KHOA 바다누리(result.data)와 data.go.kr
-/// 표준(response.body.items.item)을 모두 수용하고([parseDataGoKrItems]),
-/// 필드명 camel/snake 변형도 후보 매칭으로 흡수한다([pickField]). 매핑 실패 시
-/// 예외를 던져 상위 폴백(고저조 API → 합성 데이터)으로 넘어간다.
+/// 규격(활용가이드 SV-AP-02-009):
+/// - URL: https://apis.data.go.kr/1192136/surveyTideLevel/GetSurveyTideLevelApiService
+/// - 요청: serviceKey / type=json / obsCode / reqDate(yyyyMMdd) / min(분 간격) /
+///   numOfRows(최대 300)
+/// - 응답: response.header{resultCode,resultMsg} + response.body.items.item[]
+///   각 item: obsvtrNm(관측소)·lat·lot·obsrvnDt(관측일시)·bscTdlvHgt(실측조위 cm)·
+///   tdlvHgt(예측조위 cm). resultCode 00=정상, 03=데이터없음.
 ///
-/// 참고: data.go.kr가 바다누리 API를 대체하는 신규 엔드포인트를 별도 경로로
-/// 제공하면 [_host]/[_path]만 그에 맞춰 바꾸면 되고, 파싱은 그대로 동작한다.
+/// serviceKey는 data.go.kr **디코딩 키**를 주입한다(Uri가 재인코딩하므로 인코딩
+/// 키를 넣으면 이중 인코딩된다). 봉투·필드명은 [parseDataGoKrItems]/[pickField]로
+/// 처리하며 실패 시 예외를 던져 상위 폴백(고저조 API → 합성 데이터)으로 넘어간다.
 class DataGoKrTideObsRepository implements TideRepository {
   DataGoKrTideObsRepository({http.Client? client, String? serviceKey})
     : _client = client ?? http.Client(),
@@ -34,10 +35,12 @@ class DataGoKrTideObsRepository implements TideRepository {
   final http.Client _client;
   final String _serviceKey;
 
-  // 바다누리 해양정보 서비스 조위관측소 실측·예측 조위(tideObsPreTab).
-  // data.go.kr 15142507이 문서화한 요청주소와 동일 규격이다.
-  static const _host = 'www.khoa.go.kr';
-  static const _path = '/api/oceangrid/tideObsPreTab/search.do';
+  static const _host = 'apis.data.go.kr';
+  static const _path = '/1192136/surveyTideLevel/GetSurveyTideLevelApiService';
+
+  /// 시계열 간격(분). 10분이면 하루 ~144점으로 numOfRows(최대 300) 안에서
+  /// 극값 시각을 분 단위로 정밀히 잡을 수 있다.
+  static const _stepMinutes = 10;
 
   @override
   Future<TideDay> fetchTideDay(SeaLocation location, DateTime date) async {
@@ -82,11 +85,13 @@ class DataGoKrTideObsRepository implements TideRepository {
         '${date.year}'
         '${date.month.toString().padLeft(2, '0')}'
         '${date.day.toString().padLeft(2, '0')}';
-    final uri = Uri.http(_host, _path, {
-      'ServiceKey': _serviceKey,
-      'ObsCode': obsCode,
-      'Date': ymd,
-      'ResultType': 'json',
+    final uri = Uri.https(_host, _path, {
+      'serviceKey': _serviceKey,
+      'type': 'json',
+      'obsCode': obsCode,
+      'reqDate': ymd,
+      'min': '$_stepMinutes',
+      'numOfRows': '300',
     });
     final res = await _client.get(uri);
     if (res.statusCode != 200) {
@@ -95,32 +100,28 @@ class DataGoKrTideObsRepository implements TideRepository {
     return parseDataGoKrItems(res.body).map(_mapSample).toList();
   }
 
-  /// 시계열 한 행 → (시각, 조위). 조위는 **예측 우선, 없으면 실측**.
+  /// 시계열 한 행 → (시각, 조위). 조위는 **예측(tdlvHgt) 우선, 없으면
+  /// 실측(bscTdlvHgt)**.
   _TideSample _mapSample(Map<String, dynamic> item) {
     final timeRaw = pickField(item, const [
-      'record_time', // 바다누리 실측·예측 공통 관측시각
+      'obsrvnDt', // 활용가이드 확정: 관측일시
+      'record_time',
       'pre_time',
-      'obsrDt',
-      'predcDt',
       'recordTime',
-      'tph_time',
       'time',
     ]);
     // 예측 조위 후보 → 실측 조위 후보 순.
     final levelRaw =
         pickField(item, const [
-          'pre_value', // 바다누리 예측 조위(cm)
+          'tdlvHgt', // 활용가이드 확정: 예측조위(cm)
+          'pre_value',
           'predcTdlvVl',
-          'predc_tdlv_vl',
           'preValue',
-          'pre_level',
         ]) ??
         pickField(item, const [
-          'tide_level', // 실측 조위(cm)
+          'bscTdlvHgt', // 활용가이드 확정: 실측조위(cm)
+          'tide_level',
           'tdlv',
-          'obsrTdlvVl',
-          'tphLevel',
-          'tph_level',
         ]);
     if (timeRaw == null || levelRaw == null) {
       throw FormatException('알 수 없는 실측·예측 조위 필드 구성: ${item.keys.join(', ')}');
@@ -130,9 +131,9 @@ class DataGoKrTideObsRepository implements TideRepository {
     return _TideSample(time: time, heightCm: level);
   }
 
-  /// 시계열에서 [day](00~24시) 구간의 만조/간조를 뽑는다. 1시간 격자의 국소
-  /// 극값을 찾은 뒤, 이웃 3점 포물선(2차)으로 꼭짓점 시각·높이를 시분까지
-  /// 정밀화한다 — 실제 만조/간조는 정시에 딱 맞지 않으므로.
+  /// 시계열에서 [day](00~24시) 구간의 만조/간조를 뽑는다. 격자의 국소 극값을
+  /// 찾은 뒤, 이웃 3점 포물선(2차)으로 꼭짓점 시각·높이를 시·분까지 정밀화한다
+  /// — 실제 만조/간조는 격자 시각에 딱 맞지 않으므로.
   List<TideExtreme> _extremesFrom(List<_TideSample> s, DateTime day) {
     final next = day.add(const Duration(days: 1));
     final out = <TideExtreme>[];
@@ -145,9 +146,9 @@ class DataGoKrTideObsRepository implements TideRepository {
       // 포물선 꼭짓점 오프셋(격자 간격 단위, -0.5~0.5). 분모 0이면 평평.
       final denom = y0 - 2 * y1 + y2;
       final d = denom == 0 ? 0.0 : (0.5 * (y0 - y2) / denom).clamp(-0.5, 0.5);
-      final stepMs = s[i + 1].time.difference(s[i - 1].time).inMilliseconds / 2;
+      final halfMs = s[i + 1].time.difference(s[i - 1].time).inMilliseconds / 2;
       final refinedTime = s[i].time.add(
-        Duration(milliseconds: (d * stepMs).round()),
+        Duration(milliseconds: (d * halfMs).round()),
       );
       final refinedHeight = y1 - 0.25 * (y0 - y2) * d;
 
@@ -160,8 +161,7 @@ class DataGoKrTideObsRepository implements TideRepository {
     return out;
   }
 
-  /// 시계열을 [day] 00~24시 1시간 간격 25점으로 만든다(선형 보간). 시계열이
-  /// 이미 1시간 격자면 정시값을 그대로 쓰고, 어긋나면 인접값으로 보간한다.
+  /// 시계열을 [day] 00~24시 1시간 간격 25점으로 만든다(선형 보간).
   List<double> _hourlyFrom(List<_TideSample> s, DateTime day) {
     double at(DateTime t) {
       if (!t.isAfter(s.first.time)) return s.first.heightCm;
