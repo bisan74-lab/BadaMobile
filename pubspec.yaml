@@ -2,7 +2,7 @@ name: bada_mobile
 description: "물때·조석 정보와 바람·해양 날씨를 한 앱에서 - BadaMobile (바다윈디)"
 publish_to: 'none'
 
-version: 0.1.72+73
+version: 0.1.73+74
 
 environment:
   sdk: ^3.8.1
@@ -32,5 +32,5 @@ flutter_launcher_icons:
   android: true
   ios: false # iOS 확장 시 true로 변경
   image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "#B4001E"
+  adaptive_icon_background: "#07162b"
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
