@@ -8,9 +8,12 @@ import 'wind_field_repository.dart';
 
 /// [inner](실 API)의 바람장 시계열을 로컬에 캐시하는 래퍼 (FR-11 체인).
 ///
-/// - 캐시가 신선하면([freshFor], 기본 3시간) 네트워크 요청 없이 캐시를 쓴다.
-///   앱을 열 때마다 무거운 격자 요청(배치 수백 좌표)을 반복하다 무료 API
-///   한도에 걸려 지도가 합성 바람으로 떨어지던 일 자체를 줄인다.
+/// - 캐시가 신선하면([freshFor], 기본 15분) 네트워크 요청 없이 캐시를 쓴다.
+///   예전엔 3시간이었는데, 서버가 새 ECMWF 런(태풍 유무가 갈리는 장기 예보
+///   갱신)을 올려도 앱이 최대 3시간 동안 옛 캐시만 보여줘 Windy와 어긋났다
+///   (사용자 지적: 태풍이 있다가 사라짐). 지금 1순위 소스는 정적 파일 1개
+///   다운로드(GitHub CDN)라 자주 확인해도 API 한도와 무관하므로 짧게 줄였다.
+///   (Open-Meteo 직접 다지점 호출은 파일 실패 시의 폴백일 때만 나간다.)
 /// - 실 요청이 실패하면 오래된 캐시([staleLimit] 이내)로 폴백한다 — 합성
 ///   목업보다 훨씬 정확하다. 캐시도 없으면 예외를 다시 던져 상위 폴백
 ///   체인(합성)으로 넘긴다.
@@ -20,14 +23,14 @@ class CachingWindFieldRepository implements WindFieldRepository {
   CachingWindFieldRepository({
     required this.inner,
     required this.cache,
-    this.freshFor = const Duration(hours: 3),
+    this.freshFor = const Duration(minutes: 15),
     this.staleLimit = const Duration(hours: 48),
   });
 
   final WindFieldRepository inner;
   final CacheStore cache;
 
-  /// 이 시간 안의 캐시는 네트워크 요청 없이 바로 쓴다(ECMWF 갱신 주기 고려).
+  /// 이 시간 안의 캐시는 네트워크 요청 없이 바로 쓴다.
   final Duration freshFor;
 
   /// 실 요청 실패 시 이 시간 안의 캐시까지는 폴백으로 인정한다.

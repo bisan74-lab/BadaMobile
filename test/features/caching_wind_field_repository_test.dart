@@ -96,7 +96,7 @@ void main() {
     await repo.fetchSeries(hours: 3);
     expect(inner.calls, 1);
     await repo.fetchSeries(hours: 3);
-    expect(inner.calls, 1); // freshFor(기본 3시간) 안이라 재요청 없음
+    expect(inner.calls, 1); // freshFor(기본 15분) 안이라 재요청 없음
   });
 
   test('3시간 간격 시계열(서버 파일)의 시각이 캐시 왕복에도 보존된다', () async {
