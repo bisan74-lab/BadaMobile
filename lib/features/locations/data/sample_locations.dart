@@ -30,6 +30,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 37.191,
     longitude: 126.649,
+    khoaStationCode: 'DT_0008', // 안산(탄도항) 관측소
   ),
   SeaLocation(
     id: 'gungpyeong',
@@ -52,6 +53,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.885,
     longitude: 126.312,
+    khoaStationCode: 'DT_0017', // 대산(가로림만 입구) 약 13km
   ),
   SeaLocation(
     id: 'anmyeondo',
@@ -97,6 +99,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 35.481,
     longitude: 126.436,
+    khoaStationCode: 'DT_0003', // 영광(법성포) 약 12km
   ),
   SeaLocation(
     id: 'beopseongpo',
@@ -152,6 +155,7 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.485,
     longitude: 127.487,
+    khoaStationCode: 'DT_0026', // 고흥발포 약 13km
   ),
   SeaLocation(
     id: 'yeosu',
@@ -255,6 +259,7 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 37.450,
     longitude: 129.174,
+    khoaStationCode: 'DT_0057', // 동해항 약 5km
   ),
   SeaLocation(
     id: 'donghae_mukho',
@@ -277,6 +282,7 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 38.078,
     longitude: 128.628,
+    khoaStationCode: 'DT_0012', // 속초 약 15km
   ),
   SeaLocation(
     id: 'sokcho',
@@ -364,6 +370,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.418,
     longitude: 126.499,
+    khoaStationCode: 'DT_0025', // 보령(대천항) 약 9km
     rank: 1,
   ),
   SeaLocation(
@@ -372,6 +379,9 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.243,
     longitude: 126.522,
+    // 무창포 전용 관측소가 없어 같은 보령시 대천항 관측소(보령 DT_0025,
+    // 약 11km)로 대신한다.
+    khoaStationCode: 'DT_0025',
     rank: 1,
   ),
   SeaLocation(
@@ -440,6 +450,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.083,
     longitude: 126.560,
+    khoaStationCode: 'DT_0051', // 서천마량 약 7km
   ),
   SeaLocation(
     id: 'sinjindo',
@@ -447,6 +458,7 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.700,
     longitude: 126.135,
+    khoaStationCode: 'DT_0067', // 안흥(신진도 소재) 인접
   ),
   SeaLocation(
     id: 'mallipo',
