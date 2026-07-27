@@ -155,7 +155,8 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.485,
     longitude: 127.487,
-    khoaStationCode: 'DT_0026', // 고흥발포 약 13km
+    // 서쪽 고흥발포(DT_0026)와 동쪽 여수(DT_0016) 사이 → 거리가중 보간.
+    khoaStationCodes: ['DT_0026', 'DT_0016'],
   ),
   SeaLocation(
     id: 'yeosu',
@@ -171,6 +172,8 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.686,
     longitude: 128.088,
+    // 삼천포·통영·여수 3개 관측소 사이(애매) → 3지점 거리가중 보간.
+    khoaStationCodes: ['DT_0061', 'DT_0014', 'DT_0016'],
   ),
   SeaLocation(
     id: 'samcheonpo',
@@ -229,6 +232,8 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 35.798,
     longitude: 129.499,
+    // 북쪽 포항(DT_0091)과 남쪽 울산(DT_0020) 사이 → 거리가중 보간.
+    khoaStationCodes: ['DT_0091', 'DT_0020'],
   ),
   SeaLocation(
     id: 'pohang',
@@ -244,6 +249,8 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 36.400,
     longitude: 129.398,
+    // 남쪽 포항(DT_0091)과 북쪽 후포(DT_0011) 사이 → 거리가중 보간.
+    khoaStationCodes: ['DT_0091', 'DT_0011'],
   ),
   SeaLocation(
     id: 'hupo',
@@ -275,6 +282,8 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 37.897,
     longitude: 128.827,
+    // 강릉권은 전용 관측소가 없어(남쪽 묵호·동해항, 북쪽 속초) 3지점 보간.
+    khoaStationCodes: ['DT_0006', 'DT_0057', 'DT_0012'],
   ),
   SeaLocation(
     id: 'yangyang',
@@ -379,9 +388,9 @@ const List<SeaLocation> sampleLocations = [
     region: '서해',
     latitude: 36.243,
     longitude: 126.522,
-    // 무창포 전용 관측소가 없어 같은 보령시 대천항 관측소(보령 DT_0025,
-    // 약 11km)로 대신한다.
-    khoaStationCode: 'DT_0025',
+    // 무창포 전용 관측소가 없어, 북쪽 보령(대천항 DT_0025)과 남쪽 서천마량
+    // (DT_0051) 사이에 있으므로 두 관측소를 거리가중 보간한다.
+    khoaStationCodes: ['DT_0025', 'DT_0051'],
     rank: 1,
   ),
   SeaLocation(
@@ -415,10 +424,9 @@ const List<SeaLocation> sampleLocations = [
     region: '남해',
     latitude: 34.516,
     longitude: 127.130,
-    // 녹동/소록도 조위관측소는 이 API 목록에 없어, 같은 고흥반도의 가장 가까운
-    // 공식 관측소인 고흥발포(DT_0026, 약 20km)로 대신한다. 합성보다 훨씬
-    // 가깝지만 녹동 정확값과는 십수 분 차이가 날 수 있다.
-    khoaStationCode: 'DT_0026',
+    // 녹동/소록도 관측소가 API에 없어, 동쪽 고흥발포(DT_0026)와 서쪽 완도
+    // (DT_0027) 사이이므로 거리가중 보간한다(발포가 더 가까워 크게 치우침).
+    khoaStationCodes: ['DT_0026', 'DT_0027'],
     rank: 1,
   ),
   SeaLocation(
@@ -427,6 +435,8 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 37.766,
     longitude: 128.951,
+    // 강릉권 전용 관측소 없음 → 묵호·동해항·속초 3지점 거리가중 보간.
+    khoaStationCodes: ['DT_0006', 'DT_0057', 'DT_0012'],
     rank: 1,
   ),
   SeaLocation(
@@ -435,6 +445,8 @@ const List<SeaLocation> sampleLocations = [
     region: '동해',
     latitude: 37.836,
     longitude: 128.877,
+    // 강릉권 전용 관측소 없음 → 묵호·동해항·속초 3지점 거리가중 보간.
+    khoaStationCodes: ['DT_0006', 'DT_0057', 'DT_0012'],
     rank: 1,
   ),
   SeaLocation(

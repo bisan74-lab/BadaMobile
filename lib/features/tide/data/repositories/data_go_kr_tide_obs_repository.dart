@@ -1,32 +1,30 @@
+import 'dart:math' as math;
+
 import 'package:http/http.dart' as http;
 
 import '../../../../core/config/env.dart';
 import '../../../../core/network/data_go_kr.dart';
 import '../../../locations/data/models/sea_location.dart';
 import '../models/tide_data.dart';
+import 'data_go_kr_tide_repository.dart' show interpolateHourlyHeights;
 import 'tide_repository.dart';
 
 /// 공공데이터포털 「해양수산부 국립해양조사원_조위관측소 실측·예측 조위 조회」
 /// (서비스ID SV-AP-02-009, 데이터셋 15142507) 리포지토리.
 ///
-/// 이 API는 관측소별 조위 시계열(실측·예측)을 [min]분 간격으로 준다. 조석예보
-/// (고,저조) API가 극값만 주는 것과 달리 연속 곡선을 주므로, **예측 조위 시계열**을
-/// 받아 (1) 조위 곡선(hourlyHeightsCm)과 (2) 만조/간조 극값을 만든다. 극값은
-/// 시계열의 국소 최대/최소를 이웃 3점 포물선(2차)으로 시·분까지 정밀화한다
-/// (격자보다 촘촘한 실제 극값 시각·조위). 값은 과거·미래 일관성을 위해
-/// **예측(tdlvHgt) 우선, 없으면 실측(bscTdlvHgt)**으로 고른다.
+/// 관측소별 조위 시계열(실측·예측)을 [_stepMinutes]분 간격으로 받아
+/// 만조/간조 극값(포물선 보간으로 시·분 정밀화)과 25점 조위 곡선을 만든다.
+/// 값은 과거·미래 일관성을 위해 예측(tdlvHgt) 우선, 없으면 실측(bscTdlvHgt).
 ///
-/// 규격(활용가이드 SV-AP-02-009):
-/// - URL: https://apis.data.go.kr/1192136/surveyTideLevel/GetSurveyTideLevelApiService
-/// - 요청: serviceKey / type=json / obsCode / reqDate(yyyyMMdd) / min(분 간격) /
-///   numOfRows(최대 300)
-/// - 응답: response.header{resultCode,resultMsg} + response.body.items.item[]
-///   각 item: obsvtrNm(관측소)·lat·lot·obsrvnDt(관측일시)·bscTdlvHgt(실측조위 cm)·
-///   tdlvHgt(예측조위 cm). resultCode 00=정상, 03=데이터없음.
+/// **다지점 거리가중 보간**: 지점이 여러 관측소 사이에 있으면
+/// ([SeaLocation.khoaStationCodes]) 2~4곳을 받아, 조위 곡선을 그냥 평균하지
+/// 않고(위상차로 진폭이 깎임) **매칭되는 만조끼리·간조끼리 시각·조위를
+/// 거리가중(1/d²) 평균**한다. 각 관측소 좌표는 응답의 lat/lot에서 읽어 지점
+/// 좌표와의 거리로 가중치를 정한다. 단일 관측소면 그 지점 시계열을 그대로 쓴다.
 ///
-/// serviceKey는 data.go.kr **디코딩 키**를 주입한다(Uri가 재인코딩하므로 인코딩
-/// 키를 넣으면 이중 인코딩된다). 봉투·필드명은 [parseDataGoKrItems]/[pickField]로
-/// 처리하며 실패 시 예외를 던져 상위 폴백(고저조 API → 합성 데이터)으로 넘어간다.
+/// 규격: URL apis.data.go.kr/1192136/surveyTideLevel/GetSurveyTideLevelApiService,
+/// 요청 serviceKey/type=json/obsCode/reqDate(yyyyMMdd)/min/numOfRows,
+/// 응답 response.body.items.item[] {obsvtrNm,lat,lot,obsrvnDt,bscTdlvHgt,tdlvHgt}.
 class DataGoKrTideObsRepository implements TideRepository {
   DataGoKrTideObsRepository({http.Client? client, String? serviceKey})
     : _client = client ?? http.Client(),
@@ -38,49 +36,97 @@ class DataGoKrTideObsRepository implements TideRepository {
   static const _host = 'apis.data.go.kr';
   static const _path = '/1192136/surveyTideLevel/GetSurveyTideLevelApiService';
 
-  /// 시계열 간격(분). 10분이면 하루 ~144점으로 numOfRows(최대 300) 안에서
-  /// 극값 시각을 분 단위로 정밀히 잡을 수 있다.
+  /// 시계열 간격(분). 10분이면 하루 ~144점(numOfRows 최대 300 안)으로 극값
+  /// 시각을 분 단위로 정밀히 잡는다.
   static const _stepMinutes = 10;
+
+  /// 다지점 보간 시 다른 관측소에서 같은 극값으로 인정할 시간 허용오차.
+  static const _matchTolerance = Duration(hours: 2);
 
   @override
   Future<TideDay> fetchTideDay(SeaLocation location, DateTime date) async {
     TideRepository.ensureInRange(date);
-    final obsCode = location.khoaStationCode;
-    if (obsCode == null) {
+    final codes = location.tideStationCodes;
+    if (codes.isEmpty) {
       // 범위 초과가 아니라 "이 지점은 아직 실데이터 연동 전"이므로 일반
       // 예외로 던져 합성 데이터 폴백을 탄다.
       throw Exception('${location.name}에는 조위관측소 코드가 없습니다');
     }
 
     final day = DateTime(date.year, date.month, date.day);
-    // 자정 부근 극값·곡선 연속성을 위해 전날~다음날까지 조회해 이어붙인다.
-    final series = <_TideSample>[];
+    final stations = <_Station>[];
+    for (final code in codes) {
+      stations.add(await _fetchStation(code, day, location));
+    }
+
+    if (stations.length == 1) {
+      // 단일 관측소: 그 지점 시계열을 그대로(더 촘촘한 곡선).
+      final s = stations.first.samples;
+      return TideDay(
+        date: day,
+        locationId: location.id,
+        extremes: _dayExtremes(_allExtremes(s), day),
+        hourlyHeightsCm: _hourlyFromSeries(s, day),
+      );
+    }
+
+    // 다지점: 거리가중으로 매칭 극값 보간.
+    final blended = _blendExtremes(stations, day);
+    if (blended.length < 2) {
+      throw const FormatException('보간할 극값이 부족함');
+    }
+    return TideDay(
+      date: day,
+      locationId: location.id,
+      extremes: _dayExtremes(blended, day),
+      hourlyHeightsCm: interpolateHourlyHeights(blended, day),
+    );
+  }
+
+  Future<_Station> _fetchStation(
+    String obsCode,
+    DateTime day,
+    SeaLocation target,
+  ) async {
+    final samples = <_TideSample>[];
+    double? lat, lon;
     for (final d in [
       day.subtract(const Duration(days: 1)),
       day,
       day.add(const Duration(days: 1)),
     ]) {
-      series.addAll(await _fetchSeries(obsCode, d));
+      final items = await _fetchItems(obsCode, d);
+      for (final it in items) {
+        samples.add(_mapSample(it));
+        lat ??= _numField(it, const ['lat', 'obsLat', 'obs_lat']);
+        lon ??= _numField(it, const ['lot', 'lon', 'obsLon', 'obs_lon']);
+      }
     }
-    series.sort((a, b) => a.time.compareTo(b.time));
-    // 중복 시각 제거(전날 24:00 == 당일 00:00 등).
+    samples.sort((a, b) => a.time.compareTo(b.time));
     final dedup = <_TideSample>[];
-    for (final s in series) {
+    for (final s in samples) {
       if (dedup.isEmpty || dedup.last.time != s.time) dedup.add(s);
     }
     if (dedup.length < 3) {
       throw const FormatException('실측·예측 조위 응답에 충분한 시계열이 없음');
     }
-
-    return TideDay(
-      date: day,
-      locationId: location.id,
-      extremes: _extremesFrom(dedup, day),
-      hourlyHeightsCm: _hourlyFrom(dedup, day),
+    // 거리(km): 관측소 좌표가 없으면 지점 좌표로 대체(가중치 지배).
+    final dist = _distKm(
+      target.latitude,
+      target.longitude,
+      lat ?? target.latitude,
+      lon ?? target.longitude,
+    );
+    return _Station(
+      samples: dedup,
+      weight: 1.0 / math.pow(math.max(dist, 0.5), 2),
     );
   }
 
-  Future<List<_TideSample>> _fetchSeries(String obsCode, DateTime date) async {
+  Future<List<Map<String, dynamic>>> _fetchItems(
+    String obsCode,
+    DateTime date,
+  ) async {
     final ymd =
         '${date.year}'
         '${date.month.toString().padLeft(2, '0')}'
@@ -97,72 +143,123 @@ class DataGoKrTideObsRepository implements TideRepository {
     if (res.statusCode != 200) {
       throw http.ClientException('실측·예측 조위 응답 오류 ${res.statusCode}', uri);
     }
-    return parseDataGoKrItems(res.body).map(_mapSample).toList();
+    return parseDataGoKrItems(res.body);
   }
 
-  /// 시계열 한 행 → (시각, 조위). 조위는 **예측(tdlvHgt) 우선, 없으면
-  /// 실측(bscTdlvHgt)**.
+  /// 시계열 한 행 → (시각, 조위). 조위는 예측(tdlvHgt) 우선, 없으면 실측.
   _TideSample _mapSample(Map<String, dynamic> item) {
     final timeRaw = pickField(item, const [
       'obsrvnDt', // 활용가이드 확정: 관측일시
       'record_time',
-      'pre_time',
       'recordTime',
       'time',
     ]);
-    // 예측 조위 후보 → 실측 조위 후보 순.
     final levelRaw =
-        pickField(item, const [
-          'tdlvHgt', // 활용가이드 확정: 예측조위(cm)
-          'pre_value',
-          'predcTdlvVl',
-          'preValue',
-        ]) ??
-        pickField(item, const [
-          'bscTdlvHgt', // 활용가이드 확정: 실측조위(cm)
-          'tide_level',
-          'tdlv',
-        ]);
+        pickField(item, const ['tdlvHgt', 'predcTdlvVl', 'pre_value']) ??
+        pickField(item, const ['bscTdlvHgt', 'tide_level', 'tdlv']);
     if (timeRaw == null || levelRaw == null) {
       throw FormatException('알 수 없는 실측·예측 조위 필드 구성: ${item.keys.join(', ')}');
     }
-    final time = DateTime.parse(timeRaw.toString().replaceFirst(' ', 'T'));
-    final level = double.parse(levelRaw.toString());
-    return _TideSample(time: time, heightCm: level);
+    return _TideSample(
+      time: DateTime.parse(timeRaw.toString().replaceFirst(' ', 'T')),
+      heightCm: double.parse(levelRaw.toString()),
+    );
   }
 
-  /// 시계열에서 [day](00~24시) 구간의 만조/간조를 뽑는다. 격자의 국소 극값을
-  /// 찾은 뒤, 이웃 3점 포물선(2차)으로 꼭짓점 시각·높이를 시·분까지 정밀화한다
-  /// — 실제 만조/간조는 격자 시각에 딱 맞지 않으므로.
-  List<TideExtreme> _extremesFrom(List<_TideSample> s, DateTime day) {
-    final next = day.add(const Duration(days: 1));
+  static double? _numField(Map<String, dynamic> item, List<String> keys) {
+    final v = pickField(item, keys);
+    if (v == null) return null;
+    return v is num ? v.toDouble() : double.tryParse(v.toString());
+  }
+
+  /// 시계열의 국소 최대/최소를 만조/간조로 뽑고, 이웃 3점 포물선으로 꼭짓점
+  /// 시각·높이를 시·분까지 정밀화한다.
+  List<TideExtreme> _allExtremes(List<_TideSample> s) {
     final out = <TideExtreme>[];
     for (var i = 1; i < s.length - 1; i++) {
       final y0 = s[i - 1].heightCm, y1 = s[i].heightCm, y2 = s[i + 1].heightCm;
       final isHigh = y1 >= y0 && y1 > y2;
       final isLow = y1 <= y0 && y1 < y2;
       if (!isHigh && !isLow) continue;
-
-      // 포물선 꼭짓점 오프셋(격자 간격 단위, -0.5~0.5). 분모 0이면 평평.
       final denom = y0 - 2 * y1 + y2;
       final d = denom == 0 ? 0.0 : (0.5 * (y0 - y2) / denom).clamp(-0.5, 0.5);
       final halfMs = s[i + 1].time.difference(s[i - 1].time).inMilliseconds / 2;
-      final refinedTime = s[i].time.add(
-        Duration(milliseconds: (d * halfMs).round()),
-      );
-      final refinedHeight = y1 - 0.25 * (y0 - y2) * d;
-
-      // 당일(00~24시) 극값만 남긴다.
-      if (refinedTime.isBefore(day) || !refinedTime.isBefore(next)) continue;
       out.add(
-        TideExtreme(time: refinedTime, heightCm: refinedHeight, isHigh: isHigh),
+        TideExtreme(
+          time: s[i].time.add(Duration(milliseconds: (d * halfMs).round())),
+          heightCm: y1 - 0.25 * (y0 - y2) * d,
+          isHigh: isHigh,
+        ),
       );
     }
     return out;
   }
 
+  List<TideExtreme> _dayExtremes(List<TideExtreme> all, DateTime day) {
+    final next = day.add(const Duration(days: 1));
+    return all
+        .where((e) => !e.time.isBefore(day) && e.time.isBefore(next))
+        .toList();
+  }
+
+  /// 여러 관측소의 극값을 거리가중으로 보간한다. 가장 가까운(가중치 최대)
+  /// 관측소를 기준으로 그날±경계의 각 만조/간조를 잡고, 나머지 관측소에서
+  /// 같은 종류(만조/간조)의 가장 가까운 극값을 [_matchTolerance] 안에서 찾아
+  /// 시각·조위를 가중평균한다(곡선 평균이 아니라 매칭 극값 평균 → 진폭 유지).
+  List<TideExtreme> _blendExtremes(List<_Station> stations, DateTime day) {
+    final ref = stations.reduce((a, b) => a.weight >= b.weight ? a : b);
+    final perStation = [for (final st in stations) _allExtremes(st.samples)];
+    final from = day.subtract(const Duration(hours: 6));
+    final to = day.add(const Duration(hours: 30));
+    final refExtremes = _allExtremes(
+      ref.samples,
+    ).where((e) => e.time.isAfter(from) && e.time.isBefore(to));
+
+    final blended = <TideExtreme>[];
+    for (final e in refExtremes) {
+      var wSum = 0.0, tSum = 0.0, hSum = 0.0;
+      for (var i = 0; i < stations.length; i++) {
+        final match = _nearestSameType(perStation[i], e);
+        if (match == null) continue;
+        final w = stations[i].weight;
+        wSum += w;
+        tSum += w * match.time.millisecondsSinceEpoch;
+        hSum += w * match.heightCm;
+      }
+      if (wSum <= 0) continue;
+      blended.add(
+        TideExtreme(
+          time: DateTime.fromMillisecondsSinceEpoch((tSum / wSum).round()),
+          heightCm: hSum / wSum,
+          isHigh: e.isHigh,
+        ),
+      );
+    }
+    blended.sort((a, b) => a.time.compareTo(b.time));
+    return blended;
+  }
+
+  /// [candidates] 중 [target]과 같은 종류(만조/간조)이면서 시각이 가장 가까운
+  /// 극값. 허용오차([_matchTolerance]) 밖이면 null.
+  TideExtreme? _nearestSameType(
+    List<TideExtreme> candidates,
+    TideExtreme target,
+  ) {
+    TideExtreme? best;
+    var bestDiff = _matchTolerance;
+    for (final c in candidates) {
+      if (c.isHigh != target.isHigh) continue;
+      final diff = c.time.difference(target.time).abs();
+      if (diff <= bestDiff) {
+        bestDiff = diff;
+        best = c;
+      }
+    }
+    return best;
+  }
+
   /// 시계열을 [day] 00~24시 1시간 간격 25점으로 만든다(선형 보간).
-  List<double> _hourlyFrom(List<_TideSample> s, DateTime day) {
+  List<double> _hourlyFromSeries(List<_TideSample> s, DateTime day) {
     double at(DateTime t) {
       if (!t.isAfter(s.first.time)) return s.first.heightCm;
       if (!t.isBefore(s.last.time)) return s.last.heightCm;
@@ -180,6 +277,21 @@ class DataGoKrTideObsRepository implements TideRepository {
 
     return List<double>.generate(25, (h) => at(day.add(Duration(hours: h))));
   }
+}
+
+/// 두 위경도 사이 거리(km, 등거리 근사 — 100km 이내 관측소 선택엔 충분).
+double _distKm(double lat1, double lon1, double lat2, double lon2) {
+  final mLat = (lat1 + lat2) / 2 * math.pi / 180;
+  final dx = (lon2 - lon1) * math.cos(mLat) * 111.32;
+  final dy = (lat2 - lat1) * 111.32;
+  return math.sqrt(dx * dx + dy * dy);
+}
+
+/// 한 관측소의 시계열 + 지점까지의 거리가중치(1/d²).
+class _Station {
+  const _Station({required this.samples, required this.weight});
+  final List<_TideSample> samples;
+  final double weight;
 }
 
 /// 시계열 한 점(내부용).
