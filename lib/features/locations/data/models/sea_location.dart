@@ -8,6 +8,8 @@ class SeaLocation {
     required this.longitude,
     this.khoaStationCode,
     this.khoaStationCodes,
+    this.tideTimeOffsetMin = 0,
+    this.tideHeightScale = 1.0,
     this.rank = 2,
     this.inland = false,
   });
@@ -38,6 +40,15 @@ class SeaLocation {
     return single != null ? [single] : const [];
   }
 
+  /// 조석 2차항 보정(조석표 표준 기법: 기준 관측소 값 + 시간차 + 조위비).
+  /// 전용 관측소가 없는 항구는 인근 관측소와 위상·진폭이 일정하게 어긋나는데
+  /// (지형에 의한 고정 상수), 실측 조석표와 대조해 이 값으로 맞춘다.
+  /// [tideTimeOffsetMin]: 만조/간조 시각에 더할 분(+면 늦어짐).
+  final int tideTimeOffsetMin;
+
+  /// 조위(cm)에 곱할 배율(1.0 = 그대로).
+  final double tideHeightScale;
+
   /// 표시 우선순위(1=주요 항구/대도시 → 3=소규모). 지도 확대 단계별 라벨
   /// 노출과 겹침 방지에 쓴다(작을수록 먼저 표시).
   final int rank;
@@ -60,6 +71,8 @@ class SeaLocation {
     'longitude': longitude,
     'khoaStationCode': khoaStationCode,
     'khoaStationCodes': khoaStationCodes,
+    'tideTimeOffsetMin': tideTimeOffsetMin,
+    'tideHeightScale': tideHeightScale,
     'rank': rank,
     'inland': inland,
   };
@@ -74,6 +87,8 @@ class SeaLocation {
     khoaStationCodes: (j['khoaStationCodes'] as List?)
         ?.map((e) => e as String)
         .toList(),
+    tideTimeOffsetMin: (j['tideTimeOffsetMin'] as num?)?.toInt() ?? 0,
+    tideHeightScale: (j['tideHeightScale'] as num?)?.toDouble() ?? 1.0,
     rank: (j['rank'] as num?)?.toInt() ?? 2,
     inland: j['inland'] as bool? ?? false,
   );

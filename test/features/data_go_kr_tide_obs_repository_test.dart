@@ -180,4 +180,35 @@ void main() {
       expect(tideAB.hourlyHeightsCm, hasLength(25));
     });
   });
+
+  group('2차항 보정(시간차·조위비)', () {
+    SeaLocation loc({int offsetMin = 0, double scale = 1.0}) => SeaLocation(
+      id: 'calib',
+      name: '보정지점',
+      region: '남해',
+      latitude: 37.45194,
+      longitude: 126.59222,
+      khoaStationCode: 'DT_0001',
+      tideTimeOffsetMin: offsetMin,
+      tideHeightScale: scale,
+    );
+
+    test('만조/간조 시각이 오프셋만큼 늦어지고 조위가 배율만큼 커진다', () async {
+      final base = await repo().fetchTideDay(loc(), date);
+      final adj = await repo().fetchTideDay(
+        loc(offsetMin: 12, scale: 1.05),
+        date,
+      );
+
+      final baseHigh = highNearNoon(base.extremes);
+      final adjHigh = highNearNoon(adj.extremes);
+      // 10분 격자 + 포물선 정밀화라 ±수 분 오차 허용.
+      final shiftMin = adjHigh.difference(baseHigh).inMinutes;
+      expect(shiftMin, inInclusiveRange(7, 17));
+
+      final baseTop = base.extremes.firstWhere((e) => e.isHigh).heightCm;
+      final adjTop = adj.extremes.firstWhere((e) => e.isHigh).heightCm;
+      expect(adjTop / baseTop, closeTo(1.05, 0.01));
+    });
+  });
 }

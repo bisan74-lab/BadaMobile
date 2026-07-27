@@ -103,12 +103,26 @@ class DataGoKrTideObsRepository implements TideRepository {
       }
     }
     samples.sort((a, b) => a.time.compareTo(b.time));
-    final dedup = <_TideSample>[];
+    var dedup = <_TideSample>[];
     for (final s in samples) {
       if (dedup.isEmpty || dedup.last.time != s.time) dedup.add(s);
     }
     if (dedup.length < 3) {
       throw const FormatException('실측·예측 조위 응답에 충분한 시계열이 없음');
+    }
+    // 지점별 2차항 보정(조석표 표준 기법): 전용 관측소가 없는 항구는 인근
+    // 관측소 대비 위상·진폭이 지형에 의해 일정하게 어긋난다. 실측 조석표와
+    // 대조해 캘리브레이션한 시간차·조위비를 시계열 자체에 적용한다 —
+    // 이후 극값 추출·곡선·보간이 모두 보정된 값 위에서 일관되게 동작한다.
+    if (target.tideTimeOffsetMin != 0 || target.tideHeightScale != 1.0) {
+      final dt = Duration(minutes: target.tideTimeOffsetMin);
+      dedup = [
+        for (final s in dedup)
+          _TideSample(
+            time: s.time.add(dt),
+            heightCm: s.heightCm * target.tideHeightScale,
+          ),
+      ];
     }
     // 거리(km): 관측소 좌표가 없으면 지점 좌표로 대체(가중치 지배).
     final dist = _distKm(
