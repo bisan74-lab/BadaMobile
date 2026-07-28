@@ -1,0 +1,21 @@
+name: Tide debug
+
+# 조위관측소 원본 만조/간조를 출력해 지점 보정(시간차·조위비) 캘리브레이션의
+# 정답지를 확보하기 위한 수동 디버그 워크플로. 키는 Secret에서만 읽는다.
+on:
+  workflow_dispatch:
+    inputs:
+      dates:
+        description: '조회할 날짜들(yyyyMMdd, 공백 구분)'
+        required: false
+        default: ''
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 관측소 만조/간조 출력
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: python3 tool/debug_tide.py ${{ inputs.dates }}
