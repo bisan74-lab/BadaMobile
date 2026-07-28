@@ -38,30 +38,40 @@ Future<Widget> buildApp() async {
 }
 
 void main() {
-  testWidgets('앱이 렌더링되고 5개 아이콘 내비게이션이 보인다', (tester) async {
+  testWidgets('앱이 렌더링되고 3개 탭 내비게이션이 보인다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    // 하단 라벨 바 대신 오른쪽 아이콘 세로 내비게이션(홈 선택 상태).
-    expect(find.byIcon(Icons.home), findsOneWidget); // 선택된 홈
-    expect(find.byIcon(Icons.wb_sunny_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.waves_outlined), findsOneWidget);
+    // 물때&날씨(선택) / Windy / 설정 3탭 구성.
+    expect(find.byIcon(Icons.waves), findsOneWidget); // 선택된 물때&날씨
     expect(find.byIcon(Icons.air_outlined), findsOneWidget);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
-    expect(find.text('바다 윈디'), findsOneWidget);
+    expect(find.text('물때&날씨'), findsOneWidget);
   });
 
-  testWidgets('물때 아이콘으로 이동하면 만조/간조 목록이 보인다', (tester) async {
+  testWidgets('첫 화면(물때&날씨)에 만조/간조와 광고 자리 소개가 보인다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.waves_outlined));
-    await tester.pumpAndSettle();
-
-    // 제목은 이제 지역명 없이 "물때"만, 지역은 우측 상단 선택 버튼에 표시된다.
-    expect(find.widgetWithText(AppBar, '물때'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, '물때 & 날씨'), findsOneWidget);
     expect(find.textContaining('만조 '), findsWidgets);
     expect(find.textContaining('간조 '), findsWidgets);
+    // 하단 광고 자리(앱 소개 박스)와 오른쪽 메뉴 항목.
+    expect(find.text('바다윈디'), findsOneWidget);
+    expect(find.text('낚시정보'), findsOneWidget);
+    expect(find.text('물때달력'), findsOneWidget);
+  });
+
+  testWidgets('오른쪽 메뉴 물때달력을 열면 달력 팝업이 뜬다', (tester) async {
+    await tester.pumpWidget(await buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('물때달력'));
+    await tester.pumpAndSettle();
+
+    // 요일 헤더가 보이면 달력이 열린 것.
+    expect(find.text('일'), findsOneWidget);
+    expect(find.text('토'), findsOneWidget);
   });
 
   testWidgets('우측 상단 지역 선택 버튼으로 지점을 바꿀 수 있다', (tester) async {

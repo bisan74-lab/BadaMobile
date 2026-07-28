@@ -2,7 +2,7 @@ name: bada_mobile
 description: "물때·조석 정보와 바람·해양 날씨를 한 앱에서 - BadaMobile (바다윈디)"
 publish_to: 'none'
 
-version: 0.1.76+77
+version: 0.2.0+78
 
 environment:
   sdk: ^3.8.1
@@ -26,6 +26,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/ # 물때 타임라인 사진풍 바다 배경(자체 생성)
+    - assets/icon/app_icon.png # 하단 광고 자리(앱 소개 박스)의 아이콘
 
 # 런처 아이콘 생성: dart run flutter_launcher_icons
 flutter_launcher_icons:

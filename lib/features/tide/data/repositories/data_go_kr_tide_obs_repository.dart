@@ -54,10 +54,11 @@ class DataGoKrTideObsRepository implements TideRepository {
     }
 
     final day = DateTime(date.year, date.month, date.day);
-    final stations = <_Station>[];
-    for (final code in codes) {
-      stations.add(await _fetchStation(code, day, location));
-    }
+    // 관측소들을 병렬로 조회한다(관측소별 3일치도 내부에서 병렬) — 예전엔
+    // 최대 6회(2관측소×3일)를 순차로 기다려 화면 로딩이 3~4초 걸렸다.
+    final stations = await Future.wait([
+      for (final code in codes) _fetchStation(code, day, location),
+    ]);
 
     if (stations.length == 1) {
       // 단일 관측소: 그 지점 시계열을 그대로(더 촘촘한 곡선).
@@ -90,12 +91,16 @@ class DataGoKrTideObsRepository implements TideRepository {
   ) async {
     final samples = <_TideSample>[];
     double? lat, lon;
-    for (final d in [
-      day.subtract(const Duration(days: 1)),
-      day,
-      day.add(const Duration(days: 1)),
-    ]) {
-      final items = await _fetchItems(obsCode, d);
+    // 전날·당일·다음날을 병렬로 받는다(순차 대기 제거 — 로딩 속도 개선).
+    final perDay = await Future.wait([
+      for (final d in [
+        day.subtract(const Duration(days: 1)),
+        day,
+        day.add(const Duration(days: 1)),
+      ])
+        _fetchItems(obsCode, d),
+    ]);
+    for (final items in perDay) {
       for (final it in items) {
         // 행 하나가 불량(조위 null 등)이어도 전체를 버리지 않고 건너뛴다 —
         // 예전엔 여기서 예외를 던져 시계열 전체가 실패했고, 2차 폴백 구멍과

@@ -921,9 +921,8 @@ class _WindyNavRail extends StatelessWidget {
 
   final ValueChanged<int> onSelect;
 
+  // 앱 셸 탭 순서와 동일: 물때&날씨 / Windy / 설정 (사용자 요구로 3개만).
   static const _icons = <(IconData, IconData)>[
-    (Icons.home_outlined, Icons.home),
-    (Icons.wb_sunny_outlined, Icons.wb_sunny),
     (Icons.waves_outlined, Icons.waves),
     (Icons.air_outlined, Icons.air),
     (Icons.settings_outlined, Icons.settings),

@@ -13,15 +13,18 @@ class TideTimeline extends StatelessWidget {
     required this.extremes,
     required this.now,
     this.showBackdrop = true,
+    this.height = 512,
   });
 
   final List<TideExtreme> extremes;
   final DateTime? now;
 
-  /// 직접 그린 바다 배경 표시 여부(설정 > 템플릿 > 배경 그래픽).
+  /// 바다 배경(사진풍 이미지) 표시 여부(설정 > 템플릿 > 배경 그래픽).
   final bool showBackdrop;
 
-  static const double _height = 512;
+  /// 타임라인 높이. null이면 부모 제약(예: Expanded)을 그대로 채운다 —
+  /// 물때&날씨 화면이 스크롤 없이 한 화면에 들어가게 할 때 쓴다.
+  final double? height;
 
   /// 만조는 축 왼쪽, 간조는 축 오른쪽에 배치해 양쪽 공간을 고르게 쓴다.
   static const double _axisFraction = 0.5;
@@ -33,7 +36,7 @@ class TideTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: _height,
+      height: height,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -55,9 +58,32 @@ class TideTimeline extends StatelessWidget {
 
           return Stack(
             children: [
-              // 직접 그린 바다 배경(라이선스 없음).
-              if (showBackdrop)
-                const Positioned.fill(child: SeaBackdrop(opacity: 0.9)),
+              // 사진풍 바다 배경(절차적으로 생성한 자체 이미지 — 라이선스 없음).
+              // 카드·라벨 가독성을 위해 어두운 그라디언트를 살짝 덮는다.
+              if (showBackdrop) ...[
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/images/sea_photo_bg.jpg',
+                    fit: BoxFit.cover,
+                    // 테스트 등 에셋을 못 읽는 환경에선 기존 그린 배경으로.
+                    errorBuilder: (_, _, _) => const SeaBackdrop(opacity: 0.9),
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.18),
+                          Colors.black.withValues(alpha: 0.30),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               Positioned(
                 left: axisX - 2,
                 top: top,
@@ -289,7 +315,8 @@ class TideCurrentStrengthBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            label,
+            // 정성 라벨(강함 등)과 비율(%)을 함께 보여준다(사용자 요청).
+            '$label ${(f * 100).round()}%',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,

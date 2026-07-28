@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/remote_config/app_gate_provider.dart';
 import '../core/storage/prefs.dart';
-import '../features/home/presentation/home_screen.dart';
-import '../features/kma_weather/presentation/kma_weather_screen.dart';
 import '../features/locations/presentation/providers.dart';
 import '../features/settings/presentation/providers.dart';
 import '../features/settings/presentation/settings_screen.dart';
@@ -45,7 +43,8 @@ class BadaMobileApp extends ConsumerWidget {
   }
 }
 
-/// 하단 탭 기반 앱 셸: 홈 / 날씨 / 물때 / Windy / 설정
+/// 하단 탭 기반 앱 셸: 물때&날씨 / Windy / 설정.
+/// 낚시정보(구 홈)·날씨 상세는 물때&날씨 화면의 오른쪽 메뉴에서 푸시로 연다.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -54,13 +53,7 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  static const _screens = [
-    HomeScreen(),
-    KmaWeatherScreen(),
-    TideScreen(),
-    WeatherScreen(),
-    SettingsScreen(),
-  ];
+  static const _screens = [TideScreen(), WeatherScreen(), SettingsScreen()];
 
   @override
   void initState() {
@@ -108,19 +101,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ref.read(appTabIndexProvider.notifier).state = i,
               destinations: const [
                 NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
-                  label: '홈',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.wb_sunny_outlined),
-                  selectedIcon: Icon(Icons.wb_sunny),
-                  label: '날씨',
-                ),
-                NavigationDestination(
                   icon: Icon(Icons.waves_outlined),
                   selectedIcon: Icon(Icons.waves),
-                  label: '물때',
+                  label: '물때&날씨',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.air_outlined),
