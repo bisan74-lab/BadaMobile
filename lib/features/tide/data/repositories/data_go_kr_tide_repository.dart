@@ -33,12 +33,18 @@ class DataGoKrTideRepository implements TideRepository {
   @override
   Future<TideDay> fetchTideDay(SeaLocation location, DateTime date) async {
     TideRepository.ensureInRange(date);
-    final obsCode = location.khoaStationCode;
-    if (obsCode == null) {
+    // 다지점 보간 지점(khoaStationCodes)은 단일 코드가 null일 수 있다. 이
+    // 리포지토리는 실측·예측(시계열) API가 실패했을 때의 2차 폴백이므로,
+    // 그런 지점도 합성으로 떨어지지 않게 첫(가장 대표) 관측소를 쓴다.
+    // 예전엔 khoaStationCode만 봐서, 다지점 지점은 1차 실패 시 곧장 합성
+    // 데이터로 직행하는 구멍이 있었다(무창포 합성 표시 사고의 원인).
+    final codes = location.tideStationCodes;
+    if (codes.isEmpty) {
       // 범위 초과가 아니라 "이 지점은 아직 실데이터 연동 전"이므로
       // DataRangeException이 아닌 일반 예외로 던져 합성 데이터 폴백을 탄다.
       throw Exception('${location.name}에는 조위관측소 코드가 없습니다');
     }
+    final obsCode = codes.first;
 
     final day = DateTime(date.year, date.month, date.day);
     // 자정 부근 보간을 위해 전날~다음날까지 조회.

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:bada_mobile/features/locations/data/models/sea_location.dart';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:bada_mobile/features/tide/data/models/tide_data.dart';
 import 'package:bada_mobile/features/tide/data/repositories/data_go_kr_tide_repository.dart';
@@ -209,6 +210,29 @@ void main() {
       expect(tide.extremes, hasLength(2));
       expect(tide.extremes.first.heightCm, 705);
       expect(tide.hourlyHeightsCm[5], closeTo(705, 0.01));
+    });
+
+    test('다지점(khoaStationCodes) 지점은 첫 관측소로 폴백 조회한다', () async {
+      // 실측·예측(1차) 실패 시 이 고저조(2차)가 다지점 지점도 받아줘야
+      // 합성으로 직행하지 않는다(무창포 합성 표시 회귀 방지).
+      const multi = SeaLocation(
+        id: 'multi',
+        name: '다지점',
+        region: '서해',
+        latitude: 36.2,
+        longitude: 126.5,
+        khoaStationCodes: ['DT_0001', 'DT_0099'],
+      );
+      final repo = DataGoKrTideRepository(
+        client: client(),
+        serviceKey: 'test-key',
+      );
+      final tide = await repo.fetchTideDay(
+        multi,
+        DateTime.now().add(const Duration(days: 3)),
+      );
+      expect(tide.extremes, isNotEmpty);
+      expect(tide.hourlyHeightsCm, hasLength(25));
     });
 
     test('관측소 코드가 없는 지점은 예외를 던진다', () async {

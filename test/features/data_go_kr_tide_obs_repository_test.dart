@@ -55,16 +55,28 @@ MockClient _client() => MockClient((request) async {
   );
   final items = [
     for (var m = 0; m < 1440; m += step)
-      {
-        'obsvtrNm': code,
-        'lat': st.lat,
-        'lot': st.lon,
-        'obsrvnDt': _fmt(d.add(Duration(minutes: m))),
-        'bscTdlvHgt': 0,
-        'tdlvHgt': double.parse(
-          _level(d.add(Duration(minutes: m)), st).toStringAsFixed(1),
-        ),
-      },
+      // 매시 정각 행은 조위를 null로 깨뜨려 결측 내성(행 건너뜀)을 함께
+      // 검증한다 — 10분 격자에서 6행 중 1행 결측이어도 곡선·극값은 유지된다.
+      if (m % 60 == 0)
+        {
+          'obsvtrNm': code,
+          'lat': st.lat,
+          'lot': st.lon,
+          'obsrvnDt': _fmt(d.add(Duration(minutes: m))),
+          'bscTdlvHgt': null,
+          'tdlvHgt': null,
+        }
+      else
+        {
+          'obsvtrNm': code,
+          'lat': st.lat,
+          'lot': st.lon,
+          'obsrvnDt': _fmt(d.add(Duration(minutes: m))),
+          'bscTdlvHgt': 0,
+          'tdlvHgt': double.parse(
+            _level(d.add(Duration(minutes: m)), st).toStringAsFixed(1),
+          ),
+        },
   ];
   return http.Response(
     jsonEncode({
@@ -107,12 +119,14 @@ void main() {
     test('예측 조위 시계열로 25개 곡선을 만든다(예측 우선)', () async {
       final tide = await repo().fetchTideDay(incheon, date);
       expect(tide.hourlyHeightsCm, hasLength(25));
+      // 정각 행은 결측(위 MockClient)이라 이웃 10분 값으로 보간된다 —
+      // ±2cm면 "실측 0이 아니라 예측 곡선을 쓴다"는 검증에 충분하다.
       for (final h in [0, 6, 12, 18, 24]) {
         expect(
           tide.hourlyHeightsCm[h],
           closeTo(
             _level(day.add(Duration(hours: h)), _stations['DT_0001']!),
-            0.5,
+            2.0,
           ),
         );
       }

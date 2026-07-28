@@ -97,7 +97,11 @@ class DataGoKrTideObsRepository implements TideRepository {
     ]) {
       final items = await _fetchItems(obsCode, d);
       for (final it in items) {
-        samples.add(_mapSample(it));
+        // 행 하나가 불량(조위 null 등)이어도 전체를 버리지 않고 건너뛴다 —
+        // 예전엔 여기서 예외를 던져 시계열 전체가 실패했고, 2차 폴백 구멍과
+        // 겹치면 합성 데이터까지 떨어졌다.
+        final sample = _mapSample(it);
+        if (sample != null) samples.add(sample);
         lat ??= _numField(it, const ['lat', 'obsLat', 'obs_lat']);
         lon ??= _numField(it, const ['lot', 'lon', 'obsLon', 'obs_lon']);
       }
@@ -137,6 +141,13 @@ class DataGoKrTideObsRepository implements TideRepository {
     );
   }
 
+  /// 요청 1건 타임아웃. 없으면 서버 지연 시 폴백도 못 타고 화면이 계속 돈다.
+  static const _timeout = Duration(seconds: 15);
+
+  /// 하루치 시계열 조회. **부분 실패는 빈 목록으로 삼킨다** — 전날/다음날 중
+  /// 하나가 일시 오류여도 나머지 이틀로 극값·곡선을 만들 수 있다(자정 부근
+  /// 정밀도만 살짝 떨어짐). 사흘 모두 실패하면 시계열 부족으로 상위에서
+  /// 예외가 나 폴백 체인(고저조 → 합성)을 탄다.
   Future<List<Map<String, dynamic>>> _fetchItems(
     String obsCode,
     DateTime date,
@@ -153,15 +164,19 @@ class DataGoKrTideObsRepository implements TideRepository {
       'min': '$_stepMinutes',
       'numOfRows': '300',
     });
-    final res = await _client.get(uri);
-    if (res.statusCode != 200) {
-      throw http.ClientException('실측·예측 조위 응답 오류 ${res.statusCode}', uri);
+    try {
+      final res = await _client.get(uri).timeout(_timeout);
+      if (res.statusCode != 200) return const [];
+      return parseDataGoKrItems(res.body);
+    } catch (_) {
+      return const [];
     }
-    return parseDataGoKrItems(res.body);
   }
 
   /// 시계열 한 행 → (시각, 조위). 조위는 예측(tdlvHgt) 우선, 없으면 실측.
-  _TideSample _mapSample(Map<String, dynamic> item) {
+  /// 시각·조위가 없거나 형식이 깨진 행은 null(건너뜀) — 행 단위 결측이 시계열
+  /// 전체 실패로 번지지 않게 한다.
+  _TideSample? _mapSample(Map<String, dynamic> item) {
     final timeRaw = pickField(item, const [
       'obsrvnDt', // 활용가이드 확정: 관측일시
       'record_time',
@@ -171,13 +186,11 @@ class DataGoKrTideObsRepository implements TideRepository {
     final levelRaw =
         pickField(item, const ['tdlvHgt', 'predcTdlvVl', 'pre_value']) ??
         pickField(item, const ['bscTdlvHgt', 'tide_level', 'tdlv']);
-    if (timeRaw == null || levelRaw == null) {
-      throw FormatException('알 수 없는 실측·예측 조위 필드 구성: ${item.keys.join(', ')}');
-    }
-    return _TideSample(
-      time: DateTime.parse(timeRaw.toString().replaceFirst(' ', 'T')),
-      heightCm: double.parse(levelRaw.toString()),
-    );
+    if (timeRaw == null || levelRaw == null) return null;
+    final time = DateTime.tryParse(timeRaw.toString().replaceFirst(' ', 'T'));
+    final level = double.tryParse(levelRaw.toString());
+    if (time == null || level == null) return null;
+    return _TideSample(time: time, heightCm: level);
   }
 
   static double? _numField(Map<String, dynamic> item, List<String> keys) {
