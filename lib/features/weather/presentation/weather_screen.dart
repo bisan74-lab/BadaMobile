@@ -370,9 +370,13 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                   ),
                 // 오른쪽 세로 아이콘 내비게이션(Windy 탭 전용). 하단 바 높이만큼
                 // 위로 올려 시간 바·상세 예보 표와 겹치지 않게 한다.
+                // 상세 예보 표가 열리면(표 높이가 애니메이션으로 변해 측정이
+                // 한 박자 늦을 수 있다) 레일을 화면 위 오른쪽으로 옮겨 표와
+                // 절대 겹치지 않게 한다. 지도 모드에선 시간 바 위에 붙인다.
                 Positioned(
                   right: 2,
-                  bottom: _bottomBarHeight + 2,
+                  top: _forecastPoint != null ? 56 : null,
+                  bottom: _forecastPoint != null ? null : _bottomBarHeight + 2,
                   child: _WindyNavRail(
                     onSelect: (i) =>
                         ref.read(appTabIndexProvider.notifier).state = i,

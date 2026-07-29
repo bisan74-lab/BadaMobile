@@ -12,6 +12,7 @@ import '../../locations/data/models/sea_location.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../../settings/presentation/providers.dart';
+import '../../weather/data/models/marine_weather.dart' show HourlyMarine;
 import '../../weather/presentation/providers.dart'
     show homeMarineForecastProvider;
 import '../data/models/tide_data.dart';
@@ -449,7 +450,10 @@ class _TideBody extends ConsumerWidget {
                         date: query.date,
                         tide: tide,
                       ),
-                      _Panel.weather => _WeatherPanel(location: query.location),
+                      _Panel.weather => _WeatherPanel(
+                        location: query.location,
+                        date: query.date,
+                      ),
                       _Panel.calendar => _CalendarPanel(
                         initial: query.date,
                         minDate: minDate,
@@ -616,12 +620,26 @@ class _FishingPanel extends ConsumerWidget {
             error: (_, _) =>
                 const _InfoRow(icon: Icons.air, label: '바람정보', value: '정보 없음'),
             data: (m) {
-              final h = m.hourly.isNotEmpty ? m.hourly.first : null;
+              // 예보는 ±14일 전체가 오므로, 반드시 **선택한 날짜**의 값을
+              // 골라야 한다(예전엔 hourly.first = 2주 전 값이라 날짜/지역을
+              // 바꿔도 안 변하는 것처럼 보였다). 그날 09시에 가장 가까운
+              // 시각을 대표로 쓴다.
+              final target = DateTime(date.year, date.month, date.day, 9);
+              HourlyMarine? h;
+              var best = const Duration(days: 999);
+              for (final e in m.hourly) {
+                final diff = e.time.difference(target).abs();
+                if (diff < best) {
+                  best = diff;
+                  h = e;
+                }
+              }
+              final sameDay = h != null && DateUtils.isSameDay(h.time, date);
               return _InfoRow(
                 icon: Icons.air,
                 label: '바람정보',
-                value: h == null
-                    ? '정보 없음'
+                value: h == null || !sameDay
+                    ? '이 날짜의 예보 없음'
                     : '${compassKo(h.windDirectionDeg)} '
                           '${h.windSpeedMs.toStringAsFixed(1)}m/s · '
                           '돌풍 ${h.windGustMs.toStringAsFixed(0)}m/s',
@@ -769,9 +787,12 @@ class _SpeciesIndexRow extends StatelessWidget {
 
 /// 날씨 패널: 물때에서 선택한 항구(동일 지역)의 날씨만 컴팩트하게.
 class _WeatherPanel extends ConsumerWidget {
-  const _WeatherPanel({required this.location});
+  const _WeatherPanel({required this.location, required this.date});
 
   final SeaLocation location;
+
+  /// 물때 화면에서 선택한 날짜 — 시간별 예보의 시작 기준이 된다.
+  final DateTime date;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -788,12 +809,16 @@ class _WeatherPanel extends ConsumerWidget {
         ),
         data: (f) {
           final now = DateTime.now();
-          // 시간별은 향후 48시간(3시간 간격)까지 우측으로 스크롤해 볼 수 있다.
+          // 시간별은 **선택한 날짜의 0시부터**(오늘이면 현재부터) 48시간
+          // (3시간 간격)까지 우측으로 스크롤해 볼 수 있다.
+          final start = DateUtils.isSameDay(date, now) || date.isBefore(now)
+              ? now.subtract(const Duration(hours: 1))
+              : DateTime(date.year, date.month, date.day);
           final hours = f.hourly
               .where(
                 (h) =>
-                    !h.time.isBefore(now.subtract(const Duration(hours: 1))) &&
-                    h.time.isBefore(now.add(const Duration(hours: 48))) &&
+                    !h.time.isBefore(start) &&
+                    h.time.isBefore(start.add(const Duration(hours: 48))) &&
                     h.time.hour % 3 == 0,
               )
               .toList();
@@ -816,16 +841,19 @@ class _WeatherPanel extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               SizedBox(
-                height: 74,
+                height: 86,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: hours.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 6),
                   itemBuilder: (context, i) {
                     final h = hours[i];
+                    // 어느 날짜의 시각인지 알 수 있게 첫 칩과 자정 칩에
+                    // 날짜(M/d)를 표시한다(사용자 요구).
+                    final showDate = i == 0 || h.time.hour == 0;
                     return Container(
                       width: 46,
-                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 5),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(10),
@@ -833,6 +861,14 @@ class _WeatherPanel extends ConsumerWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Text(
+                            showDate ? '${h.time.month}/${h.time.day}' : ' ',
+                            style: const TextStyle(
+                              color: Colors.amberAccent,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           Text(
                             '${h.time.hour}시',
                             style: const TextStyle(
@@ -955,15 +991,33 @@ class _ChartPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PanelBox(
-      title: '상세 조위 그래프',
-      child: Center(
-        child: SingleChildScrollView(
-          child: TideChart(
-            hourlyHeightsCm: tide.hourlyHeightsCm,
-            now: isToday ? DateTime.now() : null,
+    final scheme = Theme.of(context).colorScheme;
+    // 차트는 테마 색으로 그려지므로, 달력처럼 테마 표면 위에 올려야 잘
+    // 보인다(다크 테마=어두운 표면+밝은 선, 라이트=밝은 표면+어두운 선 —
+    // 사용자 요구: 배경 밝기에 맞춰 반전).
+    return Container(
+      margin: const EdgeInsets.only(right: 56),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('상세 조위 그래프', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                child: TideChart(
+                  hourlyHeightsCm: tide.hourlyHeightsCm,
+                  now: isToday ? DateTime.now() : null,
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

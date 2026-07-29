@@ -54,6 +54,16 @@ class _MulTtaeCalendarState extends State<MulTtaeCalendarView> {
   late int _year = widget.initial.year;
   late int _month = widget.initial.month;
 
+  @override
+  void didUpdateWidget(covariant MulTtaeCalendarView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 위 날짜 헤더/스트립에서 다른 달로 옮기면 달력도 그 달로 따라간다.
+    if (!DateUtils.isSameDay(oldWidget.initial, widget.initial)) {
+      _year = widget.initial.year;
+      _month = widget.initial.month;
+    }
+  }
+
   bool get _canPrev => DateTime(
     _year,
     _month,
