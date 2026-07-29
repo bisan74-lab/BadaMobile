@@ -85,87 +85,95 @@ class _MulTtaeCalendarState extends State<MulTtaeCalendarView> {
       for (var y = widget.minDate.year; y <= widget.maxDate.year; y++) y,
     ];
 
-    // 소형 화면(테스트 뷰포트 포함)에서 넘치지 않게 스크롤을 허용한다.
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: _canPrev ? () => _shiftMonth(-1) : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    DropdownButton<int>(
-                      value: _year,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (final y in years)
-                          DropdownMenuItem(value: y, child: Text('$y년')),
-                      ],
-                      onChanged: (y) {
-                        if (y != null) setState(() => _year = y);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$_month월',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ],
+    // 소형 화면(테스트 뷰포트 포함)에서 넘치지 않게 스크롤을 허용하고,
+    // 좌우 스와이프로 이전/다음 달로 넘길 수 있게 한다(사용자 요구).
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final v = details.primaryVelocity ?? 0;
+        if (v < -150 && _canNext) _shiftMonth(1);
+        if (v > 150 && _canPrev) _shiftMonth(-1);
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _canPrev ? () => _shiftMonth(-1) : null,
+                  icon: const Icon(Icons.chevron_left),
                 ),
-              ),
-              IconButton(
-                onPressed: _canNext ? () => _shiftMonth(1) : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              for (final (i, w) in const [
-                '일',
-                '월',
-                '화',
-                '수',
-                '목',
-                '금',
-                '토',
-              ].indexed)
                 Expanded(
-                  child: Center(
-                    child: Text(
-                      w,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: i == 0
-                            ? scheme.error
-                            : i == 6
-                            ? scheme.primary
-                            : scheme.onSurfaceVariant,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      DropdownButton<int>(
+                        value: _year,
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          for (final y in years)
+                            DropdownMenuItem(value: y, child: Text('$y년')),
+                        ],
+                        onChanged: (y) {
+                          if (y != null) setState(() => _year = y);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$_month월',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _canNext ? () => _shiftMonth(1) : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                for (final (i, w) in const [
+                  '일',
+                  '월',
+                  '화',
+                  '수',
+                  '목',
+                  '금',
+                  '토',
+                ].indexed)
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        w,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: i == 0
+                              ? scheme.error
+                              : i == 6
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 0.82,
-            children: [
-              for (var i = 0; i < firstWeekday; i++) const SizedBox.shrink(),
-              for (var day = 1; day <= daysInMonth; day++)
-                _dayCell(context, DateTime(_year, _month, day)),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            GridView.count(
+              crossAxisCount: 7,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 0.82,
+              children: [
+                for (var i = 0; i < firstWeekday; i++) const SizedBox.shrink(),
+                for (var day = 1; day <= daysInMonth; day++)
+                  _dayCell(context, DateTime(_year, _month, day)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

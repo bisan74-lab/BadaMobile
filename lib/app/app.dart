@@ -116,9 +116,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-/// 우하단 세로 스택의 가로형 필 탭 내비게이션(하단 바 대체, Windy 레일과
-/// 같은 위치). 아이콘+라벨의 긴 필 모양이라 그래프 위 미니 메뉴와 확실히
-/// 구분된다. 전체 투명도 50%.
+/// 우하단 세로 탭 내비게이션(하단 바 대체). 그래프 위 미니 메뉴와 동일한
+/// 크기(46px 칩)의 아이콘+라벨로 통일하고, 활성 탭은 강조색으로 채운다.
+/// 전체 투명도 50%.
 class _SideNavRail extends StatelessWidget {
   const _SideNavRail({required this.index, required this.onSelect});
 
@@ -126,7 +126,7 @@ class _SideNavRail extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   static const _icons = <(IconData, IconData, String)>[
-    (Icons.waves_outlined, Icons.waves, '물때&날씨'),
+    (Icons.waves_outlined, Icons.waves, '물때'),
     (Icons.air_outlined, Icons.air, 'Windy'),
     (Icons.settings_outlined, Icons.settings, '설정'),
   ];
@@ -138,46 +138,36 @@ class _SideNavRail extends StatelessWidget {
       opacity: 0.5,
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           for (var i = 0; i < _icons.length; i++)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Material(
-                color: i == index ? primary : Colors.black87,
-                borderRadius: BorderRadius.circular(20),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () => onSelect(i),
-                  child: Container(
-                    width: 108,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          i == index ? _icons[i].$2 : _icons[i].$1,
-                          size: 17,
+              padding: const EdgeInsets.only(bottom: 5),
+              child: InkWell(
+                onTap: () => onSelect(i),
+                borderRadius: BorderRadius.circular(9),
+                child: Container(
+                  width: 46,
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  decoration: BoxDecoration(
+                    color: i == index ? primary : Colors.black54,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        i == index ? _icons[i].$2 : _icons[i].$1,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _icons[i].$3,
+                        style: const TextStyle(
                           color: Colors.white,
+                          fontSize: 8.5,
                         ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            _icons[i].$3,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),

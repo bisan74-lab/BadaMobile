@@ -18,6 +18,13 @@ class RegionSelectorAction extends ConsumerWidget {
     final location = ref.watch(
       forWeather ? weatherLocationProvider : selectedLocationProvider,
     );
+    // 앱바가 위젯 단에서 foregroundColor를 바꾸는 화면(물때&날씨의 투명
+    // 앱바=흰색)도 있으므로, 테마 값이 아니라 **현재 앱바가 실제로 적용한
+    // 전경색**(IconTheme)을 따른다 — 어두운 배경엔 밝은 글자, 밝은 배경엔
+    // 어두운 글자가 자동으로 된다(사용자 지적).
+    final fg =
+        IconTheme.of(context).color ??
+        Theme.of(context).appBarTheme.foregroundColor;
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: TextButton.icon(
@@ -25,15 +32,8 @@ class RegionSelectorAction extends ConsumerWidget {
             showLocationPickerSheet(context, forWeather: forWeather),
         icon: const Icon(Icons.edit_location_alt_outlined),
         iconAlignment: IconAlignment.end,
-        label: Text(
-          location.name,
-          style: TextStyle(
-            color: Theme.of(context).appBarTheme.foregroundColor,
-          ),
-        ),
-        style: TextButton.styleFrom(
-          foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-        ),
+        label: Text(location.name, style: TextStyle(color: fg)),
+        style: TextButton.styleFrom(foregroundColor: fg),
       ),
     );
   }

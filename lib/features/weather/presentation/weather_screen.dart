@@ -914,39 +914,63 @@ class _CursorWindBar extends StatelessWidget {
   }
 }
 
-/// Windy(몰입형 지도) 탭 오른쪽에 뜨는 아이콘 전용 세로 내비게이션.
-/// 박스·라벨 없이 아이콘만. 현재 탭(Windy=air)은 강조색, 나머지는 흰색+그림자.
+/// Windy(몰입형 지도) 탭 우하단 세로 내비게이션. 물때&날씨 화면의 레일과
+/// 동일한 컴팩트 칩(46px, 아이콘+라벨) 스타일이며, 하단 바(시간 슬라이더/
+/// 상세 예보 표) 높이만큼 위로 올라가 겹치지 않는다.
 class _WindyNavRail extends StatelessWidget {
   const _WindyNavRail({required this.onSelect});
 
   final ValueChanged<int> onSelect;
 
-  // 앱 셸 탭 순서와 동일: 물때&날씨 / Windy / 설정 (사용자 요구로 3개만).
-  static const _icons = <(IconData, IconData)>[
-    (Icons.waves_outlined, Icons.waves),
-    (Icons.air_outlined, Icons.air),
-    (Icons.settings_outlined, Icons.settings),
+  static const _icons = <(IconData, IconData, String)>[
+    (Icons.waves_outlined, Icons.waves, '물때'),
+    (Icons.air_outlined, Icons.air, 'Windy'),
+    (Icons.settings_outlined, Icons.settings, '설정'),
   ];
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    const shadow = [Shadow(color: Colors.black, blurRadius: 5)];
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < _icons.length; i++)
-          IconButton(
-            onPressed: () => onSelect(i),
-            iconSize: 26,
-            visualDensity: VisualDensity.compact,
-            icon: Icon(
-              i == windyTabIndex ? _icons[i].$2 : _icons[i].$1,
-              color: i == windyTabIndex ? primary : Colors.white,
-              shadows: shadow,
+    return Opacity(
+      opacity: 0.5,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < _icons.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: InkWell(
+                onTap: () => onSelect(i),
+                borderRadius: BorderRadius.circular(9),
+                child: Container(
+                  width: 46,
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  decoration: BoxDecoration(
+                    color: i == windyTabIndex ? primary : Colors.black54,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        i == windyTabIndex ? _icons[i].$2 : _icons[i].$1,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _icons[i].$3,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

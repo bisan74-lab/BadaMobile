@@ -17,7 +17,10 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('설정')),
+      // 우측 탭 레일(물때/Windy/설정 칩)과 겹치지 않게 본문 폭을 줄여
+      // 좌측 기준으로 배치한다 — 오른쪽 여백 위에 레일이 뜬다.
       body: ListView(
+        padding: const EdgeInsets.only(right: 64),
         children: const [
           _TemplateSection(),
           Divider(height: 1),

@@ -29,10 +29,10 @@ enum _Panel { timeline, fishing, weather, calendar, chart }
 /// 달별 제철 어종(낚시정보 기본값). 9~11월은 쭈꾸미·갑오징어(사용자 지정),
 /// 나머지 달은 그 계절에 잘 잡히는 어종으로 둔다.
 List<String> seasonalSpecies(int month) => switch (month) {
-  >= 3 && <= 5 => const ['참돔', '감성돔'],
-  >= 6 && <= 8 => const ['광어', '농어'],
-  >= 9 && <= 11 => const ['쭈꾸미', '갑오징어'],
-  _ => const ['볼락', '우럭'],
+  >= 3 && <= 5 => const ['참돔', '감성돔', '농어', '광어', '볼락'],
+  >= 6 && <= 8 => const ['광어', '농어', '참돔', '삼치', '우럭'],
+  >= 9 && <= 11 => const ['쭈꾸미', '갑오징어', '삼치', '감성돔', '광어'],
+  _ => const ['볼락', '우럭', '광어', '문어', '감성돔'],
 };
 
 /// 물때 & 날씨 화면 — 앱의 메인 탭.
@@ -777,7 +777,7 @@ class _WeatherPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final forecastAsync = ref.watch(weatherForecastProvider(location));
     return _PanelBox(
-      title: '날씨 · ${location.name}',
+      title: '날씨 · ${location.name} (향후 2주)',
       child: forecastAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => const Center(
@@ -787,7 +787,16 @@ class _WeatherPanel extends ConsumerWidget {
           ),
         ),
         data: (f) {
-          final hours = f.next24h.where((h) => h.time.hour % 3 == 0).toList();
+          final now = DateTime.now();
+          // 시간별은 향후 48시간(3시간 간격)까지 우측으로 스크롤해 볼 수 있다.
+          final hours = f.hourly
+              .where(
+                (h) =>
+                    !h.time.isBefore(now.subtract(const Duration(hours: 1))) &&
+                    h.time.isBefore(now.add(const Duration(hours: 48))) &&
+                    h.time.hour % 3 == 0,
+              )
+              .toList();
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -851,7 +860,7 @@ class _WeatherPanel extends ConsumerWidget {
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    for (final d in f.daily.take(5))
+                    for (final d in f.daily.take(15))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Row(
