@@ -590,7 +590,9 @@ class _FishingPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final marineAsync = ref.watch(homeMarineForecastProvider(location));
     final fishingAsync = ref.watch(fishingForecastProvider(location));
-    final species = seasonalSpecies(date.month);
+    // 사용자가 어종을 직접 골랐으면 그 목록을, 아니면 제철 어종을 쓴다.
+    final custom = ref.watch(tideFishingSpeciesProvider);
+    final species = custom.isNotEmpty ? custom : seasonalSpecies(date.month);
 
     String tideLine() {
       if (tide.extremes.isEmpty) return '정보 없음';
@@ -647,13 +649,38 @@ class _FishingPanel extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 12),
-          Text(
-            '낚시지수 (${species.join(' · ')})',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '낚시지수 (${species.join(' · ')})',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              // 어종 변경 버튼 — 카탈로그에서 최대 5종을 골라 바꾼다.
+              InkWell(
+                onTap: () => _editSpecies(context, ref, custom),
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit, size: 13, color: Colors.white70),
+                      SizedBox(width: 3),
+                      Text(
+                        '어종변경',
+                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           fishingAsync.when(
@@ -690,6 +717,69 @@ class _FishingPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// 어종 선택 다이얼로그. 칩으로 최대 5종을 고르고, "제철 어종(자동)"을
+  /// 누르면 선택을 비워 달별 제철 어종으로 되돌린다. 취소는 변경 없음.
+  Future<void> _editSpecies(
+    BuildContext context,
+    WidgetRef ref,
+    List<String> current,
+  ) async {
+    // 자동 모드였다면 현재 화면의 제철 어종을 초기 선택으로 보여준다.
+    final picked = [
+      ...(current.isNotEmpty ? current : seasonalSpecies(date.month)),
+    ];
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('어종 선택 (최대 5종)'),
+          content: SingleChildScrollView(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: -4,
+              children: [
+                for (final s in fishingSpeciesCatalog)
+                  FilterChip(
+                    label: Text(s),
+                    selected: picked.contains(s),
+                    onSelected: (v) => setState(() {
+                      if (v) {
+                        if (picked.length <
+                            TideFishingSpeciesNotifier.maxCount) {
+                          picked.add(s);
+                        }
+                      } else {
+                        picked.remove(s);
+                      }
+                    }),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, const <String>[]),
+              child: const Text('제철 어종(자동)'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: picked.isEmpty
+                  ? null
+                  : () => Navigator.pop(context, picked),
+              child: const Text('적용'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) {
+      ref.read(tideFishingSpeciesProvider.notifier).set(result);
+    }
   }
 }
 
@@ -965,8 +1055,8 @@ class _CalendarPanel extends StatelessWidget {
       margin: const EdgeInsets.only(right: 56),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        // 달력은 테마 색을 쓰므로 밝은 반투명 표면 위에 올린다.
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+        // 달력은 테마 색을 쓰므로 반투명 표면 위에 올린다(투명도 70%).
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.70),
         borderRadius: BorderRadius.circular(16),
       ),
       child: SingleChildScrollView(
@@ -999,7 +1089,7 @@ class _ChartPanel extends StatelessWidget {
       margin: const EdgeInsets.only(right: 56),
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
       decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.94),
+        color: scheme.surface.withValues(alpha: 0.70),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(

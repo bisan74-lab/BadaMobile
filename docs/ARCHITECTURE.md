@@ -155,20 +155,19 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   `khoaStationCode`가 있는 지점(9곳)만 조석 실데이터가 붙고, 나머지는 해역별 합성
   조석 곡선으로 대체된다 — 물때·해양 날씨·낚시지수는 좌표만 있으면 전부 동작한다.
 - 지역탭은 없앴다. 대신 모든 탭 AppBar 우측 `RegionSelectorAction`이 공용
-  바텀시트 `showLocationPickerSheet`를 연다. 시트는 **현재 위치(GPS,
-  `geolocator`→`resolveCurrentLocation`)** + **지명 검색(읍/면/동 단위,
+  바텀시트 `showLocationPickerSheet`를 연다. 시트는 **지명 검색(읍/면/동 단위,
   `GeocodingRepository`=Open-Meteo Geocoding 무료·키불필요→`geocodingSearchProvider`)**
   + 내장 지점 + 즐겨찾기를 한 화면에 제공한다.
 - 공용 지역 `selectedLocationProvider`는 tide/home/Windy가 공유하고, **날씨 탭은
   별도의 `weatherLocationProvider`**를 쓴다 — 날씨 탭에서 내륙 지점을 골라도 물때·
   바다타임 등 다른 탭에 영향을 주지 않는다. `RegionSelectorAction(forWeather: true)`와
   `showLocationPickerSheet(forWeather: true)`로 대상 provider를 고른다.
-- 두 provider 모두 선택을 **전체 정보(JSON)로 영속화**해 검색·현재위치 등 목록에 없는
+- 두 provider 모두 선택을 **전체 정보(JSON)로 영속화**해 검색 등 목록에 없는
   커스텀 지점도 재시작 후 복원된다(구버전 id-only 키 호환).
-- **현재 위치(GPS)는 날씨 탭에만** 적용한다. 홈/물때/Windy는 공용 지역을 그대로 쓰며
-  현재 위치와 연동하지 않는다. `AppShell._initLocation`은 날씨 탭 저장 위치가 없는 첫
-  실행일 때만 권한을 요청해 `weatherLocationProvider`를 현재 위치로 채운다(거부·실패
-  시 기본 지점 유지). "현재 위치로 설정" 버튼도 `forWeather` 시트에서만 노출된다.
+- **위치 권한(GPS)은 어디서도 쓰지 않는다**(사용자 요구로 제거). 앱 시작 시
+  위치 초기화도, "현재 위치로 설정" 버튼도 없다 — 날씨 탭도 저장된(없으면
+  기본) 지역으로 시작하고, 지역 변경은 목록·지명 검색으로만 한다. 매니페스트에
+  위치 권한 선언이 없고 `geolocator` 의존성도 제거했다.
 - `SeaLocation.rank`(1=주요→3=소규모)로 Windy 지도 라벨을 확대 단계별 노출,
   `inland=true`(내륙 도시·검색 지점)는 지도 마커에서 제외. 마커 점은 투영 좌표에
   정확히 중심을 맞춰 해안선과 정렬된다.

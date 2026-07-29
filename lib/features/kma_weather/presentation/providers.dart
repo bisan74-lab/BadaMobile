@@ -53,20 +53,22 @@ final landWeatherRepositoryProvider = Provider<LandWeatherRepository>((ref) {
 /// 뼈대는 Open-Meteo(15일 + 24시간 + 부가정보)이고, **기상청 단기예보가
 /// 조회되면 근일(약 3일) 시간별 기온·날씨를 기상청 값으로 덮어쓴다**(기상청 우선).
 /// 기상청 키가 없거나 실패하면 Open-Meteo 값을 그대로 쓴다.
+/// 두 API는 **병렬로 요청**한다 — 순차(await 두 번)로 하면 첫 로딩이
+/// 두 API 응답 시간의 합만큼 걸려 체감 3~4초까지 늘어난다.
 final weatherForecastProvider =
     FutureProvider.family<WeatherForecast, SeaLocation>((ref, location) async {
-      final base = await ref
+      final baseFuture = ref
           .watch(landWeatherRepositoryProvider)
           .fetchForecast(location);
-      if (Env.dataGoKrApiKey.isEmpty) return base;
-      try {
-        final kma = await ref
-            .watch(kmaWeatherRepositoryProvider)
-            .fetchForecast(location);
-        return _overlayKma(base, kma);
-      } catch (_) {
-        return base; // 기상청 실패 시 Open-Meteo 값 유지.
-      }
+      if (Env.dataGoKrApiKey.isEmpty) return baseFuture;
+      // 기상청 실패는 null로 흡수해 Open-Meteo 값만 쓴다(기존 폴백 유지).
+      final kmaFuture = ref
+          .watch(kmaWeatherRepositoryProvider)
+          .fetchForecast(location)
+          .then<KmaForecast?>((k) => k, onError: (_) => null);
+      final base = await baseFuture;
+      final kma = await kmaFuture;
+      return kma == null ? base : _overlayKma(base, kma);
     });
 
 /// 기상청 시간별(기온·하늘/강수형태)을 Open-Meteo 뼈대의 같은 시각에 덮어쓴다.

@@ -7,8 +7,8 @@ import '../../data/models/sea_location.dart';
 import '../providers.dart';
 
 /// 각 탭 상단 우측 버튼([RegionSelectorAction])으로 여는 지역 선택
-/// 바텀시트. 현재 위치 · 지명 검색(읍/면/동 단위) · 즐겨찾기 · 선택을
-/// 가벼운 시트 하나로 제공한다.
+/// 바텀시트. 지명 검색(읍/면/동 단위) · 즐겨찾기 · 선택을 가벼운 시트
+/// 하나로 제공한다. 위치 권한(GPS)은 쓰지 않는다.
 Future<void> showLocationPickerSheet(
   BuildContext context, {
   bool forWeather = false,
@@ -38,7 +38,6 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
   /// 디바운스된 검색어(지오코딩 API 호출용).
   String _geoQuery = '';
   Timer? _debounce;
-  bool _locating = false;
 
   @override
   void dispose() {
@@ -61,19 +60,6 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
       ref.read(selectedLocationProvider.notifier).select(loc);
     }
     Navigator.of(context).pop();
-  }
-
-  Future<void> _useCurrentLocation() async {
-    setState(() => _locating = true);
-    try {
-      final loc = await resolveCurrentLocation();
-      if (!mounted) return;
-      _choose(loc);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _locating = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
   }
 
   @override
@@ -129,23 +115,6 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
           Expanded(
             child: ListView(
               children: [
-                // 현재 위치 — 날씨 탭에서만 제공(홈/물때/Windy는 미적용).
-                if (widget.forWeather) ...[
-                  ListTile(
-                    leading: _locating
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(Icons.my_location, color: scheme.primary),
-                    title: const Text('현재 위치로 설정'),
-                    subtitle: const Text('GPS로 지금 있는 곳의 날씨를 본다'),
-                    onTap: _locating ? null : _useCurrentLocation,
-                  ),
-                  const Divider(height: 1),
-                ],
-
                 // 내장 지점(즐겨찾기·주요 항구/지역).
                 for (final loc in filtered)
                   ListTile(

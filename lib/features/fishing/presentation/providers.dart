@@ -68,3 +68,34 @@ final fishingSpeciesProvider =
     NotifierProvider<FishingSpeciesNotifier, List<String>>(
       FishingSpeciesNotifier.new,
     );
+
+/// 물때&날씨 화면 낚시정보 패널의 어종 선택(최대 5종).
+/// **비어 있으면 달별 제철 어종을 자동으로 쓴다**(기본 동작). 사용자가
+/// 어종을 직접 고르면 SharedPreferences에 영속화되어 계절이 바뀌어도
+/// 유지되고, "제철 어종(자동)"으로 되돌리면 다시 비워진다.
+class TideFishingSpeciesNotifier extends Notifier<List<String>> {
+  static const _prefsKey = 'tide_fishing_species';
+  static const maxCount = 5;
+
+  @override
+  List<String> build() {
+    final saved = ref.read(sharedPreferencesProvider).getStringList(_prefsKey);
+    return (saved ?? const []).where(fishingSpeciesCatalog.contains).toList();
+  }
+
+  /// [species]로 교체한다(카탈로그에 있는 어종만, 최대 [maxCount]종).
+  /// 빈 목록을 넘기면 제철 어종 자동 모드로 돌아간다.
+  void set(List<String> species) {
+    final list = species
+        .where(fishingSpeciesCatalog.contains)
+        .take(maxCount)
+        .toList();
+    state = list;
+    ref.read(sharedPreferencesProvider).setStringList(_prefsKey, list);
+  }
+}
+
+final tideFishingSpeciesProvider =
+    NotifierProvider<TideFishingSpeciesNotifier, List<String>>(
+      TideFishingSpeciesNotifier.new,
+    );

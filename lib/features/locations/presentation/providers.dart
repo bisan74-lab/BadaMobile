@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../core/storage/prefs.dart';
 import '../data/geocoding.dart';
@@ -28,39 +27,6 @@ final geocodingSearchProvider = FutureProvider.family<List<GeoPlace>, String>((
 ) {
   return ref.read(geocodingRepositoryProvider).search(query);
 });
-
-/// GPS로 현재 위치를 얻어 즉석 [SeaLocation]으로 만든다. 권한 거부·위치
-/// 서비스 꺼짐 등은 예외로 던져 호출부에서 안내한다.
-Future<SeaLocation> resolveCurrentLocation() async {
-  final enabled = await Geolocator.isLocationServiceEnabled();
-  if (!enabled) {
-    throw const _LocationException('위치 서비스가 꺼져 있습니다. 기기 설정에서 켜 주세요.');
-  }
-  var permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.denied) {
-    permission = await Geolocator.requestPermission();
-  }
-  if (permission == LocationPermission.denied ||
-      permission == LocationPermission.deniedForever) {
-    throw const _LocationException('위치 권한이 없습니다. 앱 설정에서 허용해 주세요.');
-  }
-  final pos = await Geolocator.getCurrentPosition();
-  return SeaLocation(
-    id: 'gps_${pos.latitude.toStringAsFixed(4)}_${pos.longitude.toStringAsFixed(4)}',
-    name: '현재 위치',
-    region: '검색',
-    latitude: pos.latitude,
-    longitude: pos.longitude,
-    inland: true,
-  );
-}
-
-class _LocationException implements Exception {
-  const _LocationException(this.message);
-  final String message;
-  @override
-  String toString() => message;
-}
 
 /// 현재 선택된 지점 — 홈/물때/날씨 화면이 모두 이 값을 따른다.
 /// 선택은 SharedPreferences에 전체 정보(JSON)로 저장되어, 검색·현재위치 등
@@ -115,8 +81,7 @@ class WeatherLocationNotifier extends Notifier<SeaLocation> {
       }
     }
     // 공용 지역(홈/물때/Windy)과 완전히 분리한다 — 저장값이 없으면 기본
-    // 지점(무창포항)으로 시작하고, 앱 시작 시 첫 실행이면 현재 위치로
-    // 대체된다.
+    // 지점(무창포항)으로 시작한다. GPS/위치 권한은 쓰지 않는다.
     return _defaultLocation(ref.read(locationsProvider));
   }
 
