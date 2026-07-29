@@ -1,0 +1,27 @@
+# 물때 검증: 앱과 동일한 계산(관측소 API + 보정 + 블렌딩)으로 뽑은
+# 만조/간조를 badatime.com 물때표와 자동 대조한다. 이 세션 환경에서는
+# badatime.com 이 egress 정책으로 막혀 있어, 네트워크 제한이 없는
+# Actions 러너에서 돌리고 로그로 결과를 읽는다(tide-debug와 같은 패턴).
+name: verify-tide
+
+on:
+  workflow_dispatch:
+    inputs:
+      dates:
+        description: "검증 날짜 YYYYMMDD (공백 구분, 비우면 내일/+3일/+6일)"
+        required: false
+        default: ""
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify tide values against badatime.com
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: python tool/verify_tide.py ${{ inputs.dates }}
