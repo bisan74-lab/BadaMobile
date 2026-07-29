@@ -92,6 +92,60 @@ class _TemplateSection extends ConsumerWidget {
           value: backdrop,
           onChanged: (v) => ref.read(backdropEnabledProvider.notifier).set(v),
         ),
+        if (backdrop) ...[
+          _label(context, '배경 사진'),
+          // 물때&날씨 전체화면 배경 사진 선택(자체 생성 이미지 5종, 썸네일).
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: backgroundImageChoices.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final choice = backgroundImageChoices[i];
+                final selected =
+                    ref.watch(backgroundImageProvider) == choice.asset;
+                return GestureDetector(
+                  onTap: () => ref
+                      .read(backgroundImageProvider.notifier)
+                      .select(choice.asset),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 72,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected
+                                ? scheme.primary
+                                : scheme.outlineVariant,
+                            width: selected ? 2.5 : 1,
+                          ),
+                        ),
+                        child: Image.asset(
+                          choice.asset,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              ColoredBox(color: scheme.surfaceContainerLow),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        choice.label,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: selected ? FontWeight.bold : null,
+                          color: selected ? scheme.primary : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ],
     );
   }

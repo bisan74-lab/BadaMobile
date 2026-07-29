@@ -1,18 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
-import '../../home/presentation/home_screen.dart';
-import '../../kma_weather/presentation/kma_weather_screen.dart';
+import '../../fishing/data/models/fishing_index.dart';
+import '../../fishing/presentation/providers.dart';
+import '../../kma_weather/data/weather_code.dart';
+import '../../kma_weather/presentation/providers.dart';
+import '../../kma_weather/presentation/widgets/weather_icon.dart';
+import '../../locations/data/models/sea_location.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../../settings/presentation/providers.dart';
+import '../../weather/presentation/providers.dart'
+    show homeMarineForecastProvider;
 import '../data/models/tide_data.dart';
 import 'providers.dart';
 import 'widgets/moon_phase_icon.dart';
 import 'widgets/mul_ttae_calendar.dart';
 import 'widgets/tide_chart.dart';
 import 'widgets/tide_timeline.dart';
+
+/// 중앙 패널 종류: 만조·간조 타임라인(기본)과 오른쪽 미니 메뉴로 전환하는
+/// 낚시정보/날씨/물때달력/조위그래프. 메뉴를 누르면 새 화면이 아니라 그래프
+/// 자리(중앙 영역)에 그대로 채워진다(사용자 요구).
+enum _Panel { timeline, fishing, weather, calendar, chart }
+
+/// 달별 제철 어종(낚시정보 기본값). 9~11월은 쭈꾸미·갑오징어(사용자 지정),
+/// 나머지 달은 그 계절에 잘 잡히는 어종으로 둔다.
+List<String> seasonalSpecies(int month) => switch (month) {
+  >= 3 && <= 5 => const ['참돔', '감성돔'],
+  >= 6 && <= 8 => const ['광어', '농어'],
+  >= 9 && <= 11 => const ['쭈꾸미', '갑오징어'],
+  _ => const ['볼락', '우럭'],
+};
 
 /// 물때 & 날씨 화면 — 앱의 메인 탭.
 ///
@@ -31,6 +52,7 @@ class TideScreen extends ConsumerStatefulWidget {
 
 class _TideScreenState extends ConsumerState<TideScreen> {
   DateTime _date = DateUtils.dateOnly(DateTime.now());
+  _Panel _panel = _Panel.timeline;
 
   DateTime get _today => DateUtils.dateOnly(DateTime.now());
   DateTime get _minDate => _today.subtract(maxTideForecastRange);
@@ -83,11 +105,12 @@ class _TideScreenState extends ConsumerState<TideScreen> {
       ),
       body: Stack(
         children: [
-          // 전체화면 사진풍 바다 배경 + 가독성용 어두운 그라디언트.
+          // 전체화면 사진풍 바다 배경(설정 > 배경 사진에서 선택) + 가독성용
+          // 어두운 그라디언트.
           if (showPhoto)
             Positioned.fill(
               child: Image.asset(
-                'assets/images/sea_photo_bg.jpg',
+                ref.watch(backgroundImageProvider),
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) =>
                     const ColoredBox(color: Color(0xFF0A2A44)),
@@ -137,7 +160,15 @@ class _TideScreenState extends ConsumerState<TideScreen> {
                         ? _TideBody(
                             query: (location: location, date: _date),
                             isToday: isToday,
-                            onOpenCalendar: _openCalendar,
+                            panel: _panel,
+                            onPanel: (p) => setState(() => _panel = p),
+                            minDate: _minDate,
+                            maxDate: _maxDate,
+                            system: system,
+                            onPickDate: (d) {
+                              _select(d);
+                              setState(() => _panel = _Panel.timeline);
+                            },
                           )
                         : _OutOfRangeCard(mulTtae: mulTtae),
                   ),
@@ -335,17 +366,28 @@ class _DayChip extends StatelessWidget {
   }
 }
 
-/// 조석 데이터 본문: 조류세기 + (타임라인 | 오른쪽 메뉴).
+/// 조석 데이터 본문: 조류세기 + 중앙 패널(타임라인/낚시정보/날씨/달력/그래프)
+/// + 오른쪽 미니 메뉴. 메뉴를 누르면 중앙 영역이 그 내용으로 채워진다.
 class _TideBody extends ConsumerWidget {
   const _TideBody({
     required this.query,
     required this.isToday,
-    required this.onOpenCalendar,
+    required this.panel,
+    required this.onPanel,
+    required this.minDate,
+    required this.maxDate,
+    required this.system,
+    required this.onPickDate,
   });
 
   final TideQuery query;
   final bool isToday;
-  final VoidCallback onOpenCalendar;
+  final _Panel panel;
+  final ValueChanged<_Panel> onPanel;
+  final DateTime minDate;
+  final DateTime maxDate;
+  final MulTtaeSystem system;
+  final ValueChanged<DateTime> onPickDate;
 
   /// 하루 조위 변화폭 기준의 정성적 조류세기(0~1, 라벨).
   (double, String) _strength(List<double> hourlyHeightsCm) {
@@ -384,27 +426,44 @@ class _TideBody extends ConsumerWidget {
               child: TideCurrentStrengthBar(fraction: fraction, label: label),
             ),
             const SizedBox(height: 6),
-            // 그래프 영역을 최대한 크게: 타임라인을 전체 폭으로 깔고,
-            // 낚시정보·날씨·물때달력·조위그래프 버튼은 그래프 위에
-            // 반투명(50%)으로 겹쳐 놓는다(사용자 요구).
+            // 중앙 패널: 기본은 만조·간조 타임라인(가로 폭 축소), 미니 메뉴를
+            // 누르면 같은 자리에 낚시정보/날씨/물때달력/조위그래프가 채워진다.
             Expanded(
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: TideTimeline(
-                      extremes: tide.extremes,
-                      now: isToday ? DateTime.now() : null,
-                      height: null,
-                      frameless: true,
-                    ),
+                    child: switch (panel) {
+                      _Panel.timeline => Padding(
+                        // 표(카드) 가로 길이를 줄인다 — 오른쪽 미니 메뉴
+                        // 자리도 확보(사용자 요구).
+                        padding: const EdgeInsets.only(left: 4, right: 56),
+                        child: TideTimeline(
+                          extremes: tide.extremes,
+                          now: isToday ? DateTime.now() : null,
+                          height: null,
+                          frameless: true,
+                        ),
+                      ),
+                      _Panel.fishing => _FishingPanel(
+                        location: query.location,
+                        date: query.date,
+                        tide: tide,
+                      ),
+                      _Panel.weather => _WeatherPanel(location: query.location),
+                      _Panel.calendar => _CalendarPanel(
+                        initial: query.date,
+                        minDate: minDate,
+                        maxDate: maxDate,
+                        system: system,
+                        onPicked: onPickDate,
+                      ),
+                      _Panel.chart => _ChartPanel(tide: tide, isToday: isToday),
+                    },
                   ),
                   Positioned(
                     right: 0,
                     top: 4,
-                    child: _GraphOverlayMenu(
-                      tide: tide,
-                      onOpenCalendar: onOpenCalendar,
-                    ),
+                    child: _MiniMenu(panel: panel, onPanel: onPanel),
                   ),
                 ],
               ),
@@ -416,90 +475,485 @@ class _TideBody extends ConsumerWidget {
   }
 }
 
-/// 그래프 위에 겹쳐 놓는 반투명(50%) 미니 메뉴 — 낚시정보·날씨·물때달력·
-/// 조위그래프. 그래프 자리를 최대한 크게 쓰기 위해 별도 열 대신 오버레이로
-/// 배치한다(사용자 요구).
-class _GraphOverlayMenu extends StatelessWidget {
-  const _GraphOverlayMenu({required this.tide, required this.onOpenCalendar});
+/// 그래프 오른쪽에 겹치는 반투명(50%) 미니 메뉴. 누르면 중앙 패널이 그
+/// 내용으로 바뀌고, 활성 항목을 다시 누르면 타임라인으로 돌아온다.
+class _MiniMenu extends StatelessWidget {
+  const _MiniMenu({required this.panel, required this.onPanel});
 
-  final TideDay tide;
-  final VoidCallback onOpenCalendar;
+  final _Panel panel;
+  final ValueChanged<_Panel> onPanel;
+
+  static const _items = <(_Panel, IconData, String)>[
+    (_Panel.fishing, Icons.phishing, '낚시정보'),
+    (_Panel.weather, Icons.wb_sunny_outlined, '날씨'),
+    (_Panel.calendar, Icons.calendar_month_outlined, '물때달력'),
+    (_Panel.chart, Icons.show_chart, '조위'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    Widget item(IconData icon, String label, VoidCallback onTap) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: 54,
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                Icon(icon, size: 20, color: Colors.white),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // 아이콘 투명도 50%(사용자 요구). 세로 공간이 모자라도 넘치지 않게
-    // 스크롤을 허용한다.
+    final primary = Theme.of(context).colorScheme.primary;
     return Opacity(
-      opacity: 0.5,
+      opacity: 0.55,
       child: SingleChildScrollView(
         child: Column(
           children: [
-            item(Icons.phishing, '낚시정보', () {
-              Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const HomeScreen()));
-            }),
-            item(Icons.wb_sunny_outlined, '날씨', () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const KmaWeatherScreen()),
-              );
-            }),
-            item(Icons.calendar_month_outlined, '물때달력', onOpenCalendar),
-            item(Icons.show_chart, '조위그래프', () {
-              showDialog<void>(
-                context: context,
-                builder: (context) => Dialog(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+            for (final (p, icon, label) in _items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: InkWell(
+                  onTap: () => onPanel(panel == p ? _Panel.timeline : p),
+                  borderRadius: BorderRadius.circular(9),
+                  child: Container(
+                    width: 46,
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    decoration: BoxDecoration(
+                      color: panel == p ? primary : Colors.black54,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        Icon(icon, size: 16, color: Colors.white),
+                        const SizedBox(height: 2),
                         Text(
-                          '상세 조위 그래프',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        TideChart(
-                          hourlyHeightsCm: tide.hourlyHeightsCm,
-                          now: DateUtils.isSameDay(tide.date, DateTime.now())
-                              ? DateTime.now()
-                              : null,
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              );
-            }),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 패널 공통 컨테이너: 반투명 어두운 배경(그래프 자리에 채워지는 카드).
+class _PanelBox extends StatelessWidget {
+  const _PanelBox({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 56),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+/// 낚시정보 패널: 만조정보·바람정보와 낚시지수 두 블록만(날짜 없음).
+/// 어종 기본값은 달별 제철 어종([seasonalSpecies]).
+class _FishingPanel extends ConsumerWidget {
+  const _FishingPanel({
+    required this.location,
+    required this.date,
+    required this.tide,
+  });
+
+  final SeaLocation location;
+  final DateTime date;
+  final TideDay tide;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final marineAsync = ref.watch(homeMarineForecastProvider(location));
+    final fishingAsync = ref.watch(fishingForecastProvider(location));
+    final species = seasonalSpecies(date.month);
+
+    String tideLine() {
+      if (tide.extremes.isEmpty) return '정보 없음';
+      return tide.extremes
+          .map(
+            (e) =>
+                '${e.isHigh ? '만조' : '간조'} '
+                '${e.time.hour.toString().padLeft(2, '0')}:'
+                '${e.time.minute.toString().padLeft(2, '0')}',
+          )
+          .join('  ·  ');
+    }
+
+    return _PanelBox(
+      title: '낚시정보',
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          _InfoRow(icon: Icons.waves, label: '만조정보', value: tideLine()),
+          const SizedBox(height: 8),
+          marineAsync.when(
+            loading: () => const _InfoRow(
+              icon: Icons.air,
+              label: '바람정보',
+              value: '불러오는 중…',
+            ),
+            error: (_, _) =>
+                const _InfoRow(icon: Icons.air, label: '바람정보', value: '정보 없음'),
+            data: (m) {
+              final h = m.hourly.isNotEmpty ? m.hourly.first : null;
+              return _InfoRow(
+                icon: Icons.air,
+                label: '바람정보',
+                value: h == null
+                    ? '정보 없음'
+                    : '${compassKo(h.windDirectionDeg)} '
+                          '${h.windSpeedMs.toStringAsFixed(1)}m/s · '
+                          '돌풍 ${h.windGustMs.toStringAsFixed(0)}m/s',
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '낚시지수 (${species.join(' · ')})',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          fishingAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, _) => const Text(
+              '낚시지수를 불러오지 못했습니다',
+              style: TextStyle(color: Colors.white70),
+            ),
+            data: (f) {
+              final groups = f.speciesGroupsForDate(
+                date,
+                preferredSpecies: species,
+              );
+              if (groups.isEmpty) {
+                return const Text(
+                  '이 날짜의 낚시지수가 없습니다',
+                  style: TextStyle(color: Colors.white70),
+                );
+              }
+              return Column(
+                children: [
+                  for (final g in groups)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _SpeciesIndexRow(indices: g),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.white70),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 한 어종의 시간대별 지수를 등급 칩으로 요약.
+class _SpeciesIndexRow extends StatelessWidget {
+  const _SpeciesIndexRow({required this.indices});
+
+  final List<FishingIndex> indices;
+
+  Color _gradeColor(FishingGrade g) => switch (g) {
+    FishingGrade.veryGood => const Color(0xFF2E9E5B),
+    FishingGrade.good => const Color(0xFF6BB94D),
+    FishingGrade.normal => const Color(0xFFC9A227),
+    FishingGrade.bad => const Color(0xFFCC7A29),
+    FishingGrade.veryBad => const Color(0xFFC24444),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final name = indices.first.species ?? '대표';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const Spacer(),
+          for (final i in indices.take(3)) ...[
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: _gradeColor(i.grade),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${i.timeSlot} ${i.grade.label}',
+                style: const TextStyle(color: Colors.white, fontSize: 10.5),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 날씨 패널: 물때에서 선택한 항구(동일 지역)의 날씨만 컴팩트하게.
+class _WeatherPanel extends ConsumerWidget {
+  const _WeatherPanel({required this.location});
+
+  final SeaLocation location;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final forecastAsync = ref.watch(weatherForecastProvider(location));
+    return _PanelBox(
+      title: '날씨 · ${location.name}',
+      child: forecastAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => const Center(
+          child: Text(
+            '날씨를 불러오지 못했습니다',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+        data: (f) {
+          final hours = f.next24h.where((h) => h.time.hour % 3 == 0).toList();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  WeatherIcon(code: f.now.weatherCode, size: 34),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${f.now.tempC.round()}°  ${wmoLabelKo(f.now.weatherCode)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 74,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: hours.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (context, i) {
+                    final h = hours[i];
+                    return Container(
+                      width: 46,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${h.time.hour}시',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                            ),
+                          ),
+                          WeatherIcon(code: h.weatherCode, size: 20),
+                          Text(
+                            '${h.tempC.round()}°',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    for (final d in f.daily.take(5))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 44,
+                              child: Text(
+                                '${d.date.month}/${d.date.day}',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                            WeatherIcon(code: d.weatherCode, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${d.tempMinC.round()}°/${d.tempMaxC.round()}°',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '강수 ${d.precipProbMaxPct}%',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 물때달력 패널: 그래프 자리에 그대로 그린다. 날짜 탭 → 그 날짜 선택 후
+/// 타임라인으로 복귀.
+class _CalendarPanel extends StatelessWidget {
+  const _CalendarPanel({
+    required this.initial,
+    required this.minDate,
+    required this.maxDate,
+    required this.system,
+    required this.onPicked,
+  });
+
+  final DateTime initial;
+  final DateTime minDate;
+  final DateTime maxDate;
+  final MulTtaeSystem system;
+  final ValueChanged<DateTime> onPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 56),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        // 달력은 테마 색을 쓰므로 밝은 반투명 표면 위에 올린다.
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: SingleChildScrollView(
+        child: MulTtaeCalendarView(
+          initial: initial,
+          minDate: minDate,
+          maxDate: maxDate,
+          system: system,
+          onPicked: onPicked,
+        ),
+      ),
+    );
+  }
+}
+
+/// 조위그래프 패널: 반투명 배경(투명도 추가) 위에 상세 조위 곡선.
+class _ChartPanel extends StatelessWidget {
+  const _ChartPanel({required this.tide, required this.isToday});
+
+  final TideDay tide;
+  final bool isToday;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PanelBox(
+      title: '상세 조위 그래프',
+      child: Center(
+        child: SingleChildScrollView(
+          child: TideChart(
+            hourlyHeightsCm: tide.hourlyHeightsCm,
+            now: isToday ? DateTime.now() : null,
+          ),
         ),
       ),
     );

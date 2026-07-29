@@ -64,3 +64,34 @@ class BackdropNotifier extends Notifier<bool> {
 final backdropEnabledProvider = NotifierProvider<BackdropNotifier, bool>(
   BackdropNotifier.new,
 );
+
+/// 물때&날씨 화면 배경 사진 후보(자체 생성 이미지 — 라이선스 없음).
+const backgroundImageChoices = <({String asset, String label})>[
+  (asset: 'assets/images/sea_photo_bg.jpg', label: '노을 바다'),
+  (asset: 'assets/images/sea_bg_day.jpg', label: '한낮 바다'),
+  (asset: 'assets/images/sea_bg_dusk.jpg', label: '보랏빛 황혼'),
+  (asset: 'assets/images/sea_bg_night.jpg', label: '달밤 바다'),
+  (asset: 'assets/images/sea_bg_emerald.jpg', label: '에메랄드 아침'),
+];
+
+/// 선택된 배경 사진 에셋 경로(설정 > 배경 사진). 저장되어 유지된다.
+class BackgroundImageNotifier extends Notifier<String> {
+  static const _prefsKey = 'bg_image_asset';
+
+  @override
+  String build() {
+    final saved = ref.read(sharedPreferencesProvider).getString(_prefsKey);
+    final valid = backgroundImageChoices.any((c) => c.asset == saved);
+    return valid ? saved! : backgroundImageChoices.first.asset;
+  }
+
+  void select(String asset) {
+    state = asset;
+    ref.read(sharedPreferencesProvider).setString(_prefsKey, asset);
+  }
+}
+
+final backgroundImageProvider =
+    NotifierProvider<BackgroundImageNotifier, String>(
+      BackgroundImageNotifier.new,
+    );

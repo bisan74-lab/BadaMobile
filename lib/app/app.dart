@@ -97,10 +97,12 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           ),
           if (!onWindy)
+            // Windy 탭 레일과 같은 위치(우하단)에 가로로 긴 필 버튼으로
+            // 표시한다 — 다른(미니) 메뉴들과 구분되는 스타일(사용자 요구).
             Align(
-              alignment: Alignment.centerRight,
+              alignment: Alignment.bottomRight,
               child: Padding(
-                padding: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.only(right: 6, bottom: 88),
                 child: _SideNavRail(
                   index: index,
                   onSelect: (i) =>
@@ -114,8 +116,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-/// 오른쪽 가장자리 세로 탭 내비게이션(하단 바 대체). 어느 배경 위에서도
-/// 보이도록 반투명 원형 배경 + 흰 아이콘으로 그리고, 전체 투명도 50%.
+/// 우하단 세로 스택의 가로형 필 탭 내비게이션(하단 바 대체, Windy 레일과
+/// 같은 위치). 아이콘+라벨의 긴 필 모양이라 그래프 위 미니 메뉴와 확실히
+/// 구분된다. 전체 투명도 50%.
 class _SideNavRail extends StatelessWidget {
   const _SideNavRail({required this.index, required this.onSelect});
 
@@ -135,21 +138,46 @@ class _SideNavRail extends StatelessWidget {
       opacity: 0.5,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           for (var i = 0; i < _icons.length; i++)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 3),
               child: Material(
-                color: Colors.black54,
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip: _icons[i].$3,
-                  onPressed: () => onSelect(i),
-                  iconSize: 22,
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(
-                    i == index ? _icons[i].$2 : _icons[i].$1,
-                    color: i == index ? primary : Colors.white,
+                color: i == index ? primary : Colors.black87,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => onSelect(i),
+                  child: Container(
+                    width: 108,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          i == index ? _icons[i].$2 : _icons[i].$1,
+                          size: 17,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            _icons[i].$3,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

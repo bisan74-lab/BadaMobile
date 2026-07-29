@@ -15,22 +15,27 @@ Future<DateTime?> showMulTtaeCalendar(
   return showDialog<DateTime>(
     context: context,
     builder: (context) => Dialog(
-      child: _MulTtaeCalendar(
+      child: MulTtaeCalendarView(
         initial: initial,
         minDate: minDate,
         maxDate: maxDate,
         system: system,
+        onPicked: (d) => Navigator.pop(context, d),
       ),
     ),
   );
 }
 
-class _MulTtaeCalendar extends StatefulWidget {
-  const _MulTtaeCalendar({
+/// 물때달력 본체. 다이얼로그뿐 아니라 화면 중앙 패널에도 임베드해 쓴다
+/// (물때&날씨 화면의 물때달력 버튼 — 그래프 자리에 그대로 그려진다).
+class MulTtaeCalendarView extends StatefulWidget {
+  const MulTtaeCalendarView({
+    super.key,
     required this.initial,
     required this.minDate,
     required this.maxDate,
     required this.system,
+    required this.onPicked,
   });
 
   final DateTime initial;
@@ -38,11 +43,14 @@ class _MulTtaeCalendar extends StatefulWidget {
   final DateTime maxDate;
   final MulTtaeSystem system;
 
+  /// 날짜를 탭했을 때 호출된다(다이얼로그면 pop, 패널이면 날짜 선택).
+  final ValueChanged<DateTime> onPicked;
+
   @override
-  State<_MulTtaeCalendar> createState() => _MulTtaeCalendarState();
+  State<MulTtaeCalendarView> createState() => _MulTtaeCalendarState();
 }
 
-class _MulTtaeCalendarState extends State<_MulTtaeCalendar> {
+class _MulTtaeCalendarState extends State<MulTtaeCalendarView> {
   late int _year = widget.initial.year;
   late int _month = widget.initial.month;
 
@@ -169,7 +177,7 @@ class _MulTtaeCalendarState extends State<_MulTtaeCalendar> {
     final today = DateUtils.isSameDay(d, DateTime.now());
     final mt = mulTtaeFor(d, system: widget.system);
     return InkWell(
-      onTap: enabled ? () => Navigator.pop(context, d) : null,
+      onTap: enabled ? () => widget.onPicked(d) : null,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         margin: const EdgeInsets.all(1.5),
