@@ -302,6 +302,11 @@ def discover_badatime(names_needed):
                     break
             if best:
                 break
+        # 지점 상세는 /{id}/{탭} 구조 — 어떤 탭(road 등)이 걸렸든
+        # 물때표 탭(/tide)으로 정규화한다(무창포가 /236/road로 잡혔던 문제).
+        if best:
+            best = re.sub(r"/(\d+)/\w+$", r"/\1/tide", best)
+            best = re.sub(r"/(\d+)$", r"/\1/tide", best)
         result[name_terms[0]] = best
     print(f"  링크맵 {len(link_map)}건 수집(페이지 {len(seen_pages)}개)")
     unmatched = [k for k, v in result.items() if not v]
@@ -335,16 +340,20 @@ def bada_extremes(page_text, day, start_month):
         return None, "만조/간조 항목 없음"
     events.sort(key=lambda e: e[0])
     cur_month, cur_day, prev_day = None, None, None
+    month_header_seen = False  # 직전 날짜 행 이후 월 헤더를 봤는지.
     result = []
     for _, kind, val in events:
         if kind == "month":
             cur_month = val
+            month_header_seen = True
         elif kind == "day":
             if cur_month is None:
                 cur_month = start_month  # 표는 오늘(KST)부터 시작한다.
-            if prev_day is not None and val < prev_day:
-                # 월 헤더를 놓쳤더라도 일자가 줄어들면 다음 달로 넘어간 것.
+            # 월 헤더가 없었는데 일자가 줄었다면 다음 달로 넘어간 것.
+            # (헤더로 이미 넘어갔으면 중복으로 올리지 않는다 — 8월→9월 버그)
+            if not month_header_seen and prev_day is not None and val < prev_day:
                 cur_month = cur_month % 12 + 1
+            month_header_seen = False
             prev_day = cur_day = val
         elif kind == "entry" and cur_day is not None:
             if cur_month == day.month and cur_day == day.day:
@@ -438,6 +447,7 @@ def main():
     print("\n[2/3] 지점별 비교")
     dumped_sample = False
     summary = []  # (name, date, n_matched, max_dt_min, max_dh_cm, note)
+    calib = {}  # name -> [(dt_min, dh_cm)] 부호 있는 차이(bada - app)
     for loc in LOCATIONS:
         name = loc[0]
         url = urls.get(loc[1][0])
@@ -477,7 +487,7 @@ def main():
                 for t, h, ih in bada
             )
             print(f"  {day:%m-%d} BADA: {bada_str}")
-            # 같은 종류·가장 가까운 시각끼리 매칭해 차이 계산.
+            # 같은 종류·가장 가까운 시각끼리 매칭해 차이 계산(부호 = bada - app).
             diffs = []
             for t, h, ih in app:
                 tm = t.hour * 60 + t.minute
@@ -486,10 +496,11 @@ def main():
                     continue
                 dmin, bt, bh = min(cands)
                 if dmin <= 120:
-                    diffs.append((dmin, abs(h - bh)))
+                    diffs.append((bt - tm, bh - h))
+                    calib.setdefault(name, []).append((bt - tm, bh - h))
             if diffs:
-                max_dt = max(d[0] for d in diffs)
-                max_dh = max(d[1] for d in diffs)
+                max_dt = max(abs(d[0]) for d in diffs)
+                max_dh = max(abs(d[1]) for d in diffs)
                 print(f"        매칭 {len(diffs)}/{len(app)}: 최대 시각차 {max_dt}분, 최대 조위차 {max_dh:.0f}cm")
                 summary.append((name, day, len(diffs), max_dt, max_dh, ""))
             else:
@@ -501,6 +512,19 @@ def main():
         dt_s = "-" if dt is None else str(dt)
         dh_s = "-" if dh is None else f"{dh:.0f}"
         print(f"{name:<12} {day:%m-%d}  {n:<4} {dt_s:<9} {dh_s:<9} {note}")
+
+    print("\n[보정 제안] 지점별 평균 차이(bada - app): 시간은 tideTimeOffsetMin에")
+    print("더하고, 조위는 가산 오프셋(cm)으로 반영하면 badatime과 맞는다.")
+    for name, pairs in calib.items():
+        n = len(pairs)
+        mean_dt = sum(p[0] for p in pairs) / n
+        mean_dh = sum(p[1] for p in pairs) / n
+        sd_dt = (sum((p[0] - mean_dt) ** 2 for p in pairs) / n) ** 0.5
+        sd_dh = (sum((p[1] - mean_dh) ** 2 for p in pairs) / n) ** 0.5
+        print(
+            f"  {name:<12} n={n:<3} 시간 {mean_dt:+6.1f}분(±{sd_dt:.1f}) "
+            f"조위 {mean_dh:+6.1f}cm(±{sd_dh:.1f})"
+        )
 
 
 if __name__ == "__main__":
