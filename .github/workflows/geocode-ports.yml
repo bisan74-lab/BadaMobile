@@ -1,0 +1,20 @@
+# 국가어항 목록(공공데이터) 주소를 Nominatim으로 지오코딩한다.
+# 로컬 개발 세션은 egress 정책상 nominatim.openstreetmap.org에 직접
+# 접근할 수 없어, 네트워크 제한이 없는 Actions 러너에서 실행하고
+# 결과를 로그의 JSON으로 받는다(verify-tide.yml과 같은 패턴).
+name: geocode-ports
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  geocode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Geocode national fishing ports via Nominatim
+        run: python tool/geocode_national_ports.py
