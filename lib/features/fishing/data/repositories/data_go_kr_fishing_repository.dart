@@ -29,6 +29,40 @@ class DataGoKrFishingRepository implements FishingRepository {
   static const _host = 'apis.data.go.kr';
   static const _basePath = '/1192136/fcstFishingv2';
 
+  /// 하루치 **전국** 응답(약 1,750건)은 어느 지역을 고르든 완전히 같으므로,
+  /// 세션 안에서는 날짜별로 한 번만 받아 재사용한다 — 새 지역을 골라도
+  /// 네트워크 재요청 없이 가까운 포인트 필터만 다시 해서 즉시 뜬다.
+  /// (같은 원본을 그대로 쓰는 것이라 실시간 값이 틀어지지 않는다.
+  /// 실패한 요청은 캐시하지 않아 다음 조회에서 재시도한다.)
+  static final Map<String, Future<List<Map<String, dynamic>>>> _dayItems = {};
+
+  Future<List<Map<String, dynamic>>> _itemsFor(String ymd) {
+    return _dayItems.putIfAbsent(ymd, () async {
+      try {
+        final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiServicev2', {
+          'serviceKey': _serviceKey,
+          'type': 'json',
+          'reqDate': ymd,
+          'gubun': '갯바위',
+          'pageNo': '1',
+          'numOfRows': '3000', // 전체 포인트×어종×오전/오후 (하루 약 1,750건)
+        });
+        final res = await _client.get(uri);
+        if (res.statusCode != 200) {
+          throw http.ClientException('바다낚시지수 응답 오류 ${res.statusCode}', uri);
+        }
+        final items = parseDataGoKrItems(res.body);
+        if (items.isEmpty) {
+          throw const FormatException('바다낚시지수 응답에 데이터가 없음');
+        }
+        return items;
+      } catch (_) {
+        _dayItems.remove(ymd);
+        rethrow;
+      }
+    });
+  }
+
   @override
   Future<FishingForecast> fetchForecast(SeaLocation location) async {
     final today = DateTime.now();
@@ -36,23 +70,7 @@ class DataGoKrFishingRepository implements FishingRepository {
         '${today.year}'
         '${today.month.toString().padLeft(2, '0')}'
         '${today.day.toString().padLeft(2, '0')}';
-    final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiServicev2', {
-      'serviceKey': _serviceKey,
-      'type': 'json',
-      'reqDate': ymd,
-      'gubun': '갯바위',
-      'pageNo': '1',
-      'numOfRows': '3000', // 전체 포인트×어종×오전/오후 (하루 약 1,750건)
-    });
-
-    final res = await _client.get(uri);
-    if (res.statusCode != 200) {
-      throw http.ClientException('바다낚시지수 응답 오류 ${res.statusCode}', uri);
-    }
-    final items = parseDataGoKrItems(res.body);
-    if (items.isEmpty) {
-      throw const FormatException('바다낚시지수 응답에 데이터가 없음');
-    }
+    final items = await _itemsFor(ymd);
 
     final nearest = _nearestPointName(items, location);
     final indices =

@@ -29,12 +29,48 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
   static const _marineHost = 'marine-api.open-meteo.com';
   static const _forecastHost = 'api.open-meteo.com';
 
+  /// 지점별로 학습한 파랑 격자 좌표(연안 마스킹 보정 결과). 값이 null이면
+  /// "주변에 바다 격자 없음(내륙)", 키가 없으면 아직 미학습. 격자 지오메트리는
+  /// 변하지 않는 사실이라 세션 안에서 재사용해도 실시간 값이 틀어지지 않고,
+  /// 재조회 시 탐색 왕복(격자 확인 8회 + 재요청)을 통째로 건너뛰어 새 지역
+  /// 로딩이 한 번의 왕복으로 끝난다.
+  static final Map<String, (double, double)?> _wetPointCache = {};
+
   @override
   Future<MarineForecast> fetchForecast(
     SeaLocation location, {
     int hours = defaultForecastHours,
     int pastDays = 0,
   }) async {
+    // 이미 학습한 지점은 곧장 그 좌표(자기 좌표 또는 앞바다 격자)로 요청한다.
+    if (_wetPointCache.containsKey(location.id)) {
+      final wet = _wetPointCache[location.id];
+      if (wet == null) {
+        // 내륙으로 학습된 지점: 자기 좌표 예보(바람 등)만 쓰고 파고는 숨긴다.
+        final (forecast, _) = await _fetchAt(
+          location.latitude,
+          location.longitude,
+          location.id,
+          hours,
+          pastDays,
+        );
+        return MarineForecast(
+          locationId: forecast.locationId,
+          hourly: forecast.hourly,
+          hasWaveData: false,
+        );
+      }
+      final (forecast, wavesPresent) = await _fetchAt(
+        wet.$1,
+        wet.$2,
+        location.id,
+        hours,
+        pastDays,
+      );
+      if (wavesPresent) return forecast;
+      _wetPointCache.remove(location.id); // 희귀: 격자 변화 — 아래서 재학습.
+    }
+
     final (forecast, wavesPresent) = await _fetchAt(
       location.latitude,
       location.longitude,
@@ -47,11 +83,15 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     // 있다(Open-Meteo cell_selection=sea가 이 파랑모델엔 안 먹힌다). 그러면
     // 가장 가까운 **실제 바다 격자**를 찾아 그 지점으로 예보 전체(파고·바람)를
     // 다시 받는다 — Windy가 앞바다 값을 보여주는 것과 같은 효과.
-    if (wavesPresent) return forecast;
+    if (wavesPresent) {
+      _wetPointCache[location.id] = (location.latitude, location.longitude);
+      return forecast;
+    }
     final wet = await _nearestWetPoint(location.latitude, location.longitude);
     if (wet == null) {
       // 주변에 앞바다 격자가 전혀 없다 = 육지 지점. 파도·너울을 숨기도록
       // 표시한다(상세 표에서 해당 행을 아예 뺀다).
+      _wetPointCache[location.id] = null;
       return MarineForecast(
         locationId: forecast.locationId,
         hourly: forecast.hourly,
@@ -65,6 +105,7 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       hours,
       pastDays,
     );
+    _wetPointCache[location.id] = wet;
     return wetForecast;
   }
 
