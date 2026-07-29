@@ -123,13 +123,16 @@ class DataGoKrTideObsRepository implements TideRepository {
     // 관측소 대비 위상·진폭이 지형에 의해 일정하게 어긋난다. 실측 조석표와
     // 대조해 캘리브레이션한 시간차·조위비를 시계열 자체에 적용한다 —
     // 이후 극값 추출·곡선·보간이 모두 보정된 값 위에서 일관되게 동작한다.
-    if (target.tideTimeOffsetMin != 0 || target.tideHeightScale != 1.0) {
+    if (target.tideTimeOffsetMin != 0 ||
+        target.tideHeightScale != 1.0 ||
+        target.tideHeightOffsetCm != 0) {
       final dt = Duration(minutes: target.tideTimeOffsetMin);
       dedup = [
         for (final s in dedup)
           _TideSample(
             time: s.time.add(dt),
-            heightCm: s.heightCm * target.tideHeightScale,
+            heightCm:
+                s.heightCm * target.tideHeightScale + target.tideHeightOffsetCm,
           ),
       ];
     }

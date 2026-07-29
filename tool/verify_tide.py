@@ -33,7 +33,7 @@ BADA = "https://www.badatime.com"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BadaMobileVerify/1.0"}
 
 # 앱 sample_locations.dart에서 발췌한 검증 대상 20개 항구(서해7·남해7·동해6).
-# (이름, badatime 검색어 후보, lat, lon, [관측소코드], 시간보정분, 조위비)
+# (이름, badatime 검색어 후보, lat, lon, [관측소코드], 시간보정분, 조위비[, 조위가산cm])
 LOCATIONS = [
     # ── 서해 7 ──
     ("인천", ["인천"], 37.452, 126.592, ["DT_0001"], 0, 1.0),
@@ -181,15 +181,16 @@ def station_series(obs, day):
 
 def app_extremes(loc, day):
     """앱과 동일한 만조/간조 계산(그날 것만)."""
-    name, _, lat, lon, codes, off, scale = loc
+    name, _, lat, lon, codes, off, scale = loc[:7]
+    off_cm = loc[7] if len(loc) > 7 else 0
     stations = []
     for obs in codes:
         samples, coord = station_series(obs, day)
         if len(samples) < 3:
             continue
-        if off or scale != 1.0:
+        if off or scale != 1.0 or off_cm:
             dt = timedelta(minutes=off)
-            samples = [(t + dt, h * scale) for t, h in samples]
+            samples = [(t + dt, h * scale + off_cm) for t, h in samples]
         slat, slon = coord if coord else (lat, lon)
         w = 1.0 / max(dist_km(lat, lon, slat, slon), 0.5) ** 2
         stations.append((samples, w))
