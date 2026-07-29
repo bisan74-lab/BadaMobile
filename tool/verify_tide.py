@@ -125,8 +125,8 @@ def fetch_day(obs, ymd):
 
 
 def extremes(series):
-    """국소 극값 + 이웃 3점 포물선 정밀화(앱 _allExtremes와 동일)."""
-    out = []
+    """국소 극값 + 이웃 3점 포물선 정밀화 + 만조/간조 교대 강제(앱과 동일)."""
+    raw = []
     for i in range(1, len(series) - 1):
         (t0, y0), (t1, y1), (t2, y2) = series[i - 1], series[i], series[i + 1]
         is_high = y1 >= y0 and y1 > y2
@@ -136,7 +136,17 @@ def extremes(series):
         denom = y0 - 2 * y1 + y2
         d = 0.0 if denom == 0 else max(-0.5, min(0.5, 0.5 * (y0 - y2) / denom))
         half = (t2 - t0).total_seconds() / 2
-        out.append((t1 + timedelta(seconds=d * half), y1 - 0.25 * (y0 - y2) * d, is_high))
+        raw.append((t1 + timedelta(seconds=d * half), y1 - 0.25 * (y0 - y2) * d, is_high))
+    # 조차가 작은 해역(동해)은 평평한 구간에서 같은 종류 극값이 연달아
+    # 검출된다 → 같은 종류가 이어지면 더 극단적인 쪽만 남긴다(교대 강제).
+    out = []
+    for e in raw:
+        if out and out[-1][2] == e[2]:
+            keep_new = (e[1] > out[-1][1]) if e[2] else (e[1] < out[-1][1])
+            if keep_new:
+                out[-1] = e
+            continue
+        out.append(e)
     return out
 
 
@@ -347,10 +357,68 @@ def bada_extremes(page_text, day):
     return dedup, None
 
 
+def probe():
+    """badatime.com 페이지 구조 정찰: 인천을 예로 실제 물때표 URL을 찾는다."""
+    html = http_get(BADA + "/")
+    links = anchors(html)
+    print(f"홈 앵커 {len(links)}개. '인천'/'물때' 포함 앵커:")
+    for href, text in links:
+        if "인천" in text or "물때" in text:
+            print(f"  '{text}' -> {href}")
+    tried = set()
+
+    def inspect(u, depth):
+        if u in tried or len(tried) > 25:
+            return
+        tried.add(u)
+        try:
+            h = http_get(u)
+        except Exception as e:
+            print(f"\n## {u}: 실패 {e}")
+            return
+        time_mod.sleep(0.2)
+        title = re.search(r"<title>(.*?)</title>", h, re.S)
+        n_manjo = h.count("만조")
+        times = len(re.findall(r"\d{1,2}:\d{2}", h))
+        print(f"\n## {u}\n   {len(h)}B, 만조 {n_manjo}회, 시각패턴 {times}개, "
+              f"title={unescape(title.group(1)).strip()[:70] if title else '?'}")
+        if n_manjo >= 4:
+            i = h.find("만조")
+            print("   ---- RAW HTML 발췌(만조 주변 3000자) ----")
+            print(h[max(0, i - 600) : i + 2400])
+            print("   ---- 발췌 끝 ----")
+            txt = to_text(h)
+            j = txt.find("만조")
+            print("   ---- TEXT 발췌(만조 주변 1500자) ----")
+            print(txt[max(0, j - 300) : j + 1200])
+            print("   ---- 발췌 끝 ----")
+            return
+        if depth <= 0:
+            return
+        for hr, tx in anchors(h):
+            full = urllib.parse.urljoin(u, hr)
+            if "badatime" not in urllib.parse.urlparse(full).netloc:
+                continue
+            if any(w in tx for w in ("물때", "조석", "인천")) or "/tide" in hr:
+                print(f"   link: '{tx.strip()[:30]}' -> {full}")
+                inspect(full, depth - 1)
+
+    for cand in (
+        f"{BADA}/158/tide",
+        f"{BADA}/158",
+        f"{BADA}/tide/158",
+        f"{BADA}/158/tide-calendar",
+    ):
+        inspect(cand, 1)
+
+
 def main():
     if not KEY:
         sys.exit("DATA_GO_KR_API_KEY 환경변수가 없습니다.")
     args = [a for a in sys.argv[1:] if a.strip()]
+    if args and args[0] == "--probe":
+        probe()
+        return
     if args:
         dates = [datetime.strptime(a, "%Y%m%d") for a in args]
     else:

@@ -205,7 +205,11 @@ class DataGoKrTideObsRepository implements TideRepository {
   }
 
   /// 시계열의 국소 최대/최소를 만조/간조로 뽑고, 이웃 3점 포물선으로 꼭짓점
-  /// 시각·높이를 시·분까지 정밀화한다.
+  /// 시각·높이를 시·분까지 정밀화한다. 조차가 작은 해역(동해)은 평평한
+  /// 구간에서 같은 종류 극값이 연달아 검출되므로(후포·묵호 등에서 만조가
+  /// 하루 5~9개 표시되던 버그), **만조/간조가 교대로 나오게 강제**한다 —
+  /// 같은 종류가 이어지면 더 극단적인(만조는 더 높은, 간조는 더 낮은)
+  /// 하나만 남긴다.
   List<TideExtreme> _allExtremes(List<_TideSample> s) {
     final out = <TideExtreme>[];
     for (var i = 1; i < s.length - 1; i++) {
@@ -216,13 +220,19 @@ class DataGoKrTideObsRepository implements TideRepository {
       final denom = y0 - 2 * y1 + y2;
       final d = denom == 0 ? 0.0 : (0.5 * (y0 - y2) / denom).clamp(-0.5, 0.5);
       final halfMs = s[i + 1].time.difference(s[i - 1].time).inMilliseconds / 2;
-      out.add(
-        TideExtreme(
-          time: s[i].time.add(Duration(milliseconds: (d * halfMs).round())),
-          heightCm: y1 - 0.25 * (y0 - y2) * d,
-          isHigh: isHigh,
-        ),
+      final e = TideExtreme(
+        time: s[i].time.add(Duration(milliseconds: (d * halfMs).round())),
+        heightCm: y1 - 0.25 * (y0 - y2) * d,
+        isHigh: isHigh,
       );
+      if (out.isNotEmpty && out.last.isHigh == e.isHigh) {
+        final keepNew = e.isHigh
+            ? e.heightCm > out.last.heightCm
+            : e.heightCm < out.last.heightCm;
+        if (keepNew) out[out.length - 1] = e;
+        continue;
+      }
+      out.add(e);
     }
     return out;
   }
