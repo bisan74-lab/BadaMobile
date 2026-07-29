@@ -17,10 +17,12 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('설정')),
-      // 우측 탭 레일(물때/Windy/설정 칩)과 겹치지 않게 본문 폭을 줄여
-      // 좌측 기준으로 배치한다 — 오른쪽 여백 위에 레일이 뜬다.
+      // 우측 탭 레일(물날씨/Windy/설정 칩)과 겹치지 않게 본문 폭을 줄여
+      // 좌측 기준으로 배치한다 — 오른쪽 여백 위에 레일이 뜬다. 레일은
+      // 화면 끝 6px + 칩 46px = 52px를 차지하므로 56px면 4px 간격을 두고
+      // 최대한 넓게 쓴다(64px는 틈이 너무 넓다는 사용자 피드백).
       body: ListView(
-        padding: const EdgeInsets.only(right: 64),
+        padding: const EdgeInsets.only(right: 56),
         children: const [
           _TemplateSection(),
           Divider(height: 1),
