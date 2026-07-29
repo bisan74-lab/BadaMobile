@@ -35,6 +35,10 @@ class _LocationPickerSheet extends ConsumerStatefulWidget {
 class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
   String _query = '';
 
+  /// 해역 필터('전체'면 모두). 지점이 45곳이라 가나다순만으로는 찾기
+  /// 어렵다는 피드백으로 추가 — 칩을 누르면 그 해역만 보인다.
+  String _region = '전체';
+
   /// 디바운스된 검색어(지오코딩 API 호출용).
   String _geoQuery = '';
   Timer? _debounce;
@@ -78,6 +82,7 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
               // (내륙 도시는 날씨 탭 검색 전용).
               (l) =>
                   (widget.forWeather || !l.inland) &&
+                  (_region == '전체' || l.region == _region) &&
                   (_query.isEmpty ||
                       l.name.contains(_query) ||
                       l.region.contains(_query)),
@@ -89,6 +94,9 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
                 (favorites.contains(a.id) ? 1 : 0);
             return favDiff != 0 ? favDiff : a.name.compareTo(b.name);
           });
+
+    // 해역 필터 칩 목록. 날씨 탭 시트에는 내륙 도시도 있으므로 '내륙' 추가.
+    final regions = ['전체', '서해', '남해', '동해', '제주', if (widget.forWeather) '내륙'];
 
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.8,
@@ -112,6 +120,28 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
               onChanged: _onQueryChanged,
             ),
           ),
+          // 해역 필터 칩(전체/서해/남해/동해/제주[/내륙]) — 한 줄 가로 스크롤.
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                for (final r in regions)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text(r),
+                      selected: _region == r,
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) => setState(() => _region = r),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: ListView(
               children: [

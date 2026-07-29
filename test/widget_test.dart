@@ -121,6 +121,25 @@ void main() {
     expect(find.text('부산(영도)'), findsOneWidget);
   });
 
+  testWidgets('지역 선택 시트의 해역 칩으로 목록을 좁힐 수 있다', (tester) async {
+    await tester.pumpWidget(await buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.edit_location_alt_outlined).first);
+    await tester.pumpAndSettle();
+
+    // '동해' 칩을 누르면 동해 지점만 남는다(서해 목포는 사라진다).
+    await tester.tap(find.widgetWithText(FilterChip, '동해'));
+    await tester.pumpAndSettle();
+    expect(find.text('감포(경주)'), findsOneWidget);
+    expect(find.text('목포'), findsNothing);
+
+    // '전체'로 돌아오면 다시 모든 해역이 보인다.
+    await tester.tap(find.widgetWithText(FilterChip, '전체'));
+    await tester.pumpAndSettle();
+    expect(find.text('가로림만(서산)'), findsOneWidget);
+  });
+
   testWidgets('설정 탭에 템플릿/정보가 보인다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
