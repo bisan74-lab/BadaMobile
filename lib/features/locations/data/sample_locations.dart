@@ -1,4 +1,5 @@
 import 'models/sea_location.dart';
+import 'national_fishing_ports.dart';
 
 /// 전국 해안·낚시 포인트 목록.
 ///
@@ -7,6 +8,13 @@ import 'models/sea_location.dart';
 /// (물때·해양 날씨·낚시지수는 khoaStationCode 여부와 무관하게 모두 동작).
 /// 코드는 국립해양조사원 조위관측소 기준으로, 확인된 지점만 채워 두었다.
 const List<SeaLocation> sampleLocations = [
+  ..._curatedLocations,
+  ...nationalFishingPorts,
+];
+
+/// 직접 확인·캘리브레이션한 주요 항구(아래 기존 목록). 국가어항현황
+/// 공공데이터로 자동 추가한 지점(`nationalFishingPorts`)과 분리해 둔다.
+const List<SeaLocation> _curatedLocations = [
   // ── 서해 ──────────────────────────────────────────────
   SeaLocation(
     id: 'ganghwado',
