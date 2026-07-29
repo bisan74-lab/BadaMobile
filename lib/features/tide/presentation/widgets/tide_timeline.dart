@@ -14,6 +14,7 @@ class TideTimeline extends StatelessWidget {
     required this.now,
     this.showBackdrop = true,
     this.height = 512,
+    this.frameless = false,
   });
 
   final List<TideExtreme> extremes;
@@ -25,6 +26,10 @@ class TideTimeline extends StatelessWidget {
   /// 타임라인 높이. null이면 부모 제약(예: Expanded)을 그대로 채운다 —
   /// 물때&날씨 화면이 스크롤 없이 한 화면에 들어가게 할 때 쓴다.
   final double? height;
+
+  /// true면 자체 배경(박스 색·바다 이미지)을 그리지 않는다 — 화면 전체가
+  /// 이미 바다 배경일 때(물때&날씨 전체화면 배경) 이중 배경을 피한다.
+  final bool frameless;
 
   /// 만조는 축 왼쪽, 간조는 축 오른쪽에 배치해 양쪽 공간을 고르게 쓴다.
   static const double _axisFraction = 0.5;
@@ -40,7 +45,7 @@ class TideTimeline extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: const Color(0xFF082238),
+        color: frameless ? Colors.transparent : const Color(0xFF082238),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -60,7 +65,7 @@ class TideTimeline extends StatelessWidget {
             children: [
               // 사진풍 바다 배경(절차적으로 생성한 자체 이미지 — 라이선스 없음).
               // 카드·라벨 가독성을 위해 어두운 그라디언트를 살짝 덮는다.
-              if (showBackdrop) ...[
+              if (showBackdrop && !frameless) ...[
                 Positioned.fill(
                   child: Image.asset(
                     'assets/images/sea_photo_bg.jpg',

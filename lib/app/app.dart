@@ -80,43 +80,82 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final index = ref.watch(appTabIndexProvider);
-    // Windy(몰입형 지도) 탭에서는 하단 라벨 바를 숨긴다 — 그 탭 안에서 오른쪽
-    // 세로 아이콘 내비게이션을 띄운다. 나머지 탭은 원래 하단 라벨 내비게이션.
+    // 하단 바 없이 모든 탭에서 오른쪽 세로 아이콘 내비게이션을 쓴다(사용자
+    // 요구). Windy 탭은 자기 화면 안에 전용 레일이 있으므로 중복해서 띄우지
+    // 않는다.
     final onWindy = index == windyTabIndex;
     return Scaffold(
-      body: IndexedStack(
-        index: index,
-        // 화면 밖 탭(특히 애니메이션이 있는 Windy 탭)의 Ticker를 꺼서
-        // 불필요한 리빌드와 배터리 소모, pumpAndSettle 무한대기를 막는다.
+      body: Stack(
         children: [
-          for (var i = 0; i < _screens.length; i++)
-            TickerMode(enabled: i == index, child: _screens[i]),
+          IndexedStack(
+            index: index,
+            // 화면 밖 탭(특히 애니메이션이 있는 Windy 탭)의 Ticker를 꺼서
+            // 불필요한 리빌드와 배터리 소모, pumpAndSettle 무한대기를 막는다.
+            children: [
+              for (var i = 0; i < _screens.length; i++)
+                TickerMode(enabled: i == index, child: _screens[i]),
+            ],
+          ),
+          if (!onWindy)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: _SideNavRail(
+                  index: index,
+                  onSelect: (i) =>
+                      ref.read(appTabIndexProvider.notifier).state = i,
+                ),
+              ),
+            ),
         ],
       ),
-      bottomNavigationBar: onWindy
-          ? null
-          : NavigationBar(
-              selectedIndex: index,
-              onDestinationSelected: (i) =>
-                  ref.read(appTabIndexProvider.notifier).state = i,
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.waves_outlined),
-                  selectedIcon: Icon(Icons.waves),
-                  label: '물때&날씨',
+    );
+  }
+}
+
+/// 오른쪽 가장자리 세로 탭 내비게이션(하단 바 대체). 어느 배경 위에서도
+/// 보이도록 반투명 원형 배경 + 흰 아이콘으로 그리고, 전체 투명도 50%.
+class _SideNavRail extends StatelessWidget {
+  const _SideNavRail({required this.index, required this.onSelect});
+
+  final int index;
+  final ValueChanged<int> onSelect;
+
+  static const _icons = <(IconData, IconData, String)>[
+    (Icons.waves_outlined, Icons.waves, '물때&날씨'),
+    (Icons.air_outlined, Icons.air, 'Windy'),
+    (Icons.settings_outlined, Icons.settings, '설정'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Opacity(
+      opacity: 0.5,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < _icons.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: _icons[i].$3,
+                  onPressed: () => onSelect(i),
+                  iconSize: 22,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    i == index ? _icons[i].$2 : _icons[i].$1,
+                    color: i == index ? primary : Colors.white,
+                  ),
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.air_outlined),
-                  selectedIcon: Icon(Icons.air),
-                  label: 'Windy',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  selectedIcon: Icon(Icons.settings),
-                  label: '설정',
-                ),
-              ],
+              ),
             ),
+        ],
+      ),
     );
   }
 }

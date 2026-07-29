@@ -38,15 +38,15 @@ Future<Widget> buildApp() async {
 }
 
 void main() {
-  testWidgets('앱이 렌더링되고 3개 탭 내비게이션이 보인다', (tester) async {
+  testWidgets('앱이 렌더링되고 오른쪽 3개 탭 레일이 보인다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    // 물때&날씨(선택) / Windy / 설정 3탭 구성.
+    // 하단 바 없이 오른쪽 세로 아이콘 레일: 물때&날씨(선택)/Windy/설정.
     expect(find.byIcon(Icons.waves), findsOneWidget); // 선택된 물때&날씨
     expect(find.byIcon(Icons.air_outlined), findsOneWidget);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
-    expect(find.text('물때&날씨'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
   });
 
   testWidgets('첫 화면(물때&날씨)에 만조/간조와 광고 자리 소개가 보인다', (tester) async {

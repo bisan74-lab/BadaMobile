@@ -68,42 +68,86 @@ class _TideScreenState extends ConsumerState<TideScreen> {
     final mulTtae = mulTtaeFor(_date, system: system);
     final isToday = DateUtils.isSameDay(_date, DateTime.now());
 
+    final showPhoto = ref.watch(backdropEnabledProvider);
+
     return Scaffold(
+      // 바다 배경이 상태바·앱바 뒤까지 꽉 차게(전체화면 배경).
+      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFF0A2A44),
       appBar: AppBar(
         title: const Text('물때 & 날씨'),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: const [RegionSelectorAction()],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _DateHeader(date: _date, mulTtae: mulTtae, onTap: _openCalendar),
-              const SizedBox(height: 6),
-              _FiveDayStrip(
-                date: _date,
-                minDate: _minDate,
-                maxDate: _maxDate,
-                system: system,
-                onSelect: _select,
-                onSelectedTap: _openCalendar,
+      body: Stack(
+        children: [
+          // 전체화면 사진풍 바다 배경 + 가독성용 어두운 그라디언트.
+          if (showPhoto)
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/sea_photo_bg.jpg',
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) =>
+                    const ColoredBox(color: Color(0xFF0A2A44)),
               ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: _tideAvailable
-                    ? _TideBody(
-                        query: (location: location, date: _date),
-                        isToday: isToday,
-                        onOpenCalendar: _openCalendar,
-                      )
-                    : _OutOfRangeCard(mulTtae: mulTtae),
+            ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.black.withValues(alpha: 0.15),
+                    Colors.black.withValues(alpha: 0.35),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              const _AdPlaceholder(),
-            ],
+            ),
           ),
-        ),
+          SafeArea(
+            child: Padding(
+              // 오른쪽은 앱 셸의 세로 탭 레일 공간을 살짝 비워 둔다.
+              padding: const EdgeInsets.fromLTRB(12, 4, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 투명 앱바 높이만큼 내려서 시작.
+                  SizedBox(height: kToolbarHeight - 8),
+                  _DateHeader(
+                    date: _date,
+                    mulTtae: mulTtae,
+                    onTap: _openCalendar,
+                  ),
+                  const SizedBox(height: 6),
+                  _FiveDayStrip(
+                    date: _date,
+                    minDate: _minDate,
+                    maxDate: _maxDate,
+                    system: system,
+                    onSelect: _select,
+                    onSelectedTap: _openCalendar,
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: _tideAvailable
+                        ? _TideBody(
+                            query: (location: location, date: _date),
+                            isToday: isToday,
+                            onOpenCalendar: _openCalendar,
+                          )
+                        : _OutOfRangeCard(mulTtae: mulTtae),
+                  ),
+                  const SizedBox(height: 8),
+                  const _AdPlaceholder(),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -144,11 +188,14 @@ class _DateHeader extends StatelessWidget {
               '${date.year}.${date.month}.${date.day} '
               '(${_weekdays[date.weekday - 1]}) · '
               '음력 ${mulTtae.lunarDay}일 ${mulTtae.label}$suffix',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              // 전체화면 바다 배경 위라 흰색 + 그림자로 가독성 확보.
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+              ),
             ),
-            const Icon(Icons.arrow_drop_down, size: 20),
+            const Icon(Icons.arrow_drop_down, size: 20, color: Colors.white),
           ],
         ),
       ),
@@ -331,28 +378,34 @@ class _TideBody extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D2C47),
+                color: Colors.black.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TideCurrentStrengthBar(fraction: fraction, label: label),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            // 그래프 영역을 최대한 크게: 타임라인을 전체 폭으로 깔고,
+            // 낚시정보·날씨·물때달력·조위그래프 버튼은 그래프 위에
+            // 반투명(50%)으로 겹쳐 놓는다(사용자 요구).
             Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
                 children: [
-                  // 타임라인은 가로를 줄이고(오른쪽 메뉴 공간), 세로는 남은
-                  // 공간을 모두 채워 스크롤 없이 한 화면에 들어간다.
-                  Expanded(
+                  Positioned.fill(
                     child: TideTimeline(
                       extremes: tide.extremes,
                       now: isToday ? DateTime.now() : null,
-                      showBackdrop: ref.watch(backdropEnabledProvider),
                       height: null,
+                      frameless: true,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _RightMenu(tide: tide, onOpenCalendar: onOpenCalendar),
+                  Positioned(
+                    right: 0,
+                    top: 4,
+                    child: _GraphOverlayMenu(
+                      tide: tide,
+                      onOpenCalendar: onOpenCalendar,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -363,36 +416,38 @@ class _TideBody extends ConsumerWidget {
   }
 }
 
-/// 오른쪽 세로 메뉴 — 하단 탭에 있던 항목들을 이쪽으로 옮겼다.
-class _RightMenu extends StatelessWidget {
-  const _RightMenu({required this.tide, required this.onOpenCalendar});
+/// 그래프 위에 겹쳐 놓는 반투명(50%) 미니 메뉴 — 낚시정보·날씨·물때달력·
+/// 조위그래프. 그래프 자리를 최대한 크게 쓰기 위해 별도 열 대신 오버레이로
+/// 배치한다(사용자 요구).
+class _GraphOverlayMenu extends StatelessWidget {
+  const _GraphOverlayMenu({required this.tide, required this.onOpenCalendar});
 
   final TideDay tide;
   final VoidCallback onOpenCalendar;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     Widget item(IconData icon, String label, VoidCallback onTap) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(bottom: 6),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           child: Container(
-            width: 62,
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            width: 54,
+            padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
               children: [
-                Icon(icon, size: 22, color: scheme.primary),
-                const SizedBox(height: 4),
-                Text(label, style: Theme.of(context).textTheme.labelSmall),
+                Icon(icon, size: 20, color: Colors.white),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
               ],
             ),
           ),
@@ -400,48 +455,52 @@ class _RightMenu extends StatelessWidget {
       );
     }
 
-    // 세로 공간이 모자란 소형 화면에서도 넘치지 않게 스크롤을 허용한다.
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          item(Icons.phishing, '낚시정보', () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const HomeScreen()));
-          }),
-          item(Icons.wb_sunny_outlined, '날씨', () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const KmaWeatherScreen()));
-          }),
-          item(Icons.calendar_month_outlined, '물때달력', onOpenCalendar),
-          item(Icons.show_chart, '조위그래프', () {
-            showDialog<void>(
-              context: context,
-              builder: (context) => Dialog(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '상세 조위 그래프',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      TideChart(
-                        hourlyHeightsCm: tide.hourlyHeightsCm,
-                        now: DateUtils.isSameDay(tide.date, DateTime.now())
-                            ? DateTime.now()
-                            : null,
-                      ),
-                    ],
+    // 아이콘 투명도 50%(사용자 요구). 세로 공간이 모자라도 넘치지 않게
+    // 스크롤을 허용한다.
+    return Opacity(
+      opacity: 0.5,
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            item(Icons.phishing, '낚시정보', () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const HomeScreen()));
+            }),
+            item(Icons.wb_sunny_outlined, '날씨', () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const KmaWeatherScreen()),
+              );
+            }),
+            item(Icons.calendar_month_outlined, '물때달력', onOpenCalendar),
+            item(Icons.show_chart, '조위그래프', () {
+              showDialog<void>(
+                context: context,
+                builder: (context) => Dialog(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '상세 조위 그래프',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        TideChart(
+                          hourlyHeightsCm: tide.hourlyHeightsCm,
+                          now: DateUtils.isSameDay(tide.date, DateTime.now())
+                              ? DateTime.now()
+                              : null,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          }),
-        ],
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
