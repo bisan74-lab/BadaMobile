@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/widgets/ad_placeholder.dart';
 import '../app_info.dart';
 import 'policy_screen.dart';
 import 'providers.dart';
@@ -17,16 +18,33 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('설정')),
-      // 우측 탭 레일(물날씨/Windy/설정 칩)과 겹치지 않게 본문 폭을 줄여
+      // 우측 탭 레일(물때날씨/Windy/설정 칩)과 겹치지 않게 본문 폭을 줄여
       // 좌측 기준으로 배치한다 — 오른쪽 여백 위에 레일이 뜬다. 레일은
       // 화면 끝 6px + 칩 46px = 52px를 차지하므로 56px면 4px 간격을 두고
       // 최대한 넓게 쓴다(64px는 틈이 너무 넓다는 사용자 피드백).
-      body: ListView(
-        padding: const EdgeInsets.only(right: 56),
-        children: const [
-          _TemplateSection(),
-          Divider(height: 1),
-          _InfoSection(),
+      // 맨 아래에는 물때&날씨 화면과 동일한 광고 자리를 고정해 둔다.
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(right: 56),
+              children: const [
+                _TemplateSection(),
+                Divider(height: 1),
+                _AccuracySection(),
+                Divider(height: 1),
+                _InfoSection(),
+              ],
+            ),
+          ),
+          const SafeArea(
+            top: false,
+            child: Padding(
+              // 물때&날씨 화면의 하단 광고 자리와 같은 좌우/아래 여백.
+              padding: EdgeInsets.fromLTRB(12, 8, 10, 8),
+              child: AdPlaceholder(),
+            ),
+          ),
         ],
       ),
     );
@@ -204,6 +222,93 @@ class _SkinChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 바다윈디가 왜 정확한 데이터를 보여주는지 설명하는 섹션(사용자 요구).
+/// 데이터 출처(공식 기관)와 검증 방법을 간결한 항목으로 나열한다.
+class _AccuracySection extends StatelessWidget {
+  const _AccuracySection();
+
+  static const _items = <(IconData, String, String)>[
+    (
+      Icons.waves,
+      '물때·조위: 국립해양조사원(KHOA) 공식 데이터',
+      '전국 조위관측소의 실측·예측 조위를 10분 간격으로 받아 만조·간조를 '
+          '계산합니다. 전용 관측소가 없는 항구는 인접 관측소 2~3곳을 거리 '
+          '가중치로 보간하고, 지형에 따른 시간차·조위차를 지점별로 보정합니다.',
+    ),
+    (
+      Icons.fact_check_outlined,
+      '물때표 교차 검증',
+      '전국 물때표 서비스(바다타임)와 서해·남해·동해 20개 항구 × 3일의 '
+          '만조·간조를 자동 대조해, 평균 오차 1분·2cm 이내로 맞춘 것을 '
+          '확인했습니다.',
+    ),
+    (
+      Icons.wb_sunny_outlined,
+      '날씨: 기상청 + 글로벌 수치예보',
+      '가까운 기간은 기상청 단기예보(공식)를 우선 쓰고, 그 이후 기간은 '
+          'ECMWF 등 글로벌 수치예보 모델(Open-Meteo)로 최대 2주까지 '
+          '이어 보여줍니다.',
+    ),
+    (
+      Icons.air,
+      '바람 지도: 최신 예보를 1시간 안에 반영',
+      '유럽중기예보센터(ECMWF)가 하루 4회 새 예보를 공개하는 즉시 서버가 '
+          '받아 지도에 반영합니다. 태풍 등 급변하는 상황도 최신 실행 기준으로 '
+          '표시됩니다.',
+    ),
+    (
+      Icons.phishing,
+      '낚시지수: 해양수산부 공공데이터',
+      '어종별 낚시지수는 해양수산부 공공데이터 API를 기반으로 합니다.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ExpansionTile(
+      leading: const Icon(Icons.verified_outlined),
+      title: const Text('데이터 출처와 정확도'),
+      subtitle: const Text('바다윈디의 물때·날씨가 정확한 이유'),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      children: [
+        for (final (icon, title, body) in _items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 18, color: scheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        body,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

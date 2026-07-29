@@ -101,8 +101,8 @@ class _SideNavRail extends StatelessWidget {
 
   static const _icons = <(IconData, IconData, String)>[
     // 물때&날씨 화면의 미니 메뉴에 '물때' 버튼이 생기면서, 같은 이름이
-    // 두 개 되지 않게 탭 라벨은 '물날씨'(물때&날씨 축약)로 구분한다.
-    (Icons.waves_outlined, Icons.waves, '물날씨'),
+    // 두 개 되지 않게 탭 라벨은 '물때날씨'(물때&날씨 축약)로 구분한다.
+    (Icons.waves_outlined, Icons.waves, '물때날씨'),
     (Icons.air_outlined, Icons.air, 'Windy'),
     (Icons.settings_outlined, Icons.settings, '설정'),
   ];

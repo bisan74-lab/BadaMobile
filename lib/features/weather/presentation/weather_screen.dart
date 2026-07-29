@@ -368,15 +368,14 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                       ),
                     ),
                   ),
-                // 오른쪽 세로 아이콘 내비게이션(Windy 탭 전용). 하단 바 높이만큼
-                // 위로 올려 시간 바·상세 예보 표와 겹치지 않게 한다.
-                // 상세 예보 표가 열리면(표 높이가 애니메이션으로 변해 측정이
-                // 한 박자 늦을 수 있다) 레일을 화면 위 오른쪽으로 옮겨 표와
-                // 절대 겹치지 않게 한다. 지도 모드에선 시간 바 위에 붙인다.
+                // 오른쪽 세로 아이콘 내비게이션(Windy 탭 전용). 하단 바(시간
+                // 슬라이더 또는 상세 예보 표) 높이만큼 위로 올려 항상 그
+                // **바로 위**에 붙인다(사용자 요구 — 상세 예보 때 맨 위로
+                // 튀지 않게). 표 높이는 매 프레임 측정돼 애니메이션을
+                // 한 프레임 차이로 따라간다.
                 Positioned(
                   right: 2,
-                  top: _forecastPoint != null ? 56 : null,
-                  bottom: _forecastPoint != null ? null : _bottomBarHeight + 2,
+                  bottom: _bottomBarHeight + 2,
                   child: _WindyNavRail(
                     onSelect: (i) =>
                         ref.read(appTabIndexProvider.notifier).state = i,
@@ -927,7 +926,7 @@ class _WindyNavRail extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   static const _icons = <(IconData, IconData, String)>[
-    (Icons.waves_outlined, Icons.waves, '물때'),
+    (Icons.waves_outlined, Icons.waves, '물때날씨'),
     (Icons.air_outlined, Icons.air, 'Windy'),
     (Icons.settings_outlined, Icons.settings, '설정'),
   ];

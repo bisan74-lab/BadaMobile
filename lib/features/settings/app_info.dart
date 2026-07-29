@@ -4,7 +4,7 @@ class AppInfo {
   const AppInfo._();
 
   static const appName = '바다 윈디';
-  static const appVersion = '0.2.8';
+  static const appVersion = '0.2.9';
   static const releaseDate = '2026-07-29';
 
   /// 오류신고 및 사업제휴 문의 이메일.

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
+import '../../../core/widgets/ad_placeholder.dart';
 import '../../fishing/data/models/fishing_index.dart';
 import '../../fishing/presentation/providers.dart';
 import '../../kma_weather/data/weather_code.dart';
@@ -174,7 +175,7 @@ class _TideScreenState extends ConsumerState<TideScreen> {
                         : _OutOfRangeCard(mulTtae: mulTtae),
                   ),
                   const SizedBox(height: 8),
-                  const _AdPlaceholder(),
+                  const AdPlaceholder(),
                 ],
               ),
             ),
@@ -1150,63 +1151,6 @@ class _OutOfRangeCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 하단 광고 자리. 광고를 붙이기 전까지는 같은 크기의 박스에 앱 아이콘과
-/// 짧은 소개를 담아 둔다(추후 이 위젯만 광고 위젯으로 교체).
-class _AdPlaceholder extends StatelessWidget {
-  const _AdPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
-              'assets/icon/app_icon.png',
-              width: 36,
-              height: 36,
-              errorBuilder: (_, _, _) =>
-                  Icon(Icons.waves, size: 32, color: scheme.primary),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '바다윈디',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '물때·날씨·바람을 한눈에 보는 낚시 도우미',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

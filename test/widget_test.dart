@@ -42,9 +42,9 @@ void main() {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    // 하단 바 없이 오른쪽 세로 아이콘 레일: 물날씨(선택)/Windy/설정.
-    expect(find.byIcon(Icons.waves), findsOneWidget); // 선택된 물날씨 탭
-    expect(find.text('물날씨'), findsOneWidget);
+    // 하단 바 없이 오른쪽 세로 아이콘 레일: 물때날씨(선택)/Windy/설정.
+    expect(find.byIcon(Icons.waves), findsOneWidget); // 선택된 물때날씨 탭
+    expect(find.text('물때날씨'), findsOneWidget);
     expect(find.byIcon(Icons.air_outlined), findsOneWidget);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
@@ -128,9 +128,23 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    // 템플릿(펼침) + 그 아래 정보 항목이 한 화면에 나열된다.
+    // 템플릿(펼침) + 데이터 정확도 + 하단 광고 자리.
     expect(find.text('템플릿'), findsOneWidget);
     expect(find.text('앱 테마'), findsOneWidget);
+    expect(find.text('데이터 출처와 정확도'), findsOneWidget);
+    expect(find.text('바다윈디'), findsOneWidget); // 하단 광고 자리(고정)
+
+    // 정보 항목은 아래로 스크롤해야 보인다(새 섹션 추가로 길어짐).
+    await tester.scrollUntilVisible(
+      find.text('오류신고 및 사업제휴 문의'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text('오류신고 및 사업제휴 문의'), findsOneWidget);
   });
 }
