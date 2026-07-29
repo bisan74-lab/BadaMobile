@@ -2,7 +2,7 @@ name: bada_mobile
 description: "물때·조석 정보와 바람·해양 날씨를 한 앱에서 - BadaMobile (바다윈디)"
 publish_to: 'none'
 
-version: 0.2.9+87
+version: 0.2.10+88
 
 environment:
   sdk: ^3.8.1

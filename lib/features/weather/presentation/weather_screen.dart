@@ -353,18 +353,31 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                       ),
                     ),
                   ),
-                // 하단: 상세 예보 표(열렸을 때만).
+                // 하단: 상세 예보 표(열렸을 때만). 표는 데이터 로딩이 끝나면
+                // 스스로 커지는데 그 시점엔 이 위젯이 리빌드되지 않아 높이
+                // 재측정이 안 됐다(레일이 낮은 높이 기준으로 표 위에 겹치던
+                // 버그). 크기 변화 알림을 받아 그때마다 다시 잰다.
                 if (_forecastPoint case final fp?)
                   Positioned(
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    child: KeyedSubtree(
-                      key: _bottomBarKey,
-                      child: _PointForecastPanel(
-                        location: fp,
-                        roseHour: _roseHour,
-                        onClose: _closeDetail,
+                    child: NotificationListener<SizeChangedLayoutNotification>(
+                      onNotification: (_) {
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => _measureBottomBar(),
+                        );
+                        return true;
+                      },
+                      child: SizeChangedLayoutNotifier(
+                        child: KeyedSubtree(
+                          key: _bottomBarKey,
+                          child: _PointForecastPanel(
+                            location: fp,
+                            roseHour: _roseHour,
+                            onClose: _closeDetail,
+                          ),
+                        ),
                       ),
                     ),
                   ),
