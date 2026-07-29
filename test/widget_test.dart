@@ -42,8 +42,9 @@ void main() {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
-    // 하단 바 없이 오른쪽 세로 아이콘 레일: 물때&날씨(선택)/Windy/설정.
-    expect(find.byIcon(Icons.waves), findsOneWidget); // 선택된 물때&날씨
+    // 하단 바 없이 오른쪽 세로 아이콘 레일: 물날씨(선택)/Windy/설정.
+    expect(find.byIcon(Icons.waves), findsOneWidget); // 선택된 물날씨 탭
+    expect(find.text('물날씨'), findsOneWidget);
     expect(find.byIcon(Icons.air_outlined), findsOneWidget);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
@@ -56,16 +57,40 @@ void main() {
     expect(find.widgetWithText(AppBar, '물때 & 날씨'), findsOneWidget);
     expect(find.textContaining('만조 '), findsWidgets);
     expect(find.textContaining('간조 '), findsWidgets);
-    // 하단 광고 자리(앱 소개 박스)와 오른쪽 메뉴 항목.
+    // 하단 광고 자리(앱 소개 박스)와 오른쪽 메뉴 항목(물때 복귀 버튼 포함).
     expect(find.text('바다윈디'), findsOneWidget);
+    expect(find.text('물때'), findsOneWidget);
     expect(find.text('낚시정보'), findsOneWidget);
     expect(find.text('물때달력'), findsOneWidget);
+  });
+
+  testWidgets('다른 패널을 열었다가 미니 메뉴 물때로 타임라인에 돌아온다', (tester) async {
+    await tester.pumpWidget(await buildApp());
+    await tester.pumpAndSettle();
+
+    // 물때달력 패널을 연 뒤(타임라인의 만조/간조 표기가 사라진다) —
+    // 좁은 테스트 뷰포트에선 미니 메뉴가 스크롤되므로 먼저 드러낸다.
+    await tester.ensureVisible(find.text('물때달력'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('물때달력'));
+    await tester.pumpAndSettle();
+    expect(find.text('일'), findsOneWidget); // 달력 요일 헤더
+
+    // '물때' 버튼으로 만조·간조 타임라인에 명시적으로 복귀한다.
+    await tester.ensureVisible(find.text('물때'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('물때'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('만조 '), findsWidgets);
   });
 
   testWidgets('오른쪽 메뉴 물때달력을 열면 달력 팝업이 뜬다', (tester) async {
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
+    // 좁은 테스트 뷰포트에선 미니 메뉴가 스크롤되므로 먼저 드러낸다.
+    await tester.ensureVisible(find.text('물때달력'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('물때달력'));
     await tester.pumpAndSettle();
 

@@ -467,6 +467,13 @@ class _TideBody extends ConsumerWidget {
                   Positioned(
                     right: 0,
                     top: 4,
+                    // 우하단 앱 탭 레일(물날씨/Windy/설정)이 이 영역의 아래쪽에
+                    // 겹치므로(레일은 화면 기준 bottom 88 + 높이 ≈135, 이 스택
+                    // 바닥은 화면 아래 72px 위), 그만큼 아래를 비워 둬야 낮은
+                    // 화면에서 아래 칩(물때달력·조위)이 레일에 가려 안 눌리는
+                    // 문제가 없다. 공간이 모자라면 메뉴가 이 범위 안에서
+                    // 스크롤된다.
+                    bottom: 155,
                     child: _MiniMenu(panel: panel, onPanel: onPanel),
                   ),
                 ],
@@ -480,7 +487,10 @@ class _TideBody extends ConsumerWidget {
 }
 
 /// 그래프 오른쪽에 겹치는 반투명(50%) 미니 메뉴. 누르면 중앙 패널이 그
-/// 내용으로 바뀌고, 활성 항목을 다시 누르면 타임라인으로 돌아온다.
+/// 내용으로 바뀐다. 맨 위 '물때'가 기본 화면(만조·간조 타임라인)으로
+/// 돌아오는 명시적 버튼이다 — 다른 패널을 보다가 물때로 돌아오는 경로가
+/// "켜진 버튼을 다시 누르기"뿐이면 어색하다는 사용자 지적으로 추가.
+/// (활성 항목을 다시 눌러도 여전히 타임라인으로 돌아온다.)
 class _MiniMenu extends StatelessWidget {
   const _MiniMenu({required this.panel, required this.onPanel});
 
@@ -488,6 +498,7 @@ class _MiniMenu extends StatelessWidget {
   final ValueChanged<_Panel> onPanel;
 
   static const _items = <(_Panel, IconData, String)>[
+    (_Panel.timeline, Icons.waves_outlined, '물때'),
     (_Panel.fishing, Icons.phishing, '낚시정보'),
     (_Panel.weather, Icons.wb_sunny_outlined, '날씨'),
     (_Panel.calendar, Icons.calendar_month_outlined, '물때달력'),
