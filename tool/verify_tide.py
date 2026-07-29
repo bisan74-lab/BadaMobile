@@ -314,41 +314,43 @@ def discover_badatime(names_needed):
     return result
 
 
-DATE_PATTERNS = [
-    lambda d: rf"{d.year}[.\-/]0?{d.month}[.\-/]0?{d.day}\b",
-    lambda d: rf"0?{d.month}월\s*0?{d.day}일",
-    lambda d: rf"\b0?{d.month}\.0?{d.day}\b",
-]
-ENTRY_RE = re.compile(r"(만조|간조)\s*(\d{1,2}:\d{2})\s*\(?\s*(-?\d+)\s*\)?")
+# badatime 물때표 형식(프로브로 확인): 날짜 행은 "1(토)", 월 전환은 "8월"
+# 헤더, 만조/간조 항목은 "06:24 (893) ▲+819" (▲=만조, ▼=간조).
+DAY_RE = re.compile(r"\b(\d{1,2})\((?:월|화|수|목|금|토|일)\)")
+MONTH_RE = re.compile(r"\b(\d{1,2})월\b")
+ENTRY_RE = re.compile(r"(\d{1,2}:\d{2})\s*\(\s*(-?\d+)\s*\)\s*(▲|▼)")
 
 
-def bada_extremes(page_text, day):
-    """페이지 텍스트에서 해당 날짜 구간의 만조/간조를 뽑는다."""
-    # 날짜 마커들의 위치를 모두 찾는다(모든 날짜 패턴).
-    markers = []  # (pos, date)
-    for delta in range(-16, 17):
-        d = day + timedelta(days=delta)
-        for pat in DATE_PATTERNS:
-            for m in re.finditer(pat(d), page_text):
-                markers.append((m.start(), d.date()))
-    if not markers:
-        return None, "날짜 마커 없음"
-    markers.sort()
-    # 대상 날짜 마커 → 다음 마커 전까지가 그날 구간.
+def bada_extremes(page_text, day, start_month):
+    """페이지 텍스트를 순서대로 훑어(월·일 문맥 추적) 해당 날짜의 만조/간조를 뽑는다."""
+    events = []
+    for m in DAY_RE.finditer(page_text):
+        events.append((m.start(), "day", int(m.group(1))))
+    for m in MONTH_RE.finditer(page_text):
+        events.append((m.start(), "month", int(m.group(1))))
+    for m in ENTRY_RE.finditer(page_text):
+        h, mnt = map(int, m.group(1).split(":"))
+        events.append((m.start(), "entry", (h * 60 + mnt, int(m.group(2)), m.group(3) == "▲")))
+    if not any(k == "entry" for _, k, _ in events):
+        return None, "만조/간조 항목 없음"
+    events.sort(key=lambda e: e[0])
+    cur_month, cur_day, prev_day = None, None, None
     result = []
-    for i, (pos, d) in enumerate(markers):
-        if d != day.date():
-            continue
-        end = markers[i + 1][0] if i + 1 < len(markers) else len(page_text)
-        seg = page_text[pos:end]
-        for kind, hm, height in ENTRY_RE.findall(seg):
-            h, mnt = map(int, hm.split(":"))
-            result.append((h * 60 + mnt, int(height), kind == "만조"))
-        if result:
-            break
+    for _, kind, val in events:
+        if kind == "month":
+            cur_month = val
+        elif kind == "day":
+            if cur_month is None:
+                cur_month = start_month  # 표는 오늘(KST)부터 시작한다.
+            if prev_day is not None and val < prev_day:
+                # 월 헤더를 놓쳤더라도 일자가 줄어들면 다음 달로 넘어간 것.
+                cur_month = cur_month % 12 + 1
+            prev_day = cur_day = val
+        elif kind == "entry" and cur_day is not None:
+            if cur_month == day.month and cur_day == day.day:
+                result.append(val)
     if not result:
-        return None, "구간에서 만조/간조 못 찾음"
-    # 중복 제거(같은 시각).
+        return None, "해당 날짜 구간 없음"
     seen, dedup = set(), []
     for t, h, ih in sorted(result):
         if t not in seen:
@@ -430,6 +432,9 @@ def main():
     print("\n[1/3] badatime.com 지점 URL 탐색")
     urls = discover_badatime([loc[1] for loc in LOCATIONS])
 
+    # badatime 표는 오늘(KST)부터 시작 — 월 문맥 추적의 시작값.
+    kst_now = datetime.utcnow() + timedelta(hours=9)
+
     print("\n[2/3] 지점별 비교")
     dumped_sample = False
     summary = []  # (name, date, n_matched, max_dt_min, max_dh_cm, note)
@@ -440,7 +445,11 @@ def main():
         page_text = None
         if url:
             try:
-                page_text = to_text(http_get(url))
+                raw_html = http_get(url)
+                title = re.search(r"<title>(.*?)</title>", raw_html, re.S)
+                if title:
+                    print(f"  페이지: {unescape(title.group(1)).strip()[:60]}")
+                page_text = to_text(raw_html)
                 time_mod.sleep(0.3)
             except Exception as e:
                 print(f"  ! 페이지 로드 실패: {e}")
@@ -453,7 +462,7 @@ def main():
             if page_text is None:
                 summary.append((name, day, 0, None, None, "badatime 페이지 없음"))
                 continue
-            bada, err = bada_extremes(page_text, day)
+            bada, err = bada_extremes(page_text, day, kst_now.month)
             if bada is None:
                 print(f"  {day:%m-%d} BADA: 파싱 실패({err})")
                 summary.append((name, day, 0, None, None, f"파싱 실패({err})"))
