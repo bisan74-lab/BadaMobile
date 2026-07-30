@@ -941,7 +941,7 @@ class _WindyNavRail extends StatelessWidget {
 
   static const _icons = <(IconData, IconData, String)>[
     (Icons.waves_outlined, Icons.waves, '물때날씨'),
-    (Icons.air_outlined, Icons.air, 'Windy'),
+    (Icons.air_outlined, Icons.air, '바람지도'),
     (Icons.settings_outlined, Icons.settings, '설정'),
   ];
 
