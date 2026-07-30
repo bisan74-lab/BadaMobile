@@ -9,15 +9,13 @@ import 'package:flutter/material.dart';
 import '../../data/models/wind_field.dart';
 import 'map_projection.dart';
 
-/// Windy.com 기본 바람 레이어 색상 스케일(m/s → RGB).
+/// 바람 세기(m/s) → RGB 색상 스케일.
 ///
-/// **이 값들은 Windy 앱 스크린샷의 하단 범례(legend) 그라데이션을 m/s 눈금
-/// 위치(0·3·5·10·15·20·30)에 맞춰 픽셀 단위로 추출해 옮긴 것**이라, 화면 색이
-/// Windy와 사실상 일치한다(tool: scratchpad에서 legend 샘플링). Windy 색은
-/// 생각보다 **차분한(채도 낮은) 톤**이다: 저속은 연보라→파랑→청록, 중속은
-/// 청록끼 도는 초록(예: 5m/s 초록빛 틸, 10m/s 올리브그린), 강풍은 카키→
-/// 주황갈색→자주로 간다. 예전의 쨍한 시안·형광 노랑과 달라 바다가 Windy처럼
-/// 청록/초록으로 보인다. 색을 다시 맞출 땐 이 추출 절차를 반복한다.
+/// 중간 구간(2~26m/s)은 채도 낮은 청록·올리브·카키·자주 톤으로, 저속은
+/// 파랑, 중속은 청록끼 도는 초록·올리브그린, 강풍은 카키→주황갈색→자주로
+/// 이어진다. 양 끝은 자체적으로 다시 잡았다: **0m/s는 더 밝은 하늘빛 청보라**로
+/// 시작하고, **30m/s는 짙은 남색-검정**으로 가라앉아 위험할수록 어두워지는
+/// 인상을 준다.
 const _stopSpeeds = <double>[
   0,
   2,
@@ -43,7 +41,7 @@ const _stopSpeeds = <double>[
   30,
 ];
 const _stopR = <int>[
-  97,
+  176,
   64,
   72,
   75,
@@ -64,10 +62,10 @@ const _stopR = <int>[
   149,
   117,
   94,
-  90,
+  22,
 ];
 const _stopG = <int>[
-  111,
+  185,
   123,
   147,
   146,
@@ -88,10 +86,10 @@ const _stopG = <int>[
   74,
   91,
   107,
-  136,
+  34,
 ];
 const _stopB = <int>[
-  182,
+  232,
   165,
   168,
   148,
@@ -112,7 +110,7 @@ const _stopB = <int>[
   143,
   156,
   160,
-  160,
+  46,
 ];
 
 (int r, int g, int b) windSpeedRgb(double speedMs) {
@@ -120,17 +118,23 @@ const _stopB = <int>[
   for (var i = 0; i < _stopSpeeds.length - 1; i++) {
     if (s <= _stopSpeeds[i + 1]) {
       final t = (s - _stopSpeeds[i]) / (_stopSpeeds[i + 1] - _stopSpeeds[i]);
-      return _vivid(
-        _stopR[i] + (_stopR[i + 1] - _stopR[i]) * t,
-        _stopG[i] + (_stopG[i + 1] - _stopG[i]) * t,
-        _stopB[i] + (_stopB[i + 1] - _stopB[i]) * t,
+      return _banded(
+        _vivid(
+          _stopR[i] + (_stopR[i + 1] - _stopR[i]) * t,
+          _stopG[i] + (_stopG[i + 1] - _stopG[i]) * t,
+          _stopB[i] + (_stopB[i + 1] - _stopB[i]) * t,
+        ),
+        s,
       );
     }
   }
-  return _vivid(
-    _stopR.last.toDouble(),
-    _stopG.last.toDouble(),
-    _stopB.last.toDouble(),
+  return _banded(
+    _vivid(
+      _stopR.last.toDouble(),
+      _stopG.last.toDouble(),
+      _stopB.last.toDouble(),
+    ),
+    s,
   );
 }
 
@@ -145,6 +149,24 @@ const _stopB = <int>[
   final c = hsv
       .withSaturation((hsv.saturation * 1.14).clamp(0.0, 1.0))
       .toColor();
+  return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
+}
+
+/// 인접한 정수 풍속끼리 색이 너무 밋밋하게 이어지지 않도록, 밝기(HSL L)에만
+/// 아주 약한 리플(진폭 2%, 주기 3m/s)을 더한다. 색상(hue)·채도는 그대로라
+/// 전체적으로 보이는 인상은 리플 없는 원래 색과 거의 같다. 진폭을 더 올리면
+/// (9%대에서 실측) 채도 낮은 구간에서 계단(줄무늬)처럼 도드라져 보였으므로
+/// 2%를 넘기지 않는다.
+const _bandPeriodMs = 3.0;
+const _bandAmplitude = 0.02;
+
+(int r, int g, int b) _banded((int r, int g, int b) rgb, double speedMs) {
+  final (r, g, b) = rgb;
+  final hsl = HSLColor.fromColor(Color.fromARGB(255, r, g, b));
+  final ripple =
+      _bandAmplitude * math.sin(2 * math.pi * speedMs / _bandPeriodMs);
+  final l = (hsl.lightness + ripple).clamp(0.0, 1.0);
+  final c = hsl.withLightness(l).toColor();
   return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }
 
