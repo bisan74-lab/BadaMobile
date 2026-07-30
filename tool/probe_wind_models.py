@@ -9,6 +9,7 @@
 """
 
 import json
+import time
 import urllib.parse
 import urllib.request
 
@@ -29,6 +30,10 @@ POINTS = [
     ("서해", "서해 먼바다", 35.500, 124.500),
     ("서해", "인천 앞바다", 37.350, 126.400),
     ("동해", "속초 앞바다", 38.200, 128.650),
+    ("동해", "강릉 앞바다", 37.800, 129.000),
+    ("동해", "삼척 앞바다", 37.440, 129.290),
+    ("동해", "울진 앞바다", 36.950, 129.500),
+    ("동해", "감포 앞바다", 35.800, 129.560),
     ("동해", "포항 앞바다", 36.050, 129.500),
     ("동해", "동해 먼바다", 37.000, 130.500),
 ]
@@ -47,11 +52,18 @@ def fetch(lat, lon, model):
         "models": model,
     }
     url = f"{FORECAST}?{urllib.parse.urlencode(params)}"
-    try:
-        with urllib.request.urlopen(url, timeout=60) as r:
-            h = json.loads(r.read().decode())["hourly"]
-    except Exception as e:  # noqa: BLE001
-        print(f"    ! {model} 조회 실패: {e}")
+    h = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as r:
+                h = json.loads(r.read().decode())["hourly"]
+            break
+        except Exception as e:  # noqa: BLE001
+            if attempt == 2:
+                print(f"    ! {model} 조회 실패(3회): {e}")
+                return None, None
+            time.sleep(2 * (attempt + 1))
+    if h is None:
         return None, None
     ws = [v for v in h["wind_speed_10m"][:48] if v is not None]
     gs = [v for v in h["wind_gusts_10m"][:48] if v is not None]
