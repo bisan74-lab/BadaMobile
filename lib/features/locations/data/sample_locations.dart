@@ -1,3 +1,4 @@
+import 'local_fishing_ports.dart';
 import 'models/sea_location.dart';
 import 'national_fishing_ports.dart';
 
@@ -10,6 +11,7 @@ import 'national_fishing_ports.dart';
 const List<SeaLocation> sampleLocations = [
   ..._curatedLocations,
   ...nationalFishingPorts,
+  ...localFishingPorts,
 ];
 
 /// 직접 확인·캘리브레이션한 주요 항구(아래 기존 목록). 국가어항현황

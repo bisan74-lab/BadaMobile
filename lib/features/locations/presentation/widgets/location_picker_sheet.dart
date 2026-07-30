@@ -142,39 +142,42 @@ class _LocationPickerSheetState extends ConsumerState<_LocationPickerSheet> {
             ),
           ),
           const SizedBox(height: 4),
+          // 내장 지점이 700곳을 넘어(국가어항·지방어항·어촌정주어항 공공데이터
+          // 자동 반영) 전체를 한 번에 빌드하는 ListView 대신 ListView.builder로
+          // 화면에 보이는 항목만 지연 생성한다. 지명 검색 결과(_GeoResults)는
+          // 목록 맨 끝에 별도 아이템으로 덧붙인다.
           Expanded(
-            child: ListView(
-              children: [
-                // 내장 지점(즐겨찾기·주요 항구/지역).
-                for (final loc in filtered)
-                  ListTile(
-                    leading: Icon(
-                      loc.id == selected.id
-                          ? Icons.check_circle
-                          : Icons.place_outlined,
-                      color: loc.id == selected.id ? scheme.primary : null,
-                    ),
-                    title: Text(loc.name),
-                    subtitle: Text(loc.region),
-                    trailing: IconButton(
-                      icon: Icon(
-                        favorites.contains(loc.id)
-                            ? Icons.star
-                            : Icons.star_border,
-                        color: favorites.contains(loc.id) ? Colors.amber : null,
-                      ),
-                      onPressed: () =>
-                          ref.read(favoritesProvider.notifier).toggle(loc.id),
-                    ),
-                    onTap: () => _choose(loc),
+            child: ListView.builder(
+              itemCount:
+                  filtered.length +
+                  (widget.forWeather && _geoQuery.length >= 2 ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index >= filtered.length) {
+                  return _GeoResults(query: _geoQuery, onPick: _choose);
+                }
+                final loc = filtered[index];
+                return ListTile(
+                  leading: Icon(
+                    loc.id == selected.id
+                        ? Icons.check_circle
+                        : Icons.place_outlined,
+                    color: loc.id == selected.id ? scheme.primary : null,
                   ),
-
-                // 지명 검색 결과(읍/면/동 등 세분화 — Open-Meteo Geocoding).
-                // 홈/물때/Windy는 항구·해변 목록만 쓰므로(임의 내륙 지명이
-                // 나올 수 있는) 자유 지명 검색은 날씨 탭에서만 보여준다.
-                if (widget.forWeather && _geoQuery.length >= 2)
-                  _GeoResults(query: _geoQuery, onPick: _choose),
-              ],
+                  title: Text(loc.name),
+                  subtitle: Text(loc.region),
+                  trailing: IconButton(
+                    icon: Icon(
+                      favorites.contains(loc.id)
+                          ? Icons.star
+                          : Icons.star_border,
+                      color: favorites.contains(loc.id) ? Colors.amber : null,
+                    ),
+                    onPressed: () =>
+                        ref.read(favoritesProvider.notifier).toggle(loc.id),
+                  ),
+                  onTap: () => _choose(loc),
+                );
+              },
             ),
           ),
         ],

@@ -97,11 +97,11 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   3. 파티클 흐름(`WindMapPainter`) — `Ticker` 기반 220개 입자가 바람 벡터를 따라
      이동하며 궤적을 남긴다. 궤적 길이는 그 지점 풍속에 비례(약함=짧은 점,
      강함=긴 흐름선, `_WeatherScreenState._onTick`의 `maxTrail` 계산).
-  4. 도시 이름(`MapCityLabelLayer`, 서울·부산 등 상시 표시) + 지점 마커(99곳,
-     `InteractiveViewer` 배율이 1.8배 이상일 때만 이름 표시). 도시/지점 라벨은
-     둘 다 지도 배율만큼 `Transform.scale(1/scale)`로 반대 축소해 그려서,
-     확대해도 글자 크기가 화면 기준으로 일정하게 유지된다(그대로 두면
-     지도와 같이 커져서 글자가 지나치게 확대돼 보인다).
+  4. 도시·항구 이름(`MapCityLabelLayer`, `map_city_labels.dart`에 하드코딩된
+     고정 목록 — `sample_locations.dart`(지역 선택 시트 전용, 731곳)와는
+     무관한 별도 데이터). 라벨은 지도 배율만큼 `Transform.scale(1/scale)`로
+     반대 축소해 그려서, 확대해도 글자 크기가 화면 기준으로 일정하게
+     유지된다(그대로 두면 지도와 같이 커져서 글자가 지나치게 확대돼 보인다).
 - `MapProjection`/`LatLonBounds`(`widgets/map_projection.dart`): 모든 레이어가
   공유하는 위경도↔캔버스 좌표 변환(역변환 `latFor`/`lonFor`은 지도 탭 좌표를
   위경도로 되돌릴 때 쓴다). 기본 화면뷰(`mapViewBounds`)는 대한민국이 중앙에 오도록
@@ -151,20 +151,29 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   "정책 및 이용약관"(`PolicyScreen`, 책임 제한 약관).
 
 ### features/locations — 지역
-- 전국 해안·낚시 포인트 99곳(`sample_locations.dart`, 서해/남해/동해/제주). 직접
-  확인·캘리브레이션한 주요 항구(`_curatedLocations`, 57곳)와, 해양수산부
-  국가어항현황 공공데이터를 Nominatim(무료·키불필요, 이 세션은 egress 정책상
-  직접 호출이 막혀 있어 `tool/geocode_national_ports.py`를 GitHub Actions
-  러너에서 돌려 결과를 얻는다)으로 지오코딩해 자동 추가한 지점
-  (`national_fishing_ports.dart`, 42곳)으로 나뉜다. 자동 추가 지점은
-  시/군 대표좌표로 뭉친 결과(같은 시군구 여러 항구가 동일 좌표)·시도 경계
-  이상치를 걸러낸 것만 남겼고, 아직 실측 물때표 대조 캘리브레이션 전이라
-  2차항 보정(`tideTimeOffsetMin` 등)은 비어 있다 — 만 안쪽 등 지형에 따라
-  기존 지점보다 오차가 클 수 있다(rank 3으로 지도 라벨 우선순위를 낮춤).
+- 전국 해안·낚시 포인트 731곳(`sample_locations.dart`, 서해/남해/동해/제주).
+  세 계층으로 나뉜다.
+  1. `_curatedLocations`(57곳) — 직접 확인·캘리브레이션한 주요 항구.
+  2. `national_fishing_ports.dart`(42곳) — 해양수산부 국가어항현황 공공데이터를
+     Nominatim(무료·키불필요, 이 세션은 egress 정책상 직접 호출이 막혀 있어
+     `tool/geocode_national_ports.py`를 GitHub Actions 러너에서 돌려 결과를
+     얻는다)으로 지오코딩한 지점.
+  3. `local_fishing_ports.dart`(632곳) — 사용자가 제공한 지방어항현황·
+     어촌정주어항현황·포구현황 등 공공데이터 CSV 6개를 취합한 지점. 좌표
+     신뢰도 우선순위(같은 항구가 여러 자료에 나오면 앞쪽 채택): ①현장 실측
+     GPS 좌표 ②포구현황(직접 위경도) ③지방어항현황(POINT) ④어촌정주어항현황
+     (TM좌표 EPSG:5179 UTM-K → 위경도 변환, `pyproj`). 이름+5km 이내 좌표는
+     같은 항구로 병합했고, 이름은 같아도 5km 넘게 떨어지면(동명이인) 시/군
+     또는 해역을 괄호로 붙여 구분했다. 지역 선택 시트는 지점이 700곳을
+     넘으므로 `ListView.builder`로 화면에 보이는 항목만 지연 렌더링한다.
+
+  자동 추가 지점(2, 3)은 아직 실측 물때표 대조 캘리브레이션 전이라 2차항
+  보정(`tideTimeOffsetMin` 등)이 비어 있어 만 안쪽 등 지형에 따라 기존
+  지점보다 오차가 클 수 있다(rank 3으로 지도 라벨 우선순위를 낮춤).
   `khoaStationCode`가 있는 지점만 조석 실데이터가 붙고, 나머지(주로 도서
-  지역 — 예: 울릉도 3곳은 최근접 관측소가 150km 가까이 떨어져 있어 의도적으로
-  비워 둠)는 해역별 합성 조석 곡선으로 대체된다 — 물때·해양 날씨·낚시지수는
-  좌표만 있으면 전부 동작한다.
+  지역 — 울릉도·백령도 부속 항구는 최근접 관측소가 100km 이상 떨어져 있어
+  의도적으로 비워 둠)는 해역별 합성 조석 곡선으로 대체된다 — 물때·해양
+  날씨·낚시지수는 좌표만 있으면 전부 동작한다.
 - 지역탭은 없앴다. 대신 모든 탭 AppBar 우측 `RegionSelectorAction`이 공용
   바텀시트 `showLocationPickerSheet`를 연다. 시트는 **지명 검색(읍/면/동 단위,
   `GeocodingRepository`=Open-Meteo Geocoding 무료·키불필요→`geocodingSearchProvider`)**

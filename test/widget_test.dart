@@ -107,18 +107,12 @@ void main() {
     await tester.tap(find.byIcon(Icons.edit_location_alt_outlined).first);
     await tester.pumpAndSettle();
 
-    // 지역 선택 바텀시트에서 다른 지점을 스크롤로 찾아 선택한다.
-    await tester.scrollUntilVisible(
-      find.text('부산(영도)'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView),
-            matching: find.byType(Scrollable),
-          )
-          .last,
-    );
-    expect(find.text('부산(영도)'), findsOneWidget);
+    // 지역 선택 바텀시트에서 검색어로 좁혀 지점을 찾는다(지점이 700곳을
+    // 넘어 ListView.builder로 화면 밖 항목은 렌더링되지 않으므로 스크롤
+    // 대신 검색을 쓴다).
+    await tester.enterText(find.byType(TextField), '부산(영도)');
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, '부산(영도)'), findsOneWidget);
   });
 
   testWidgets('지역 선택 시트의 해역 칩으로 목록을 좁힐 수 있다', (tester) async {
