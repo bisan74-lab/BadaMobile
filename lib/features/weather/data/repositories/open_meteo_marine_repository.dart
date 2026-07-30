@@ -413,6 +413,24 @@ List<HourlyMarine> mergeOpenMeteoHourly({
   final swell2Period = nums(marine, 'secondary_swell_wave_period');
   final swell2Dir = nums(marine, 'secondary_swell_wave_direction');
 
+  // 너울은 모델이 값을 못 낼 때 null이 아니라 **0.0m·0.0s**를 주기도 한다
+  // (GFS Wave 실측: 특정 시각의 swell이 0.0m/0.0s). 높이도 주기도 0인 너울은
+  // 있을 수 없는 값이라, 그대로 두면 표와 지도 나침반에 "너울 0.0m·0s"가
+  // 찍힌다(사용자 지적). 결측으로 보고 아래 last()가 직전 값을 잇게 한다.
+  // 높이만 0(잔잔)이거나 주기만 0인 경우는 건드리지 않는다 — 둘 다 0인
+  // "값 없음" 패턴만 걸러낸다.
+  void dropEmptySwell(List<double?> height, List<double?> period) {
+    for (var i = 0; i < period.length; i++) {
+      final h = i < height.length ? height[i] : null;
+      if ((period[i] ?? 0) > 0 || (h ?? 0) > 0) continue;
+      period[i] = null;
+      if (i < height.length) height[i] = null;
+    }
+  }
+
+  dropEmptySwell(swellHeight, swellPeriod);
+  dropEmptySwell(swell2Height, swell2Period);
+
   double last(List<double?> xs, int i, double prev) =>
       (i >= 0 && i < xs.length ? xs[i] : null) ?? prev;
 

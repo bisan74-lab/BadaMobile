@@ -126,6 +126,37 @@ void main() {
     expect(merged, hasLength(4));
   });
 
+  test('주기 0초짜리 너울(모델이 못 낸 값)은 직전 값으로 잇는다', () {
+    // GFS Wave는 값을 못 낼 때 null이 아니라 0.0m/0.0s를 준다(실측). 그대로
+    // 두면 표·지도에 "너울 0.0m·0s"가 찍혀 회귀 방지로 고정한다.
+    final marine = _hourlyBlock([
+      'wave_height',
+      'wave_period',
+      'wave_direction',
+      'sea_surface_temperature',
+      'swell_wave_height',
+      'swell_wave_period',
+    ], 4);
+    (marine['swell_wave_height'] as List)[2] = 0.0;
+    (marine['swell_wave_period'] as List)[2] = 0.0;
+    final forecast = _hourlyBlock([
+      'wind_speed_10m',
+      'wind_gusts_10m',
+      'wind_direction_10m',
+      'temperature_2m',
+    ], 4);
+
+    final merged = mergeOpenMeteoHourly(
+      marine: marine,
+      forecast: forecast,
+      maxHours: 4,
+    );
+    // 0.0/0.0s 자리는 직전 시각 값을 그대로 잇는다.
+    expect(merged[2].swellHeightM, merged[1].swellHeightM);
+    expect(merged[2].swellPeriodS, merged[1].swellPeriodS);
+    expect(merged[2].swellPeriodS, greaterThan(0));
+  });
+
   test('API 오류 시 예외를 던진다 (폴백 래퍼가 처리)', () async {
     final repo = OpenMeteoMarineRepository(
       client: buildClient(marineStatus: 500),
