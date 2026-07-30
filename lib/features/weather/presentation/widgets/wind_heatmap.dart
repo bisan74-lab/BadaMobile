@@ -118,23 +118,17 @@ const _stopB = <int>[
   for (var i = 0; i < _stopSpeeds.length - 1; i++) {
     if (s <= _stopSpeeds[i + 1]) {
       final t = (s - _stopSpeeds[i]) / (_stopSpeeds[i + 1] - _stopSpeeds[i]);
-      return _banded(
-        _vivid(
-          _stopR[i] + (_stopR[i + 1] - _stopR[i]) * t,
-          _stopG[i] + (_stopG[i + 1] - _stopG[i]) * t,
-          _stopB[i] + (_stopB[i + 1] - _stopB[i]) * t,
-        ),
-        s,
+      return _vivid(
+        _stopR[i] + (_stopR[i + 1] - _stopR[i]) * t,
+        _stopG[i] + (_stopG[i + 1] - _stopG[i]) * t,
+        _stopB[i] + (_stopB[i + 1] - _stopB[i]) * t,
       );
     }
   }
-  return _banded(
-    _vivid(
-      _stopR.last.toDouble(),
-      _stopG.last.toDouble(),
-      _stopB.last.toDouble(),
-    ),
-    s,
+  return _vivid(
+    _stopR.last.toDouble(),
+    _stopG.last.toDouble(),
+    _stopB.last.toDouble(),
   );
 }
 
@@ -149,24 +143,6 @@ const _stopB = <int>[
   final c = hsv
       .withSaturation((hsv.saturation * 1.14).clamp(0.0, 1.0))
       .toColor();
-  return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
-}
-
-/// 인접한 정수 풍속끼리 색이 너무 밋밋하게 이어지지 않도록, 밝기(HSL L)에만
-/// 아주 약한 리플(진폭 2%, 주기 3m/s)을 더한다. 색상(hue)·채도는 그대로라
-/// 전체적으로 보이는 인상은 리플 없는 원래 색과 거의 같다. 진폭을 더 올리면
-/// (9%대에서 실측) 채도 낮은 구간에서 계단(줄무늬)처럼 도드라져 보였으므로
-/// 2%를 넘기지 않는다.
-const _bandPeriodMs = 3.0;
-const _bandAmplitude = 0.02;
-
-(int r, int g, int b) _banded((int r, int g, int b) rgb, double speedMs) {
-  final (r, g, b) = rgb;
-  final hsl = HSLColor.fromColor(Color.fromARGB(255, r, g, b));
-  final ripple =
-      _bandAmplitude * math.sin(2 * math.pi * speedMs / _bandPeriodMs);
-  final l = (hsl.lightness + ripple).clamp(0.0, 1.0);
-  final c = hsl.withLightness(l).toColor();
   return ((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
 }
 
