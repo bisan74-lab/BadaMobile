@@ -35,6 +35,20 @@ class Env {
         'claude/mobile-app-project-setup-87rgak/remote_config/app_gate.json',
   );
 
+  /// AdMob 배너 광고 단위 ID(하단 광고 자리).
+  ///
+  /// 기본값은 **구글이 공개한 테스트 광고 단위 ID**다. 그래서 아무 설정 없이
+  /// 빌드해도 테스트 광고가 뜨고, 실제 수익 계정에 무효 트래픽이 잡히지 않는다.
+  /// 스토어에 올릴 빌드는 반드시 실제 ID를 주입한다:
+  /// `--dart-define=ADMOB_BANNER_AD_UNIT_ID=ca-app-pub-XXXX/YYYY`
+  ///
+  /// 빈 문자열을 주입하면 광고를 아예 로드하지 않고 앱 소개 박스만 보여준다
+  /// (광고 없는 버전을 내보낼 때 쓴다).
+  static const admobBannerAdUnitId = String.fromEnvironment(
+    'ADMOB_BANNER_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/6300978111',
+  );
+
   /// 지도용 바람장 격자 데이터(서버가 미리 뽑아 둔 정적 파일) URL.
   ///
   /// GitHub Actions 크론(`.github/workflows/wind-data.yml`)이 Open-Meteo에서

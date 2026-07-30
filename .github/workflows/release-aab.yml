@@ -1,0 +1,134 @@
+name: Play Store AAB
+
+# Play Console에 올릴 **서명된 App Bundle(.aab)**을 만든다.
+# 테스트 설치용 APK를 만드는 release-apk.yml과 목적이 다르다:
+#  - release-apk.yml : debug 키 서명 + 테스트 광고. 기기에 직접 설치해 확인용.
+#  - 이 워크플로     : 업로드 키 서명 + 실제 광고 ID. 스토어 제출용.
+#
+# 필요한 저장소 Secret (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64   업로드 키스토어(.jks)를 base64로 인코딩한 값
+#                             (로컬에서: base64 -w0 upload-keystore.jks)
+#   ANDROID_KEYSTORE_PASSWORD 키스토어 비밀번호
+#   ANDROID_KEY_ALIAS         키 별칭(예: upload)
+#   ANDROID_KEY_PASSWORD      키 비밀번호
+#   ADMOB_APP_ID              AdMob 앱 ID (ca-app-pub-XXXX~YYYY)
+#   ADMOB_BANNER_AD_UNIT_ID   배너 광고 단위 ID (ca-app-pub-XXXX/YYYY)
+#   DATA_GO_KR_API_KEY        공공데이터포털 인증키(기존)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.5'
+          channel: stable
+          cache: true
+
+      # 스토어 제출용 빌드는 서명·광고 설정이 하나라도 빠지면 의미가 없다.
+      # 조용히 debug 키/테스트 광고로 빌드되는 대신 여기서 바로 실패시킨다.
+      - name: 필수 Secret 확인
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_BANNER_AD_UNIT_ID: ${{ secrets.ADMOB_BANNER_AD_UNIT_ID }}
+        run: |
+          missing=""
+          for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD \
+                      ADMOB_APP_ID ADMOB_BANNER_AD_UNIT_ID; do
+            [ -z "${!name}" ] && missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::스토어 제출용 빌드에 필요한 Secret이 없습니다:$missing"
+            echo "워크플로 파일 상단 주석의 Secret 목록을 참고해 등록한 뒤 다시 실행하세요."
+            exit 1
+          fi
+
+      - name: 업로드 키스토어 복원
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+          # key.properties는 gitignore돼 있고 러너에서만 만들어진다.
+          {
+            echo "storeFile=$RUNNER_TEMP/upload-keystore.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+
+      - name: 의존성 설치
+        run: flutter pub get
+
+      - name: App Bundle 빌드 (서명 + 실제 광고 ID)
+        env:
+          # AdMob 앱 ID는 AndroidManifest에 박히므로 Gradle이 환경변수로 읽는다.
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_BANNER_AD_UNIT_ID: ${{ secrets.ADMOB_BANNER_AD_UNIT_ID }}
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: |
+          flutter build appbundle --release \
+            --dart-define=DATA_GO_KR_API_KEY="$DATA_GO_KR_API_KEY" \
+            --dart-define=ADMOB_BANNER_AD_UNIT_ID="$ADMOB_BANNER_AD_UNIT_ID"
+
+      - name: 서명 확인
+        id: verify
+        run: |
+          # 서명 없이(또는 debug 키로) 만들어진 결과물이 스토어로 가는 사고를 막는다.
+          BUNDLE=build/app/outputs/bundle/release/app-release.aab
+          if ! unzip -l "$BUNDLE" | grep -qE "META-INF/.*\.(RSA|DSA|EC)"; then
+            echo "::error::App Bundle에 서명이 없습니다."
+            exit 1
+          fi
+          echo "서명된 App Bundle 확인됨: $BUNDLE"
+          echo "sha256=$(sha256sum "$BUNDLE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "tag=store-build-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: 정리 (키스토어·서명 정보 삭제)
+        if: always()
+        run: rm -f android/key.properties "$RUNNER_TEMP/upload-keystore.jks"
+
+      - name: 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 14
+
+      # 아티팩트 다운로드가 네트워크 정책에 막히는 환경이 있어, Release에도
+      # 첨부해 어느 쪽으로든 받을 수 있게 한다(release-apk.yml과 같은 이유).
+      - name: GitHub Release 생성 및 AAB 첨부
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.verify.outputs.tag }}
+          name: 스토어 제출용 ${{ steps.verify.outputs.tag }}
+          body: |
+            Play Console에 업로드할 **서명된 App Bundle**입니다.
+            (테스트 설치용 APK는 `release-apk.yml`이 만드는 test-build-* 릴리스를 쓰세요.)
+
+            SHA256: `${{ steps.verify.outputs.sha256 }}`
+
+            업로드 절차:
+            1. Play Console → 앱 선택 → 프로덕션(또는 내부 테스트) → 새 버전 만들기
+            2. `app-release.aab` 업로드
+            3. 출시 노트 작성 후 검토·출시
+          files: build/app/outputs/bundle/release/app-release.aab
+          prerelease: true

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_info.dart';
 
@@ -48,12 +49,17 @@ class PolicyScreen extends StatelessWidget {
                 '무료 서비스를 유료(광고 제거 등) 버전으로 전환할 수 있습니다.',
           ),
           _Section(
-            title: '5. 개인정보',
+            title: '5. 개인정보와 광고',
             body:
-                '앱은 회원가입을 요구하지 않으며, 지역 선택·즐겨찾기·설정 값은 이용자 기기 내에만 '
-                '저장됩니다. 개발자는 이러한 개인 식별 정보를 서버로 수집하지 않습니다. '
-                '광고가 포함된 버전에서는 광고 제공자가 별도의 정책에 따라 정보를 수집할 수 있습니다.',
+                '앱은 회원가입을 요구하지 않고 위치 권한도 요청하지 않으며, 지역 선택·즐겨찾기·'
+                '설정 값은 이용자 기기 내에만 저장됩니다. 개발자는 이용자를 식별하는 정보를 '
+                '서버로 수집하지 않습니다.\n\n'
+                '앱은 무료로 제공되며 운영을 위해 Google AdMob 광고를 노출합니다. 광고 노출·측정을 '
+                '위해 Google이 광고 식별자, IP 기반의 대략적 위치, 기기 정보를 수집할 수 있습니다. '
+                '광고 ID 삭제·맞춤 광고 거부는 기기의 설정 > 개인정보 보호 > 광고에서 할 수 있습니다. '
+                '자세한 내용은 아래 개인정보처리방침 전문을 참고하십시오.',
           ),
+          _PolicyLinkButton(),
           _Section(
             title: '6. 지식재산권',
             body:
@@ -65,6 +71,27 @@ class PolicyScreen extends StatelessWidget {
             body: '서비스 관련 문의는 ${AppInfo.contactEmail} 로 연락 주십시오.',
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 개인정보처리방침 전문(웹)으로 나가는 버튼. Play Console에 등록하는 URL과
+/// 같은 문서를 연다.
+class _PolicyLinkButton extends StatelessWidget {
+  const _PolicyLinkButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: OutlinedButton.icon(
+        onPressed: () => launchUrl(
+          Uri.parse(AppInfo.privacyPolicyUrl),
+          mode: LaunchMode.externalApplication,
+        ),
+        icon: const Icon(Icons.open_in_new, size: 18),
+        label: const Text('개인정보처리방침 전문 보기'),
       ),
     );
   }
