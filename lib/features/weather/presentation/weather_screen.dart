@@ -826,6 +826,11 @@ class _WindMapAreaState extends State<_WindMapArea> {
                                 left: projection.x(fp.longitude),
                                 top: projection.y(fp.latitude),
                                 hour: hour,
+                                // 육지 지점은 상세 표와 마찬가지로 너울·너울2
+                                // 막대를 뺀다(바람만 보여준다) — 안 그러면
+                                // 재조회로 앞바다 값이 들어와도 이 지점 값처럼
+                                // 오인시킨다.
+                                showWaves: !isOnLand(fp.latitude, fp.longitude),
                               ),
                       )
                     else if (widget.cursorLat case final plat?)
@@ -1239,12 +1244,16 @@ class _ForecastRose extends StatelessWidget {
     required this.left,
     required this.top,
     required this.hour,
+    this.showWaves = true,
   });
 
   final double scale;
   final double left;
   final double top;
   final HourlyMarine hour;
+
+  /// false면 육지 지점이라 너울·너울2 막대를 빼고 바람만 보여준다.
+  final bool showWaves;
 
   static const double _len = 84; // 막대 길이(중심→끝)
   static const double _thick = 16; // 막대 두께(글자가 들어갈 만큼만)
@@ -1264,20 +1273,22 @@ class _ForecastRose extends StatelessWidget {
         label: '바람',
         value: '${hour.windSpeedMs.round()}m/s',
       ),
-      (
-        dir: hour.swellDirectionDeg,
-        color: _swellC,
-        label: '너울',
-        value:
-            '${hour.swellHeightM.toStringAsFixed(1)}m·${hour.swellPeriodS.round()}s',
-      ),
-      (
-        dir: hour.swell2DirectionDeg,
-        color: _swell2C,
-        label: '너울2',
-        value:
-            '${hour.swell2HeightM.toStringAsFixed(1)}m·${hour.swell2PeriodS.round()}s',
-      ),
+      if (showWaves) ...[
+        (
+          dir: hour.swellDirectionDeg,
+          color: _swellC,
+          label: '너울',
+          value:
+              '${hour.swellHeightM.toStringAsFixed(1)}m·${hour.swellPeriodS.round()}s',
+        ),
+        (
+          dir: hour.swell2DirectionDeg,
+          color: _swell2C,
+          label: '너울2',
+          value:
+              '${hour.swell2HeightM.toStringAsFixed(1)}m·${hour.swell2PeriodS.round()}s',
+        ),
+      ],
     ];
     return Positioned(
       left: left,
