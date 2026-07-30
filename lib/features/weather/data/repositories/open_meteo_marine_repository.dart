@@ -164,10 +164,16 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
     });
     // 바람은 지도 바람장(OpenMeteoWindFieldRepository·fetch_wind.py)과 **같은
     // 모델(ecmwf_ifs025)**로 고정한다. 모델을 안 주면 best_match가 되는데,
-    // 다도해 같은 연안점에선 고해상도 지역모델을 골라 국지 차폐로 지속풍이
-    // 낮게(예: 2~3m/s) 나오는 반면 돌풍은 비슷해, Windy(ECMWF) 및 우리 지도
-    // 커서값과 표의 '바람' 수치가 어긋났다(사용자 지적). ECMWF로 맞추면
-    // Windy와도, 우리 지도와도 일관된다.
+    // 그러면 지점마다 다른 모델이 뽑혀 지도 커서값과 표의 '바람'이 어긋난다.
+    //
+    // best_match로 바꿀 만한지 실측했다(`tool/probe_wind_models.py`, 해역별
+    // 19개 지점 48시간 평균): 다도해 연안 +0.20, 남해 외해 +0.28, 서해 +0.18,
+    // 동해 +0.07 m/s로 **평균 차이는 미미**하다. 예전 주석은 "다도해에서
+    // best_match가 지속풍을 낮게 본다"고 적었지만 재현되지 않았다. 다만
+    // 지점별 편차는 커서(속초 앞 −2.2m/s 사례) 예측이 어렵고, 평균 +0.2로는
+    // Windy와의 격차(약 1m/s, 우리 0.25°≈28km vs Windy ECMWF 9km 해상도
+    // 차이)도 못 메운다. 실익이 없고 지도와 어긋날 위험만 있어 ECMWF 고정을
+    // 유지한다.
     final forecastUri = Uri.https(_forecastHost, '/v1/forecast', {
       ...common,
       'hourly':
