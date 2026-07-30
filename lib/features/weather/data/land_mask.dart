@@ -1,19 +1,19 @@
-import '../presentation/widgets/country_borders_data.dart';
+import 'land_polygons_data.dart';
 
-/// 지도 위 임의 좌표가 육지인지 판정한다. 지도에 실제로 그려지는 해안선
-/// (`countryBorders['해안선']`, Natural Earth 10m — 한반도·주변국·섬 전체를
-/// 포함한 닫힌 폴리곤 목록)로 point-in-polygon 판정하므로, 별도 데이터나
-/// 외부 호출 없이 화면에 보이는 해안선과 완전히 일치하는 정확한 육지/바다
-/// 구분이 된다.
+/// 지도 위 임의 좌표가 육지인지 판정한다.
 ///
-/// 파랑모델(0.25°≈25km) 격자 기반 판정 대신 이 방식을 쓰는 이유: 삼척·포항·
-/// 고흥반도처럼 폭이 좁은 지형은 완전한 육지 지점도 격자 반경 안에 바다가
-/// 걸려, "육지인데 앞바다 파도값이 나온다"는 문제가 있었다(사용자 스크린샷
-/// 7장으로 확인 — 대전·안동·원주·광주·전주·부산 시내 등). 해안선 폴리곤
-/// 기준이면 이 지점들은 정확히 육지로 걸러지고, 해안에 실제로 인접한 지점만
-/// 살아남는다.
+/// 판정에는 **닫힌 육지 면**(`landPolygons`, Natural Earth 10m land + minor
+/// islands)을 쓴다. 지도에 그리는 해안선(`country_borders_data.dart`)은 bbox로
+/// 잘린 **열린 선(LineString)**이라 point-in-polygon에 쓸 수 없다 — 예전에
+/// 그걸로 판정했다가 서울이 바다로, 황해 한복판이 육지로 나오는 정반대 결과가
+/// 나왔다(사용자 지적: "서해바다인데 파도 정보가 없다"). 판정용 면 데이터는
+/// `tool/gen_land.py`로 따로 뽑는다.
+///
+/// 파랑모델(0.25°≈25km) 격자만으로 판정하지 않는 이유: 삼척·포항·고흥반도처럼
+/// 폭이 좁은 지형은 완전한 육지 지점도 격자 반경 안에 바다가 걸려 "육지인데
+/// 앞바다 파도값이 나온다"는 문제가 있었다.
 bool isOnLand(double lat, double lon) {
-  for (final polygon in countryBorders['해안선'] ?? const []) {
+  for (final polygon in landPolygons) {
     if (_pointInPolygon(lat, lon, polygon)) return true;
   }
   return false;
