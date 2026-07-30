@@ -241,10 +241,9 @@ class _AccuracySection extends StatelessWidget {
     ),
     (
       Icons.fact_check_outlined,
-      '물때표 교차 검증',
-      '전국 물때표 서비스(바다타임)와 서해·남해·동해 20개 항구 × 3일의 '
-          '만조·간조를 자동 대조해, 평균 오차 1분·2cm 이내로 맞춘 것을 '
-          '확인했습니다.',
+      '전국 항구 물때 데이터',
+      '국가어항·지방어항을 포함한 국내 모든 항구의 물때 데이터를 담아, '
+          '어디서든 가까운 항구의 만조·간조를 확인할 수 있습니다.',
     ),
     (
       Icons.wb_sunny_outlined,
