@@ -223,6 +223,20 @@ class WindFieldSeries {
   WindField at(int offset) => hourly[offset.clamp(0, hourly.length - 1)];
 
   /// [time]과 가장 가까운 스냅샷의 인덱스(지도 시각을 예보 슬라이더와 맞출 때).
+  /// [time]을 **지나온 마지막 스텝**(시각이 [time]보다 늦지 않은 것 중 마지막).
+  ///
+  /// "지금"을 가리킬 때는 [indexClosestTo]가 아니라 이걸 쓴다. 스텝이 3시간
+  /// 간격이라 22:58에는 00시가 더 "가깝지만", 아직 오지 않은 시각을 지금이라고
+  /// 표시하면 안 되기 때문이다. 모든 스텝이 [time]보다 미래면 첫 스텝을 쓴다.
+  int indexAtOrBefore(DateTime time) {
+    var idx = 0;
+    for (var i = 0; i < hourly.length; i++) {
+      if (hourly[i].time.isAfter(time)) break;
+      idx = i;
+    }
+    return idx;
+  }
+
   int indexClosestTo(DateTime time) {
     var best = 0;
     Duration bestDiff = const Duration(days: 9999);

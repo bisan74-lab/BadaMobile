@@ -110,7 +110,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
       // 표를 닫으면 지도를 다시 현재 시각(서울 기준) 바람으로 되돌린다.
       final series = _series;
       if (series != null) {
-        _hourOffset = series.indexClosestTo(nowKst());
+        _hourOffset = series.indexAtOrBefore(nowKst());
       }
     });
   }
@@ -124,7 +124,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   void _mapHourToNow() {
     final series = _series;
     if (series == null) return;
-    final idx = series.indexClosestTo(nowKst());
+    final idx = series.indexAtOrBefore(nowKst());
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
 
@@ -179,7 +179,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
     _series = series;
     // 시계열은 오늘 0시(서울)부터 시작하므로, 지도 기본 시각을 서울 기준
     // "지금"에 맞춘다(기기 시간대 설정과 무관).
-    _hourOffset = series.indexClosestTo(nowKst());
+    _hourOffset = series.indexAtOrBefore(nowKst());
     final field = series.at(_hourOffset);
     _particles
       ..clear()
@@ -347,7 +347,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                       child: _MapTimeBar(
                         series: series,
                         offset: _hourOffset,
-                        nowOffset: series.indexClosestTo(nowKst()),
+                        nowOffset: series.indexAtOrBefore(nowKst()),
                         synthetic: result.isSynthetic,
                         onChanged: _setMapHour,
                         onNow: _mapHourToNow,
@@ -1220,6 +1220,21 @@ class _MapTimeBar extends StatelessWidget {
   }
 }
 
+/// [times] 중 "지금"([now])으로 표시할 칸의 인덱스 — **지나온 마지막 칸**.
+///
+/// 가장 가까운 칸이 아니라 지나온 칸을 고른다. 표가 3시간 간격이라 22:58에는
+/// 다음 날 00시가 더 가깝지만, **아직 오지 않은 시각을 "지금"이라고 표시하면
+/// 안 된다**(사용자 지적: 22:58인데 00시가 지금으로 나옴 → 21시가 맞다).
+/// 모든 칸이 [now]보다 미래면(예: 과거 데이터가 없을 때) 첫 칸을 쓴다.
+int currentStepIndex(List<DateTime> times, DateTime now) {
+  var idx = 0;
+  for (var i = 0; i < times.length; i++) {
+    if (times[i].isAfter(now)) break;
+    idx = i;
+  }
+  return idx;
+}
+
 /// 임의 좌표를 위한 즉석 [SeaLocation]. id를 반올림 좌표로 만들어
 /// 같은 지점을 다시 찍으면 예보 캐시가 재사용되게 한다.
 SeaLocation pointSeaLocation(double lat, double lon) {
@@ -1523,20 +1538,9 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   double? _landCheckLon;
   bool _isLand = false;
 
-  /// [steps] 중 현재 시각(서울 기준)과 가장 가까운 칸의 인덱스.
-  int _closestToNow(List<HourlyMarine> steps) {
-    final now = nowKst();
-    var best = 0;
-    var bestDiff = const Duration(days: 999);
-    for (var k = 0; k < steps.length; k++) {
-      final d = steps[k].time.difference(now).abs();
-      if (d < bestDiff) {
-        bestDiff = d;
-        best = k;
-      }
-    }
-    return best;
-  }
+  /// [steps] 중 "지금"으로 표시할 칸의 인덱스.
+  int _closestToNow(List<HourlyMarine> steps) =>
+      currentStepIndex(steps.map((s) => s.time).toList(), nowKst());
 
   static const double _colW = 46;
   static const double _labelW = 68;

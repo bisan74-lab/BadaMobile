@@ -1,0 +1,34 @@
+name: Marine 데이터 점검
+
+# 지점 예보의 바람·파고·너울이 다른 서비스와 어긋날 때, 원인이
+# **모델 미지원(폴백)**인지 **격자 해상도 차이**인지 확인하는 진단용.
+# 개발 샌드박스에서는 Open-Meteo가 막혀 있어 러너에서 돌린다.
+on:
+  workflow_dispatch:
+    inputs:
+      lat:
+        description: '위도 (기본: 외연도 36.223)'
+        required: false
+        default: '36.223'
+      lon:
+        description: '경도 (기본: 외연도 126.080)'
+        required: false
+        default: '126.080'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open-Meteo 응답 점검
+        run: |
+          python3 tool/probe_marine.py \
+            "${{ inputs.lat }}" "${{ inputs.lon }}" | tee probe.txt
+      - name: 요약을 실행 결과에 남기기
+        if: always()
+        run: |
+          {
+            echo '```'
+            cat probe.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
