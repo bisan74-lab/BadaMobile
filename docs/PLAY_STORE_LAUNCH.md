@@ -1,0 +1,131 @@
+# Play Store 런칭 체크리스트
+
+코드 쪽 준비는 끝났고, 아래는 **사람이 계정을 만들고 값을 넣어야 하는 부분**이다.
+순서대로 하면 된다.
+
+---
+
+## 1. 계정 만들기
+
+| 계정 | 비용 | 용도 |
+|---|---|---|
+| [Google Play 개발자 계정](https://play.google.com/console/signup) | **US$25 (1회)** | 앱 배포 |
+| [AdMob 계정](https://admob.google.com/) | 무료 | 광고 수익 |
+
+Play 개발자 계정은 개인이면 신분증 확인이 필요하고, 승인까지 보통 1~2일 걸린다.
+2023년 이후 만든 개인 계정은 **프로덕션 출시 전에 비공개 테스트(테스터 12명 이상,
+14일 연속)** 를 요구할 수 있으니 Play Console 안내를 확인한다.
+
+## 2. AdMob에서 앱 등록 후 ID 두 개 받기
+
+1. AdMob → 앱 → 앱 추가 → Android → "앱이 스토어에 등록되어 있나요?" → 아직 아니면 **아니요**
+2. 만들어진 **앱 ID** 복사 — `ca-app-pub-XXXXXXXX~YYYYYYYY` (물결 `~`)
+3. 그 앱에서 광고 단위 → **배너** 생성 → **광고 단위 ID** 복사 — `ca-app-pub-XXXXXXXX/YYYYYYYY` (슬래시 `/`)
+
+> 두 ID는 구분자가 다르다(`~` vs `/`). 바꿔 넣으면 광고가 안 나온다.
+
+## 3. 업로드 키스토어 만들기
+
+로컬 PC(자바 설치된 환경)에서:
+
+```bash
+keytool -genkey -v -keystore upload-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+- **이 파일과 비밀번호를 잃어버리면 앱 업데이트를 영원히 못 올린다.** 안전한 곳에 백업한다.
+- 저장소에는 절대 커밋하지 않는다(`android/.gitignore`가 이미 막고 있다).
+
+base64로 변환해 둔다(다음 단계에서 Secret에 넣는다):
+
+```bash
+base64 -w0 upload-keystore.jks > keystore.base64.txt   # macOS는 -w0 대신 -b0
+```
+
+## 4. GitHub Secret 등록
+
+저장소 → Settings → Secrets and variables → Actions → New repository secret
+
+| Secret 이름 | 값 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | 3단계에서 만든 base64 문자열 |
+| `ANDROID_KEYSTORE_PASSWORD` | 키스토어 비밀번호 |
+| `ANDROID_KEY_ALIAS` | `upload` (keytool에서 지정한 별칭) |
+| `ANDROID_KEY_PASSWORD` | 키 비밀번호 |
+| `ADMOB_APP_ID` | `ca-app-pub-XXXX~YYYY` |
+| `ADMOB_BANNER_AD_UNIT_ID` | `ca-app-pub-XXXX/YYYY` |
+| `DATA_GO_KR_API_KEY` | (이미 등록돼 있음) |
+
+## 5. 개인정보처리방침 URL 살리기
+
+Play Console은 **공개 접근 가능한 URL**을 요구한다.
+
+저장소 → Settings → Pages → Source를 기본 브랜치의 `/docs` 폴더로 지정하면
+`docs/privacy-policy.html`이 아래 주소로 서빙된다:
+
+```
+https://bisan74-lab.github.io/BadaMobile/privacy-policy.html
+```
+
+- 이 주소는 `lib/features/settings/app_info.dart`의 `privacyPolicyUrl`과 같아야 한다.
+  (앱 안의 "개인정보처리방침 전문 보기" 버튼이 이 주소를 연다.)
+- 저장소가 **비공개면 Pages가 동작하지 않는다.** 저장소를 공개로 바꾸거나,
+  방침 문서만 별도의 공개 위치(Gist, 개인 도메인 등)에 올리고 위 상수를 그 주소로 바꾼다.
+
+## 6. AAB 빌드
+
+Actions → **Play Store AAB** → Run workflow
+
+- 필수 Secret이 하나라도 없으면 워크플로가 바로 실패하며 무엇이 빠졌는지 알려준다.
+- 성공하면 `store-build-N` 릴리스와 Actions 아티팩트 양쪽에 `app-release.aab`가 올라간다.
+
+## 7. Play Console 등록
+
+1. 앱 만들기 — 이름 `바다윈디`, 언어 한국어, 앱/게임: **앱**, 무료
+2. **프로덕션(또는 내부 테스트)** → 새 버전 만들기 → `app-release.aab` 업로드
+3. 스토어 등록정보 준비물:
+   - 앱 아이콘 512×512 PNG
+   - 그래픽 이미지(피처 그래픽) 1024×500
+   - 스크린샷 최소 2장(휴대전화). 물때 타임라인 / 바람지도 / 상세 예보 화면 추천
+   - 간단한 설명(80자), 자세한 설명(4000자)
+4. **콘텐츠 등급** 설문 — 정보/유틸리티, 부적절 콘텐츠 없음
+5. **데이터 보안(Data safety)** 양식 — 아래 6번 참고
+6. **광고 포함 여부: 예** 로 체크(AdMob 사용)
+7. 대상 연령: 만 13세 이상 권장
+
+### 데이터 보안 양식 작성 기준
+
+앱 자체는 개인정보를 수집하지 않지만 **AdMob이 수집**하므로 다음처럼 답한다.
+
+| 항목 | 답 |
+|---|---|
+| 데이터를 수집/공유하나요? | **예** (광고 SDK 때문) |
+| 위치 – 대략적인 위치 | 수집·공유 O / 목적: **광고 또는 마케팅** |
+| 기기 또는 기타 ID (광고 ID) | 수집·공유 O / 목적: **광고 또는 마케팅** |
+| 앱 활동 | 광고 상호작용 측정 목적으로 수집 O |
+| 전송 중 암호화 | 예 |
+| 데이터 삭제 요청 가능 | 앱 삭제 시 기기 내 데이터 제거 |
+
+정확한 항목은 AdMob 문서
+([Play 데이터 보안 안내](https://support.google.com/admob/answer/11170392))를 확인한다.
+
+## 8. 출시 후 할 일
+
+- **`remote_config/app_gate.json`의 `storeUrl`** 이 실제 스토어 주소와 맞는지 확인한다
+  (현재 `com.badamobile.bada_mobile` 기준으로 맞춰 둠).
+- `Env.forceUpgradeConfigUrl`이 지금은 이 개발 브랜치의 raw 주소를 가리킨다.
+  **브랜치가 사라지면 게이트가 죽으므로**, 출시 전에 오래 유지될 위치
+  (main 브랜치 raw 주소, Gist, 자체 도메인 등)로 바꾼다.
+- 광고가 실제로 뜨는지 확인한다. 새 AdMob 광고 단위는 노출까지 **최대 몇 시간**
+  걸릴 수 있고, 그동안은 광고 자리에 앱 소개 박스가 보인다(정상 동작).
+
+---
+
+## 참고: 두 빌드 워크플로의 차이
+
+| | `release-apk.yml` | `release-aab.yml` |
+|---|---|---|
+| 결과물 | `.apk` | `.aab` |
+| 서명 | debug 키 | **업로드 키** |
+| 광고 | 테스트 광고 | **실제 광고 ID** |
+| 용도 | 기기에 직접 설치해 확인 | **Play Console 제출** |

@@ -94,10 +94,33 @@ dart format lib test       # 커밋 전 포맷
   못 받아오면(오프라인 등) 항상 앱을 정상 실행한다 — 이 폴백 규칙은 절대
   건드리지 않는다.
 
-## 릴리스 APK 빌드/전달
+- **광고는 부가 기능이라 절대 앱을 막지 않는다**(`core/widgets/ad_placeholder.dart`):
+  배너 로드에 실패하거나 광고가 꺼져 있으면 같은 높이의 앱 소개 박스로 조용히
+  대체된다 — 이 폴백을 없애면 광고가 없을 때 레이아웃에 빈 칸이 생긴다.
+  광고 ID는 `Env.admobBannerAdUnitId`(dart-define)와 Gradle 환경변수
+  `ADMOB_APP_ID`(AndroidManifest 플레이스홀더)로 **빌드 때 주입**하고,
+  둘 다 기본값이 구글 공식 **테스트 ID**라 설정 없이 빌드해도 실 수익 계정에
+  무효 트래픽이 잡히지 않는다. 실 ID는 저장소에 커밋하지 않는다.
+  **위젯 테스트가 광고 플랫폼 채널을 건드리면 안 되므로** `adsRuntimeEnabled`
+  기본값은 false이고 `main()`에서만 켠다 — 테스트에서 이 값을 켜지 말 것.
+
+## 릴리스 빌드/전달
+
+기기 확인용 APK와 스토어 제출용 AAB는 **워크플로가 다르다**:
+
+| | `release-apk.yml` | `release-aab.yml` |
+|---|---|---|
+| 서명 | debug 키 | 업로드 키(Secret) |
+| 광고 | 테스트 광고 | 실제 광고 ID(Secret) |
+| 용도 | 기기에 설치해 확인 | Play Console 제출 |
 
 실제 기기로 확인이 필요하면 로컬 Android SDK 없이도 GitHub Actions로 빌드한다:
 `release-apk.yml`(workflow_dispatch)을 트리거 → 완료되면 GitHub Release
 (`test-build-N` 태그)에서 `app-release.apk`를 받아 전달한다. Actions
-아티팩트가 아니라 Release를 쓰는 이유는 문서에 있음. 이 빌드는 실 API 키
-없이 만들어 합성(mock) 데이터로 동작한다.
+아티팩트가 아니라 Release를 쓰는 이유는 문서에 있음.
+
+릴리스 서명은 `android/key.properties`가 있을 때만 적용되고 없으면 debug 키로
+폴백한다 — 이 폴백을 없애면 키가 없는 CI·새 클론에서 빌드가 깨진다.
+
+**스토어 런칭 절차(계정 생성·ID 발급·Secret 등록·Play Console 등록)는
+[docs/PLAY_STORE_LAUNCH.md](docs/PLAY_STORE_LAUNCH.md)에 정리돼 있다.**
