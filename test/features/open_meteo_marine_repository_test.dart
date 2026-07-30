@@ -270,6 +270,65 @@ void main() {
     expect(forecast.hourly.first.windSpeedMs, closeTo(2.0, 1e-9));
   });
 
+  test('총 파고는 0이어도 너울(swell)이 있으면 그 지점 자체를 바다로 인정한다'
+      '(회귀 방지: 강릉·사천진처럼 총 파고만 격자 마스킹으로 0이고 너울은 '
+      '살아있는 연안 지점이 육지로 오판되던 문제)', () async {
+    final client = MockClient((request) async {
+      final n = int.parse(request.url.queryParameters['forecast_days']!) * 24;
+      final times = List.generate(
+        n,
+        (i) => DateTime(
+          2026,
+          7,
+          30,
+        ).add(Duration(hours: i)).toIso8601String().substring(0, 16),
+      );
+      if (request.url.host == 'marine-api.open-meteo.com') {
+        final keys = request.url.queryParameters['hourly']!.split(',');
+        return http.Response(
+          jsonEncode({
+            'hourly': {
+              'time': times,
+              for (final k in keys)
+                // 총 파고(wave_height)는 0(격자 마스킹)이지만 2차 너울은
+                // 실제 값(0.2)이 있다 — 실측(위도 37.805 지점)과 같은 패턴.
+                k: List.filled(
+                  n,
+                  k == 'secondary_swell_wave_height' ? 0.2 : 0.0,
+                ),
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'hourly': {
+            'time': times,
+            'wind_speed_10m': List.filled(n, 6.0),
+            'wind_gusts_10m': List.filled(n, 8.0),
+            'wind_direction_10m': List.filled(n, 180.0),
+            'temperature_2m': List.filled(n, 27.0),
+          },
+        }),
+        200,
+      );
+    });
+
+    final repo = OpenMeteoMarineRepository(client: client);
+    const nearShore = SeaLocation(
+      id: 'gangneung',
+      name: '강릉 앞바다',
+      region: '동해',
+      latitude: 37.805,
+      longitude: 128.9,
+    );
+    final forecast = await repo.fetchForecast(nearShore, hours: 24);
+    // _nearestWetPoint 재조회 없이 원점 데이터 그대로 바다로 인정된다.
+    expect(forecast.hasWaveData, isTrue);
+    expect(forecast.hourly.first.swell2HeightM, closeTo(0.2, 1e-9));
+  });
+
   test('주변에 앞바다가 없는 육지 지점은 hasWaveData=false', () async {
     // 모든 지점(원점·재조회 후보)에서 파고가 0.0 → 앞바다를 못 찾음 → 육지.
     final client = MockClient((request) async {

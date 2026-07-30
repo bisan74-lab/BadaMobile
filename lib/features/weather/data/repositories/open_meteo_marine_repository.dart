@@ -206,14 +206,22 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       'sea_surface_temperature': marineSst['sea_surface_temperature'],
     };
 
-    // 이 지점에 **양(+)의 파고**가 하나라도 있었는지(GFS 또는 WAM 총 파고).
-    // 연안 육지 마스킹 셀은 null이 아니라 **0.0**을 돌려주기도 해서, null만
-    // 거르면(≠null) 0.0을 유효 데이터로 오인해 앞바다 재조회가 안 됐다
-    // (동해 연안 파도 계속 0.0). 그래서 '0보다 큰 값'이 있는지로 판정한다.
-    bool anyPositive(Map<String, dynamic> m) =>
-        (m['wave_height'] as List?)?.any((v) => v != null && (v as num) > 0) ??
-        false;
-    final wavesPresent = anyPositive(marineGfs) || anyPositive(marineWamTotal);
+    // 이 지점에 **양(+)의 파고 관련 값**이 하나라도 있었는지 — 총 파고
+    // (wave_height)뿐 아니라 너울·2차 너울·풍파도 함께 본다. 강릉·사천진처럼
+    // 폭 좁은 연안은 총 파고가 격자 마스킹으로 0.0이어도 너울 성분은 살아있는
+    // 경우가 실측으로 확인됐다(위도 37.805 지점: wave_height=0인데
+    // secondary_swell 0.2m·5s는 나와 지도 나침반엔 값이 뜨는데 상세 표만
+    // "파도 없음"으로 잘못 숨겨졌다). 총 파고만 보면 이런 지점을 육지로
+    // 오판해 불필요한 앞바다 재조회(왕복 2회 추가)까지 발생시킨다.
+    bool anyPositive(Map<String, dynamic> m, String key) =>
+        (m[key] as List?)?.any((v) => v != null && (v as num) > 0) ?? false;
+    const waveKeys = [
+      'wave_height',
+      'swell_wave_height',
+      'wind_wave_height',
+      'secondary_swell_wave_height',
+    ];
+    final wavesPresent = waveKeys.any((k) => anyPositive(marine, k));
 
     return (
       MarineForecast(
@@ -271,15 +279,17 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
   }
 
   /// (lat, lon)의 파랑모델 격자에 실제 파고 데이터가 있는지(=바다) 가볍게
-  /// 확인한다. 1일치 wave_height 단일 필드만 받아 **0보다 큰 값**이 하나라도
-  /// 있으면 true(육지 마스킹 셀은 0.0을 주므로 0은 바다로 치지 않는다).
-  /// 어떤 모델이든 데이터가 있으면 잡도록 모델을 지정하지 않는다(best_match).
-  /// 실패는 false로 처리(없는 것으로 간주).
+  /// 확인한다. 1일치 wave_height·swell_wave_height 두 필드만 받아 **0보다
+  /// 큰 값**이 하나라도 있으면 true(육지 마스킹 셀은 0.0을 주므로 0은 바다로
+  /// 치지 않는다). 총 파고만 보면 너울만 살아있는 연안 셀을 놓치므로(위의
+  /// wavesPresent와 같은 이유) 너울도 함께 본다. 어떤 모델이든 데이터가
+  /// 있으면 잡도록 모델을 지정하지 않는다(best_match). 실패는 false로
+  /// 처리(없는 것으로 간주).
   Future<bool> _hasWaves(double lat, double lon) async {
     final uri = Uri.https(_marineHost, '/v1/marine', {
       'latitude': lat.toStringAsFixed(3),
       'longitude': lon.toStringAsFixed(3),
-      'hourly': 'wave_height',
+      'hourly': 'wave_height,swell_wave_height',
       'forecast_days': '1',
       'timezone': 'Asia/Seoul',
     });
@@ -288,8 +298,13 @@ class OpenMeteoMarineRepository implements MarineWeatherRepository {
       if (res.statusCode != 200) return false;
       final body = jsonDecode(res.body);
       final hourly = body is Map ? body['hourly'] : null;
-      final wh = hourly is Map ? hourly['wave_height'] as List? : null;
-      return wh != null && wh.any((v) => v != null && (v as num) > 0);
+      if (hourly is! Map) return false;
+      bool positive(String key) {
+        final v = hourly[key] as List?;
+        return v != null && v.any((x) => x != null && (x as num) > 0);
+      }
+
+      return positive('wave_height') || positive('swell_wave_height');
     } catch (_) {
       return false;
     }
