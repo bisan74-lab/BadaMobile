@@ -79,7 +79,7 @@ const List<SeaLocation> _curatedLocations = [
     latitude: 36.325,
     longitude: 126.508,
     khoaStationCode: 'DT_0025',
-    // 바다타임 대천항 물때표와 3일×4극값 대조 캘리브레이션(2026-07-31~08-04):
+    // 대천항 공개 물때표와 3일×4극값 대조 캘리브레이션(2026-07-31~08-04):
     // 관측소(보령) 대비 -7분·조위 ×0.975로 시각 ≤1분·조위 ≤3cm 일치.
     tideTimeOffsetMin: -7,
     tideHeightScale: 0.975,
@@ -188,7 +188,7 @@ const List<SeaLocation> _curatedLocations = [
     longitude: 128.088,
     // 삼천포·통영·여수 3개 관측소 사이(애매) → 3지점 거리가중 보간.
     khoaStationCodes: ['DT_0061', 'DT_0014', 'DT_0016'],
-    // 바다타임 미조 물때표 대조: 진폭과 무관하게 일정한 차이(±1cm 편차)라
+    // 미조 공개 물때표 대조: 진폭과 무관하게 일정한 차이(±1cm 편차)라
     // 배율이 아니라 가산 오프셋으로 맞춘다: -5분·-14cm.
     tideTimeOffsetMin: -5,
     tideHeightOffsetCm: -14,
@@ -243,7 +243,7 @@ const List<SeaLocation> _curatedLocations = [
     latitude: 35.500,
     longitude: 129.417,
     khoaStationCode: 'DT_0020',
-    // 바다타임 방어진 대조: 조위 -2cm(미소조라 시각 보정은 불필요).
+    // 방어진 공개 물때표 대조: 조위 -2cm(미소조라 시각 보정은 불필요).
     tideHeightOffsetCm: -2,
   ),
   SeaLocation(
@@ -279,7 +279,7 @@ const List<SeaLocation> _curatedLocations = [
     latitude: 36.677,
     longitude: 129.453,
     khoaStationCode: 'DT_0011',
-    // 바다타임 후포 대조: 평균 -7분(동해 미소조라 극값 시각 편차는 큼).
+    // 후포 공개 물때표 대조: 평균 -7분(동해 미소조라 극값 시각 편차는 큼).
     tideTimeOffsetMin: -7,
   ),
   SeaLocation(
@@ -297,7 +297,7 @@ const List<SeaLocation> _curatedLocations = [
     latitude: 37.550,
     longitude: 129.115,
     khoaStationCode: 'DT_0006',
-    // 바다타임 묵호 대조: 평균 -6분.
+    // 묵호 공개 물때표 대조: 평균 -6분.
     tideTimeOffsetMin: -6,
   ),
   SeaLocation(
@@ -324,7 +324,7 @@ const List<SeaLocation> _curatedLocations = [
     latitude: 38.207,
     longitude: 128.594,
     khoaStationCode: 'DT_0012',
-    // 바다타임 속초 대조: 평균 -4분.
+    // 속초 공개 물때표 대조: 평균 -4분.
     tideTimeOffsetMin: -4,
   ),
   SeaLocation(
@@ -417,7 +417,7 @@ const List<SeaLocation> _curatedLocations = [
     // 무창포 전용 관측소가 없어, 북쪽 보령(대천항 DT_0025)과 남쪽 서천마량
     // (DT_0051) 사이에 있으므로 두 관측소를 거리가중 보간한다.
     khoaStationCodes: ['DT_0025', 'DT_0051'],
-    // 바다타임 무창포 물때표 대조 캘리브레이션: +3분·조위 ×0.99.
+    // 무창포 공개 물때표 대조 캘리브레이션: +3분·조위 ×0.99.
     tideTimeOffsetMin: 3,
     tideHeightScale: 0.99,
     rank: 1,
@@ -457,7 +457,7 @@ const List<SeaLocation> _curatedLocations = [
     // (DT_0027) 사이이므로 거리가중 보간한다(발포가 더 가까워 크게 치우침).
     khoaStationCodes: ['DT_0026', 'DT_0027'],
     // 2차항 보정: 녹동은 만 안쪽이라 보간값보다 조석이 일정하게 늦고 만조가
-    // 높다. 바다타임 녹동 물때표와 3일×4극값 자동 대조(2026-07-31~08-04)로
+    // 높다. 녹동 공개 물때표와 3일×4극값 자동 대조(2026-07-31~08-04)로
     // 재캘리브레이션: +16분·×1.08(이전 +12분·×1.05에서 잔차 +4분·+3% 반영).
     tideTimeOffsetMin: 16,
     tideHeightScale: 1.08,
@@ -471,7 +471,7 @@ const List<SeaLocation> _curatedLocations = [
     longitude: 128.951,
     // 강릉권 전용 관측소 없음 → 묵호·동해항·속초 3지점 거리가중 보간.
     khoaStationCodes: ['DT_0006', 'DT_0057', 'DT_0012'],
-    // 바다타임 강릉 대조: -8분·+3cm(일정 가산).
+    // 강릉 공개 물때표 대조: -8분·+3cm(일정 가산).
     tideTimeOffsetMin: -8,
     tideHeightOffsetCm: 3,
     rank: 1,

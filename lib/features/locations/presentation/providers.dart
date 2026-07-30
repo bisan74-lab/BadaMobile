@@ -63,7 +63,7 @@ class SelectedLocationNotifier extends Notifier<SeaLocation> {
   }
 }
 
-/// 날씨 탭 **전용** 지역 — 물때·바다타임·Windy 등 다른 탭과 완전히 분리된다.
+/// 날씨 탭 **전용** 지역 — 물때·바람지도 등 다른 탭과 완전히 분리된다.
 /// 육지(내륙) 지점을 골라도 다른 탭의 조석·해양 정보에 영향을 주지 않는다.
 /// 별도 키로 영속화되어 재시작 후에도 유지된다.
 class WeatherLocationNotifier extends Notifier<SeaLocation> {

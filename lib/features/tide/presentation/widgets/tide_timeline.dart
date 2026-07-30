@@ -5,8 +5,9 @@ import '../../../../core/widgets/sea_backdrop.dart';
 import '../../data/models/tide_data.dart';
 
 /// 만조/간조를 세로 0~24시 타임라인 위에 그래픽 카드로 배치해 보여준다.
-/// 바다타임 앱의 물때 화면(사진 참고)을 본떠, 바다색 배경 위에 시각축과
-/// 만조(붉은색)/간조(파란색) 카드, 현재 시각선을 함께 그린다.
+/// 하루의 조석 흐름을 시간축 위에 배치하는 통상적인 물때표 형식으로,
+/// 바다색 배경 위에 시각축과 만조(붉은색)/간조(파란색) 카드, 현재
+/// 시각선을 함께 그린다.
 class TideTimeline extends StatelessWidget {
   const TideTimeline({
     super.key,
