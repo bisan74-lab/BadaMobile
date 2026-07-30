@@ -33,12 +33,16 @@ jobs:
       # 주입해 조석·낚시지수 실데이터로 빌드한다. Secret이 없으면 빈 값이 되어
       # 앱이 기존대로 합성(mock) 데이터로 동작한다(Env가 빈 키를 '없음'으로 취급).
       # 키는 저장소에 커밋하지 않고 GitHub Secret에서만 주입한다(로그도 자동 마스킹).
-      - name: 릴리스 APK 빌드
+      # --split-per-abi: CPU 아키텍처별로 APK를 쪼갠다. 광고 SDK가 들어오면서
+      # 모든 ABI를 담은 단일 APK가 58MB까지 커졌는데, 쪼개면 기기가 실제로 쓰는
+      # arm64-v8a 하나가 그 절반 이하다(전달·설치 모두 가벼워진다).
+      - name: 릴리스 APK 빌드 (ABI별 분리)
         env:
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
         run: |
-          flutter build apk --release \
+          flutter build apk --release --split-per-abi \
             --dart-define=DATA_GO_KR_API_KEY="$DATA_GO_KR_API_KEY"
+          ls -lh build/app/outputs/flutter-apk/*.apk
 
       - name: 태그·데이터모드 계산
         id: vars
@@ -63,9 +67,13 @@ jobs:
             수동 트리거 테스트 빌드입니다.
             데이터 모드: ${{ steps.vars.outputs.mode }}
 
+            CPU 아키텍처별로 나뉘어 있습니다. 대부분의 최신 기기는
+            **`app-arm64-v8a-release.apk`** 를 받으면 됩니다
+            (아주 오래된 기기만 `armeabi-v7a`, 에뮬레이터는 `x86_64`).
+
             실데이터로 받으려면 저장소 Settings → Secrets and variables →
             Actions에 `DATA_GO_KR_API_KEY`(data.go.kr 일반 인증키)를 추가한 뒤
             이 워크플로를 다시 실행하세요. 조석 실데이터는 지점에
             조위관측소 코드(khoaStationCode)가 등록된 곳만 적용됩니다.
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/*-release.apk
           prerelease: true
