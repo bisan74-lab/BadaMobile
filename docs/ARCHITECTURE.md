@@ -25,7 +25,7 @@ AppShell (하단 탭, IndexedStack)
 무료 버전을 배포한 뒤 나중에 광고가 붙는 버전으로 전환할 때, **앱을
 재배포하지 않고** 기존에 설치된 모든 기기의 실행을 막기 위한 장치다.
 
-- `remote_config/app_gate.json`(이 저장소에 커밋된 정적 파일, GitHub raw로
+- `app_gate.json`(공개 데이터 저장소의 정적 파일, GitHub raw로
   서빙)의 `forceUpgrade`를 `true`로 바꾸기만 하면 된다. 앱은 시작할 때마다
   `AppGateRepository.fetch()`로 이 JSON을 받아와 `forceUpgrade`가 true면
   `AppShell` 대신 `ForceUpgradeScreen`(업데이트 안내 + 스토어 링크 버튼)을

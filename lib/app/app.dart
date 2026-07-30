@@ -13,7 +13,7 @@ import 'theme.dart';
 /// 앱 진입점. `appGateProvider`가 강제 업데이트 상태(`forceUpgrade: true`)를
 /// 돌려주면 [AppShell] 대신 [ForceUpgradeScreen]을 띄워 실행을 막는다 —
 /// 무료 배포본을 나중에 광고 버전으로 전환할 때, 앱 재배포 없이
-/// `remote_config/app_gate.json`의 값만 바꾸면 모든 설치 기기에 적용된다.
+/// 공개 데이터 저장소의 `app_gate.json` 값만 바꾸면 모든 설치 기기에 적용된다.
 /// 설정 확인이 안 되면(오프라인 등) 항상 앱을 정상 실행한다.
 class BadaMobileApp extends ConsumerWidget {
   const BadaMobileApp({super.key});

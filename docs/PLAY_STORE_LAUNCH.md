@@ -54,23 +54,28 @@ base64 -w0 upload-keystore.jks > keystore.base64.txt   # macOS는 -w0 대신 -b0
 | `ANDROID_KEY_PASSWORD` | 키 비밀번호 |
 | `ADMOB_APP_ID` | `ca-app-pub-XXXX~YYYY` |
 | `ADMOB_BANNER_AD_UNIT_ID` | `ca-app-pub-XXXX/YYYY` |
+| `PUBLIC_DATA_TOKEN` | 공개 데이터 저장소용 PAT (5단계 참고) |
 | `DATA_GO_KR_API_KEY` | (이미 등록돼 있음) |
 
-## 5. 개인정보처리방침 URL 살리기
+## 5. 공개 데이터 저장소 만들기 (개인정보처리방침 + 바람장)
 
-Play Console은 **공개 접근 가능한 URL**을 요구한다.
+이 저장소는 **비공개**라 앱이 여기 있는 파일을 익명으로 받을 수 없고,
+비공개 저장소의 GitHub Pages는 유료 플랜 전용이다. 그래서 **기상 데이터와
+공개 문서만** 별도의 공개 저장소에 둔다.
 
-저장소 → Settings → Pages → Source를 기본 브랜치의 `/docs` 폴더로 지정하면
-`docs/privacy-policy.html`이 아래 주소로 서빙된다:
+절차는 [`public_data/README.md`](../public_data/README.md)에 정리돼 있다.
+요약하면:
 
-```
-https://bisan74-lab.github.io/BadaMobile/privacy-policy.html
-```
+1. 공개 저장소 `badawindy-data` 생성(기본 브랜치 `main`)
+2. `public_data/`의 `privacy-policy.html`·`app_gate.json`을 그 저장소 루트에 올리기
+3. 그 저장소 Settings → Pages → Source: `main` / `/ (root)` → Save
+   → `https://bisan74-lab.github.io/badawindy-data/privacy-policy.html`
+4. `badawindy-data`에 **Contents: Read and write** 권한만 가진 fine-grained PAT 발급
+5. 이 저장소 Secret에 `PUBLIC_DATA_TOKEN`으로 등록(4단계 표에도 포함)
+6. Actions → **Wind data refresh** 수동 실행 → 바람장이 공개 저장소에 올라오는지 확인
 
-- 이 주소는 `lib/features/settings/app_info.dart`의 `privacyPolicyUrl`과 같아야 한다.
-  (앱 안의 "개인정보처리방침 전문 보기" 버튼이 이 주소를 연다.)
-- 저장소가 **비공개면 Pages가 동작하지 않는다.** 저장소를 공개로 바꾸거나,
-  방침 문서만 별도의 공개 위치(Gist, 개인 도메인 등)에 올리고 위 상수를 그 주소로 바꾼다.
+> Play Console에 등록할 개인정보처리방침 URL은 3번에서 나온 주소이고,
+> 앱의 `AppInfo.privacyPolicyUrl`과 같아야 한다.
 
 ## 6. AAB 빌드
 
@@ -111,11 +116,8 @@ Actions → **Play Store AAB** → Run workflow
 
 ## 8. 출시 후 할 일
 
-- **`remote_config/app_gate.json`의 `storeUrl`** 이 실제 스토어 주소와 맞는지 확인한다
-  (현재 `com.badamobile.bada_mobile` 기준으로 맞춰 둠).
-- `Env.forceUpgradeConfigUrl`이 지금은 이 개발 브랜치의 raw 주소를 가리킨다.
-  **브랜치가 사라지면 게이트가 죽으므로**, 출시 전에 오래 유지될 위치
-  (main 브랜치 raw 주소, Gist, 자체 도메인 등)로 바꾼다.
+- 공개 데이터 저장소 `app_gate.json`의 `storeUrl`이 실제 스토어 주소와 맞는지
+  확인한다(현재 `com.badamobile.bada_mobile` 기준으로 맞춰 둠).
 - 광고가 실제로 뜨는지 확인한다. 새 AdMob 광고 단위는 노출까지 **최대 몇 시간**
   걸릴 수 있고, 그동안은 광고 자리에 앱 소개 박스가 보인다(정상 동작).
 

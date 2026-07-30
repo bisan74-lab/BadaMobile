@@ -26,13 +26,16 @@ class Env {
   /// 무료 버전 배포 후 광고 버전으로 전환할 때, 이 URL이 가리키는 JSON 파일의
   /// `forceUpgrade`를 true로 바꾸면(앱 재배포 없이) 이미 설치된 모든 기기에서
   /// 앱 실행이 막히고 업데이트 안내만 뜬다 — `core/remote_config/`를 참고.
-  /// 배포 전 실제 호스팅 위치(자체 도메인, Gist 등)로 바꿔야 한다.
+  ///
+  /// **공개 데이터 저장소**를 가리킨다. 코드 저장소는 비공개라 raw 파일을
+  /// 앱이 익명으로 못 받는다. 설정을 못 받아오면 앱은 항상 정상 실행되므로
+  /// (게이트만 조용히 꺼진다) URL이 틀려도 앱이 막히지는 않는다.
   /// `--dart-define=FORCE_UPGRADE_CONFIG_URL=...` 로 재정의 가능.
   static const forceUpgradeConfigUrl = String.fromEnvironment(
     'FORCE_UPGRADE_CONFIG_URL',
     defaultValue:
-        'https://raw.githubusercontent.com/bisan74-lab/BadaMobile/'
-        'claude/mobile-app-project-setup-87rgak/remote_config/app_gate.json',
+        'https://raw.githubusercontent.com/bisan74-lab/badawindy-data/'
+        'main/app_gate.json',
   );
 
   /// AdMob 배너 광고 단위 ID(하단 광고 자리).
@@ -52,7 +55,9 @@ class Env {
   /// 지도용 바람장 격자 데이터(서버가 미리 뽑아 둔 정적 파일) URL.
   ///
   /// GitHub Actions 크론(`.github/workflows/wind-data.yml`)이 Open-Meteo에서
-  /// 받아 롤링 릴리스(`wind-data`)에 올린 `wind_field.json.gz`를 가리킨다.
+  /// 받아 **공개 데이터 저장소**의 롤링 릴리스(`wind-data`)에 올린
+  /// `wind_field.json.gz`를 가리킨다. 코드 저장소는 비공개라 릴리스 자산을
+  /// 앱이 익명으로 받을 수 없어(인증 필요) 기상 데이터만 공개 저장소에 둔다.
   /// 앱은 이 파일 하나만 내려받아 지도에 쓰므로 사용자 기기가 Open-Meteo를
   /// 직접 다지점 호출하지 않는다(분당 한도 회피·모든 사용자 동일 데이터).
   /// 받지 못하면 앱이 Open-Meteo 직접 호출로 폴백한다.
@@ -60,7 +65,7 @@ class Env {
   static const windDataUrl = String.fromEnvironment(
     'WIND_DATA_URL',
     defaultValue:
-        'https://github.com/bisan74-lab/BadaMobile/releases/download/'
+        'https://github.com/bisan74-lab/badawindy-data/releases/download/'
         'wind-data/wind_field.json.gz',
   );
 }

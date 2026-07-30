@@ -1,4 +1,5 @@
-/// 강제 업데이트 게이트 설정. `remote_config/app_gate.json`에서 받아온다.
+/// 강제 업데이트 게이트 설정. 공개 데이터 저장소의 `app_gate.json`에서
+/// 받아온다(원본 사본은 `public_data/app_gate.json`).
 class AppGateConfig {
   const AppGateConfig({
     required this.forceUpgrade,

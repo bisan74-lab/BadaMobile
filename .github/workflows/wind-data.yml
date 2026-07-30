@@ -4,6 +4,12 @@ name: Wind data refresh
 # 앱은 이 정적 파일 하나만 내려받아 지도에 쓴다(사용자 기기가 Open-Meteo를
 # 직접 다지점 호출하지 않아 분당 호출 한도에 걸리지 않는다).
 #
+# **업로드 대상은 이 저장소가 아니라 공개 데이터 저장소다.** 코드 저장소는
+# 비공개라 릴리스 자산을 앱이 익명으로 못 받는다(인증 필요 → 404 → 합성
+# 데이터로 떨어짐). 그래서 기상 데이터만 공개 저장소에 올린다.
+# 필요한 Secret: PUBLIC_DATA_TOKEN — 공개 데이터 저장소에 contents:write
+# 권한이 있는 PAT.
+#
 # 실행 시각은 ECMWF 공개 주기에 맞춘다. ECMWF 0.25° 오픈데이터는 하루 4런
 # (00z/06z/12z/18z)이 초기시각+약 7.8시간에 공개된다(≈01:50/07:50/13:50/19:50
 # UTC), Open-Meteo가 곧 반영. 그래서 두 겹으로 돈다:
@@ -36,9 +42,11 @@ jobs:
       - name: 바람장 수집(배치로 한도 준수)
         run: python3 tool/fetch_wind.py
 
-      - name: 롤링 릴리스에 업로드
+      - name: 공개 데이터 저장소의 롤링 릴리스에 업로드
         uses: softprops/action-gh-release@v2
         with:
+          repository: ${{ vars.PUBLIC_DATA_REPO || 'bisan74-lab/badawindy-data' }}
+          token: ${{ secrets.PUBLIC_DATA_TOKEN }}
           tag_name: wind-data
           name: 바람장 데이터 (자동 갱신)
           body: |
