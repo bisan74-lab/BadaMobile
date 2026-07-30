@@ -24,11 +24,16 @@ jobs:
         run: |
           python3 tool/probe_marine.py \
             "${{ inputs.lat }}" "${{ inputs.lon }}" | tee probe.txt
+      - name: 바람 모델 해역별 비교
+        run: python3 tool/probe_wind_models.py | tee wind.txt
+
       - name: 요약을 실행 결과에 남기기
         if: always()
         run: |
           {
             echo '```'
             cat probe.txt
+            echo
+            cat wind.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
