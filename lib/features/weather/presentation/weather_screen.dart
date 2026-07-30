@@ -10,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/kst.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../../kma_weather/presentation/widgets/weather_icon.dart';
+import '../data/land_mask.dart';
 import '../data/models/marine_weather.dart';
 import '../data/models/wind_field.dart';
 import 'providers.dart';
@@ -1504,6 +1505,13 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   /// 0으로 리셋되면서 보고 있던 날짜 위치가 처음으로 튕겨나가는 문제를 막는다.
   MarineForecast? _lastForecast;
 
+  /// 해안선 폴리곤 기준 육지 판정 캐시. 지점이 바뀔 때만 다시 계산해,
+  /// 슬라이더를 움직일 때마다(= build 재실행마다) 매번 polygon 순회를
+  /// 반복하지 않는다.
+  double? _landCheckLat;
+  double? _landCheckLon;
+  bool _isLand = false;
+
   /// [steps] 중 현재 시각(서울 기준)과 가장 가까운 칸의 인덱스.
   int _closestToNow(List<HourlyMarine> steps) {
     final now = nowKst();
@@ -1573,6 +1581,12 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
   Widget build(BuildContext context) {
     final forecastAsync = ref.watch(marineForecastProvider(widget.location));
     final scheme = Theme.of(context).colorScheme;
+    if (_landCheckLat != widget.location.latitude ||
+        _landCheckLon != widget.location.longitude) {
+      _landCheckLat = widget.location.latitude;
+      _landCheckLon = widget.location.longitude;
+      _isLand = isOnLand(_landCheckLat!, _landCheckLon!);
+    }
     // 흰 박스 대신 어두운 반투명 스크림(윈디식)에 흰 글씨로. 표 안의 기본
     // 글씨색이 지도 위에서 안 보이지 않도록 이 패널만 흰색 텍스트 테마로 감싼다
     // (색칠된 셀 글씨는 셀별로 대비색을 계산하므로 그대로 잘 보인다).
@@ -1750,7 +1764,7 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                         selected: i,
                         nowIndex: nowIdx,
                         controller: _hCtrl,
-                        hasWaveData: forecast.hasWaveData,
+                        hasWaveData: forecast.hasWaveData && !_isLand,
                         onColumnTap: (j) => setState(() => _i = j),
                       ),
                       const SizedBox(height: 4),
