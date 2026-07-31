@@ -54,6 +54,7 @@ String encodeFile({
   List<int>? valid,
   List<double>? lats,
   List<double>? lons,
+  List<int>? stepOffsets,
 }) {
   final pts = latSteps * lonSteps;
   final ub = Int16List(steps * pts);
@@ -76,6 +77,7 @@ String encodeFile({
     if (lons != null) 'lons': lons,
     'start': '2026-07-21T00:00',
     'stepHours': stepHours,
+    if (stepOffsets != null) 'stepOffsets': stepOffsets,
     'steps': steps,
     if (valid != null) 'valid': valid,
     'u': base64Encode(ub.buffer.asUint8List()),
@@ -188,6 +190,55 @@ void main() {
     // 격자점 좌표에서는 보간 없이 그 값 그대로 나와야 한다.
     expect(f0.sample(0, 10)!.$1, closeTo(0, 0.001));
     expect(f0.sample(4, 13)!.$1, closeTo(8, 0.001));
+  });
+
+  test('fmt 3: 비균일 시간축(stepOffsets)을 그대로 스텝 시각으로 쓴다', () {
+    // 앞 구간은 1시간, 뒤는 3시간 간격. stepHours(3)로 균일 복원하면
+    // 앞 구간 시각이 어긋난다(지금 시각이 최대 3시간 전 값으로 보임).
+    const offsets = [0, 1, 2, 3, 6, 9];
+    final json =
+        jsonDecode(
+              encodeFile(
+                latSteps: 2,
+                lonSteps: 2,
+                steps: offsets.length,
+                stepHours: 3,
+                stepOffsets: offsets,
+                u: (s, k) => 1,
+                v: (s, k) => 0,
+              ),
+            )
+            as Map<String, dynamic>;
+
+    final series = parseWindFieldFile(json);
+    final start = series.hourly.first.time;
+    for (var i = 0; i < offsets.length; i++) {
+      expect(
+        series.hourly[i].time.difference(start).inHours,
+        offsets[i],
+        reason: '스텝 $i',
+      );
+    }
+  });
+
+  test('stepOffsets가 없는 구버전 파일은 stepHours로 균일 복원한다', () {
+    final json =
+        jsonDecode(
+              encodeFile(
+                latSteps: 2,
+                lonSteps: 2,
+                steps: 4,
+                stepHours: 3,
+                u: (s, k) => 1,
+                v: (s, k) => 0,
+              ),
+            )
+            as Map<String, dynamic>;
+
+    final series = parseWindFieldFile(json);
+    final start = series.hourly.first.time;
+    expect(series.hourly[1].time.difference(start).inHours, 3);
+    expect(series.hourly[3].time.difference(start).inHours, 9);
   });
 
   test('서버 파일이 200이면 그걸 쓰고, 실패하면 direct로 폴백한다', () async {

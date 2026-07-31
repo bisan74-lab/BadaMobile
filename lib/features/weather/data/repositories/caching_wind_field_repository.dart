@@ -94,6 +94,12 @@ class CachingWindFieldRepository implements WindFieldRepository {
       'start': f0.time.toIso8601String(),
       'hours': n,
       'stepHours': stepHours <= 0 ? 1 : stepHours,
+      // 시간축이 비균일해질 수 있어(앞 구간 1시간·뒤 3시간) 스텝별 실제
+      // 경과 시간을 그대로 담는다. stepHours만으로 복원하면 뒷구간 시각이
+      // 어긋난다. 없으면(구버전 캐시) stepHours로 균일 복원한다.
+      'stepOffsets': [
+        for (final h in series.hourly) h.time.difference(f0.time).inHours,
+      ],
       'minLat': f0.minLat,
       'maxLat': f0.maxLat,
       'minLon': f0.minLon,
@@ -155,11 +161,19 @@ class CachingWindFieldRepository implements WindFieldRepository {
       // 예전 캐시(필드 없음)는 전부 유효한 것으로 취급한다(당시엔 결측
       // 스텝을 아예 잘라내고 저장했으므로 안전한 기본값).
       final validRaw = json['valid'] as List?;
+      // 비균일 시간축(fmt 3+). 없으면 stepHours로 균일 복원(구버전 캐시).
+      final offsetsRaw = json['stepOffsets'] as List?;
       final series = WindFieldSeries(
         hourly: [
           for (var h = 0; h < n; h++)
             WindField(
-              time: start.add(Duration(hours: h * stepHours)),
+              time: start.add(
+                Duration(
+                  hours: offsetsRaw != null && h < offsetsRaw.length
+                      ? (offsetsRaw[h] as num).toInt()
+                      : h * stepHours,
+                ),
+              ),
               minLat: minLat,
               maxLat: maxLat,
               minLon: minLon,

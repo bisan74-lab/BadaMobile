@@ -88,6 +88,18 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
   final lats = latsRaw?.map((e) => (e as num).toDouble()).toList();
   final lons = lonsRaw?.map((e) => (e as num).toDouble()).toList();
 
+  // fmt 3+: 시간축도 비균일이다(앞 48시간은 1시간, 그 뒤는 3시간 간격).
+  // stepOffsets는 start로부터의 경과 시간(시간 단위)이라 그대로 더하면 된다.
+  // 없으면(구버전 파일·캐시) stepHours로 균일 간격을 가정해 재구성한다.
+  final offsetsRaw = json['stepOffsets'] as List?;
+  DateTime timeAt(int s) => start.add(
+    Duration(
+      hours: offsetsRaw != null && s < offsetsRaw.length
+          ? (offsetsRaw[s] as num).toInt()
+          : s * stepHours,
+    ),
+  );
+
   final uBytes = base64Decode(json['u'] as String);
   final vBytes = base64Decode(json['v'] as String);
   final u = uBytes.buffer.asInt16List(uBytes.offsetInBytes, uBytes.length ~/ 2);
@@ -117,7 +129,7 @@ WindFieldSeries parseWindFieldFile(Map<String, dynamic> json) {
     hourly: [
       for (var s = 0; s < steps; s++)
         WindField(
-          time: start.add(Duration(hours: s * stepHours)),
+          time: timeAt(s),
           minLat: minLat,
           maxLat: maxLat,
           minLon: minLon,

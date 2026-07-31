@@ -141,6 +141,51 @@ void main() {
     );
   });
 
+  test('비균일 시간축(앞 1시간·뒤 3시간)도 캐시 왕복에 그대로 보존된다', () async {
+    // 서버 파일이 앞 48시간을 1시간 간격으로 담게 되면서 시간축이 비균일해졌다.
+    // stepHours 하나로 복원하면 뒷구간 시각이 어긋난다.
+    const offsets = [0, 1, 2, 3, 6, 9];
+    const latSteps = OpenMeteoWindFieldRepository.latSteps;
+    const lonSteps = OpenMeteoWindFieldRepository.lonSteps;
+    const pts = latSteps * lonSteps;
+    final mixed = WindFieldSeries(
+      hourly: [
+        for (final h in offsets)
+          WindField(
+            time: DateTime(2026, 7, 22).add(Duration(hours: h)),
+            minLat: 18,
+            maxLat: 57,
+            minLon: 108,
+            maxLon: 148,
+            latSteps: latSteps,
+            lonSteps: lonSteps,
+            u: [for (var k = 0; k < pts; k++) 1.0],
+            v: [for (var k = 0; k < pts; k++) 0.0],
+          ),
+      ],
+    );
+    final cache = await freshCache();
+    final inner = _FakeInner(mixed);
+    final repo = CachingWindFieldRepository(
+      inner: inner,
+      cache: cache,
+      freshFor: const Duration(seconds: -1),
+    );
+    await repo.fetchSeries(hours: 12);
+    inner.series = null;
+    final fromCache = await repo.fetchSeries(hours: 12);
+
+    expect(fromCache.length, offsets.length);
+    final first = fromCache.hourly.first.time;
+    for (var i = 0; i < offsets.length; i++) {
+      expect(
+        fromCache.hourly[i].time.difference(first).inHours,
+        offsets[i],
+        reason: '스텝 $i',
+      );
+    }
+  });
+
   test('캐시도 없이 실패하면 예외를 던진다(상위 합성 폴백으로 넘어감)', () async {
     final cache = await freshCache();
     final inner = _FakeInner(null);

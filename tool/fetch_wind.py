@@ -52,7 +52,13 @@ LON_FOCUS = (122.0, 132.0)
 DENSITY_BOOST = 2.5
 
 FORECAST_DAYS = 16  # Open-Meteo/ECMWF 모델 상한(지도 스크러버 최대치).
-STEP_HOURS = 3  # 3시간 간격으로 솎아 파일 크기를 줄인다(지도 스크러버에 충분).
+# 시간 해상도. 앞 FINE_HOURS 시간은 1시간 간격으로 촘촘히 남기고, 그 뒤는
+# STEP_HOURS 간격으로 솎아 파일 크기를 억제한다. 3시간 간격만 쓰면 "지금"이
+# 최대 3시간 전 값이라 실시간처럼 안 보인다(사용자 요구로 앞 구간만 촘촘히).
+# 앞 48시간 1시간 + 나머지 3시간이면 스텝 수가 128 → 176으로 약 1.4배만 는다.
+STEP_HOURS = 3  # 먼 구간 간격(시간)
+FINE_STEP_HOURS = 1  # 가까운 구간 간격(시간)
+FINE_HOURS = 48  # 이 시간까지는 FINE_STEP_HOURS로 촘촘히 남긴다
 MODEL = "ecmwf_ifs025"  # Windy 기본 레이어와 같은 ECMWF IFS 0.25°.
 
 # 한 요청 좌표 수. 500이면 URL이 8KB를 넘어 414(URI Too Large)로 거부되므로
@@ -163,12 +169,18 @@ def main():
         if end < total:
             time.sleep(SLEEP)
 
-    # 시간축: 첫 지점 기준, 3시간 간격으로 솎는다.
+    # 시간축: 첫 지점 기준. 앞 FINE_HOURS는 1시간, 그 뒤는 STEP_HOURS 간격.
     h0 = results[0].get("hourly") or {}
     all_times = h0.get("time") or []
     if not all_times:
         raise SystemExit("응답에 시간 데이터가 없습니다.")
-    sel = [i for i, t in enumerate(all_times) if _hour_of(t) % STEP_HOURS == 0]
+    # 응답의 hourly는 1시간 간격이므로 인덱스가 곧 시작 기준 경과 시간이다.
+    sel = [
+        i
+        for i, t in enumerate(all_times)
+        if (i < FINE_HOURS and i % FINE_STEP_HOURS == 0)
+        or (i >= FINE_HOURS and _hour_of(t) % STEP_HOURS == 0)
+    ]
 
     # 요청한 기간(forecast_days) 전체를 스텝으로 남긴다 — 최신·최장 실데이터를
     # 우선한다(자르지 않음). 다만 모델(ecmwf_ifs025)이 실제로 예보하지 않는
@@ -209,10 +221,10 @@ def main():
             struct.pack_into("<h", v16, pos, _q(v))
 
     out = {
-        # fmt 2: 격자가 균일 간격이 아닐 수 있어(적응형) 각 축 실제 좌표
-        # 배열(lats/lons)을 담는다. 구버전(fmt 1) 앱도 minLat/maxLat/
-        # latSteps 등 기존 필드는 그대로 있어 최소한 bbox는 맞게 동작한다.
-        "fmt": 2,
+        # fmt 3: 시간축도 비균일(앞 구간 1시간·뒤 3시간)이라 stepOffsets를
+        # 추가로 담는다. fmt 2는 공간 격자만 비균일이었다. 구버전 앱도
+        # 기존 필드가 그대로 있어 최소한 bbox·균일 간격으로는 동작한다.
+        "fmt": 3,
         "generatedAt": _now_kst_iso(),
         "model": MODEL,
         "minLat": MIN_LAT,
@@ -224,7 +236,12 @@ def main():
         "lats": [round(x, 3) for x in lat_axis],
         "lons": [round(x, 3) for x in lon_axis],
         "start": start_time,
+        # 균일 간격 가정용(구버전 앱 폴백). 실제 간격은 아래 stepOffsets가 정확하다.
         "stepHours": STEP_HOURS,
+        # fmt 3: 스텝이 균일 간격이 아니므로 start로부터의 경과 시간(시간 단위)을
+        # 그대로 담는다. 앱은 이게 있으면 이걸 쓰고, 없으면 stepHours로 균일
+        # 재구성한다(구버전 파일·캐시 호환).
+        "stepOffsets": [hi - sel[0] for hi in sel],
         "steps": steps,
         # 스텝별로 모델의 실제 예보 범위 안인지(1) 아닌지(0). 없으면(예전
         # 포맷) 앱이 전부 유효한 것으로 취급한다.
