@@ -371,7 +371,7 @@ class _InfoSection extends StatelessWidget {
     final uri = Uri(
       scheme: 'mailto',
       path: AppInfo.contactEmail,
-      query: 'subject=${Uri.encodeComponent('[바다 윈디] 문의')}',
+      query: 'subject=${Uri.encodeComponent('[바다윈디] 문의')}',
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {

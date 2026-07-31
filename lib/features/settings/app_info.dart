@@ -3,7 +3,7 @@
 class AppInfo {
   const AppInfo._();
 
-  static const appName = '바다 윈디';
+  static const appName = '바다윈디';
   static const appVersion = '0.3.5';
   static const releaseDate = '2026-07-30';
 

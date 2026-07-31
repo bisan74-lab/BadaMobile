@@ -105,7 +105,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('바다 윈디'),
+        title: const Text('바다윈디'),
         actions: const [RegionSelectorAction()],
       ),
       body: ListView(

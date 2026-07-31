@@ -193,7 +193,7 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   정확히 중심을 맞춰 해안선과 정렬된다.
 
 ### features/home — 홈 대시보드
-- AppBar 제목 "바다 윈디" + 우측 `RegionSelectorAction`(현재 지역명 + 지역 선택).
+- AppBar 제목 "바다윈디" + 우측 `RegionSelectorAction`(현재 지역명 + 지역 선택).
 - 상단 바다색 그라디언트 헤더: 물때 요약 + `HomeDateStrip`(좌우 스크롤 날짜 띠, 과거
   2주~미래 2주 총 4주, 선택 시 자동 중앙 스크롤).
 - 날짜별 요약 3종(색상 아이콘 카드): 물때(다음 만조/간조, 오늘이 아니면 그 날짜의

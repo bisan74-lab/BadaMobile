@@ -24,7 +24,7 @@ class BadaMobileApp extends ConsumerWidget {
     final skin = ref.watch(skinProvider);
     final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
-      title: '바다 윈디',
+      title: '바다윈디',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(skin.seed),
       darkTheme: buildDarkTheme(skin.seed),
