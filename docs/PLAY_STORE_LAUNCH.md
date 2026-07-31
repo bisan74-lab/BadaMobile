@@ -24,6 +24,10 @@ Play 개발자 계정은 개인이면 신분증 확인이 필요하고, 승인�
 
 > 두 ID는 구분자가 다르다(`~` vs `/`). 바꿔 넣으면 광고가 안 나온다.
 
+배너 자리는 물때 화면 하단과 설정 화면 하단 두 곳이다. 단위를 **하나만**
+만들어 두 자리가 공유해도 되고, 자리별 수익을 나눠 보고 싶으면 **둘로**
+만들어 각각 다른 Secret에 넣는다(4단계 표 참고).
+
 ## 3. 업로드 키스토어 만들기
 
 로컬 PC(자바 설치된 환경)에서:
@@ -53,7 +57,8 @@ base64 -w0 upload-keystore.jks > keystore.base64.txt   # macOS는 -w0 대신 -b0
 | `ANDROID_KEY_ALIAS` | `upload` (keytool에서 지정한 별칭) |
 | `ANDROID_KEY_PASSWORD` | 키 비밀번호 |
 | `ADMOB_APP_ID` | `ca-app-pub-XXXX~YYYY` |
-| `ADMOB_BANNER_AD_UNIT_ID` | `ca-app-pub-XXXX/YYYY` |
+| `ADMOB_BANNER_AD_UNIT_ID` | 물때 화면 하단 배너 단위 `ca-app-pub-XXXX/YYYY` |
+| `ADMOB_SETTINGS_BANNER_AD_UNIT_ID` | (선택) 설정 화면 하단 배너 단위. 없으면 위 값을 함께 쓴다 |
 | `BADAWINDY_TK` | 공개 데이터 저장소용 PAT (5단계 참고) |
 | `DATA_GO_KR_API_KEY` | (이미 등록돼 있음) |
 

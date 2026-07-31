@@ -42,7 +42,7 @@ class SettingsScreen extends StatelessWidget {
             child: Padding(
               // 물때&날씨 화면의 하단 광고 자리와 같은 좌우/아래 여백.
               padding: EdgeInsets.fromLTRB(12, 8, 10, 8),
-              child: AdPlaceholder(),
+              child: AdPlaceholder(slot: AdSlot.settings),
             ),
           ),
         ],

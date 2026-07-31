@@ -101,7 +101,10 @@ dart format lib test       # 커밋 전 포맷
 - **광고는 부가 기능이라 절대 앱을 막지 않는다**(`core/widgets/ad_placeholder.dart`):
   배너 로드에 실패하거나 광고가 꺼져 있으면 같은 높이의 앱 소개 박스로 조용히
   대체된다 — 이 폴백을 없애면 광고가 없을 때 레이아웃에 빈 칸이 생긴다.
-  광고 ID는 `Env.admobBannerAdUnitId`(dart-define)와 Gradle 환경변수
+  배너 자리는 물때·설정 두 곳이고 `AdSlot`으로 구분해 **화면마다 다른 광고
+  단위**를 쓸 수 있다(설정용을 안 주입하면 물때용으로 폴백한다).
+  광고 ID는 `Env.admobBannerAdUnitId`·`admobSettingsBannerAdUnitId`
+  (dart-define)와 Gradle 환경변수
   `ADMOB_APP_ID`(AndroidManifest 플레이스홀더)로 **빌드 때 주입**하고,
   둘 다 기본값이 구글 공식 **테스트 ID**라 설정 없이 빌드해도 실 수익 계정에
   무효 트래픽이 잡히지 않는다. 실 ID는 저장소에 커밋하지 않는다.

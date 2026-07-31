@@ -175,7 +175,7 @@ class _TideScreenState extends ConsumerState<TideScreen> {
                         : _OutOfRangeCard(mulTtae: mulTtae),
                   ),
                   const SizedBox(height: 8),
-                  const AdPlaceholder(),
+                  const AdPlaceholder(slot: AdSlot.tide),
                 ],
               ),
             ),

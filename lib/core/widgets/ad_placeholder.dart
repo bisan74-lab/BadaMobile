@@ -8,13 +8,30 @@ import '../config/env.dart';
 /// 아예 건드리지 않고, 화면에는 아래 앱 소개 박스가 그대로 나온다.
 bool adsRuntimeEnabled = false;
 
+/// 배너가 붙는 자리. 자리마다 광고 단위를 따로 두면 AdMob 리포트에서 어느
+/// 화면이 얼마나 버는지 나눠 볼 수 있다.
+enum AdSlot {
+  /// 물때 화면 하단.
+  tide,
+
+  /// 설정 화면 하단.
+  settings;
+
+  String get adUnitId => switch (this) {
+    AdSlot.tide => Env.admobBannerAdUnitId,
+    AdSlot.settings => Env.admobSettingsBannerAdUnitId,
+  };
+}
+
 /// 하단 광고 자리. 물때&날씨 화면과 설정 화면이 같은 위젯을 공유한다.
 ///
 /// 배너가 실제로 로드되면 배너를, 그렇지 않으면(광고 비활성·로드 실패·
 /// 오프라인) **같은 높이의 앱 소개 박스**를 보여준다. 광고가 없거나 실패해도
 /// 레이아웃이 흔들리지 않고 빈 칸도 남지 않는다.
 class AdPlaceholder extends StatefulWidget {
-  const AdPlaceholder({super.key});
+  const AdPlaceholder({super.key, required this.slot});
+
+  final AdSlot slot;
 
   /// 배너(320×50)와 기존 소개 박스가 공유하는 높이.
   static const double height = 56;
@@ -34,9 +51,10 @@ class _AdPlaceholderState extends State<AdPlaceholder> {
   }
 
   void _loadBanner() {
-    if (!adsRuntimeEnabled || Env.admobBannerAdUnitId.isEmpty) return;
+    final adUnitId = widget.slot.adUnitId;
+    if (!adsRuntimeEnabled || adUnitId.isEmpty) return;
     final banner = BannerAd(
-      adUnitId: Env.admobBannerAdUnitId,
+      adUnitId: adUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(

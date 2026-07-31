@@ -12,8 +12,12 @@ name: Play Store AAB
 #   ANDROID_KEY_ALIAS         키 별칭(예: upload)
 #   ANDROID_KEY_PASSWORD      키 비밀번호
 #   ADMOB_APP_ID              AdMob 앱 ID (ca-app-pub-XXXX~YYYY)
-#   ADMOB_BANNER_AD_UNIT_ID   배너 광고 단위 ID (ca-app-pub-XXXX/YYYY)
+#   ADMOB_BANNER_AD_UNIT_ID   물때 화면 하단 배너 광고 단위 ID
+#                             (ca-app-pub-XXXX/YYYY)
 #   DATA_GO_KR_API_KEY        공공데이터포털 인증키(기존)
+# 선택 Secret:
+#   ADMOB_SETTINGS_BANNER_AD_UNIT_ID  설정 화면 하단 배너를 별도 단위로 쓸 때.
+#                             없으면 위의 ADMOB_BANNER_AD_UNIT_ID를 함께 쓴다.
 on:
   workflow_dispatch:
 
@@ -83,11 +87,15 @@ jobs:
           # AdMob 앱 ID는 AndroidManifest에 박히므로 Gradle이 환경변수로 읽는다.
           ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
           ADMOB_BANNER_AD_UNIT_ID: ${{ secrets.ADMOB_BANNER_AD_UNIT_ID }}
+          ADMOB_SETTINGS_BANNER_AD_UNIT_ID:
+            ${{ secrets.ADMOB_SETTINGS_BANNER_AD_UNIT_ID }}
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
         run: |
+          # 설정 화면 단위는 선택이다 — 비어 있으면 Env가 물때 단위로 폴백한다.
           flutter build appbundle --release \
             --dart-define=DATA_GO_KR_API_KEY="$DATA_GO_KR_API_KEY" \
-            --dart-define=ADMOB_BANNER_AD_UNIT_ID="$ADMOB_BANNER_AD_UNIT_ID"
+            --dart-define=ADMOB_BANNER_AD_UNIT_ID="$ADMOB_BANNER_AD_UNIT_ID" \
+            --dart-define=ADMOB_SETTINGS_BANNER_AD_UNIT_ID="$ADMOB_SETTINGS_BANNER_AD_UNIT_ID"
 
       - name: 서명 확인
         id: verify

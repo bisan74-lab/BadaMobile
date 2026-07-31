@@ -38,7 +38,7 @@ class Env {
         'main/app_gate.json',
   );
 
-  /// AdMob 배너 광고 단위 ID(하단 광고 자리).
+  /// 물때 화면 하단 배너의 AdMob 광고 단위 ID.
   ///
   /// 기본값은 **구글이 공개한 테스트 광고 단위 ID**다. 그래서 아무 설정 없이
   /// 빌드해도 테스트 광고가 뜨고, 실제 수익 계정에 무효 트래픽이 잡히지 않는다.
@@ -51,6 +51,21 @@ class Env {
     'ADMOB_BANNER_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-3940256099942544/6300978111',
   );
+
+  static const _settingsBannerAdUnitId = String.fromEnvironment(
+    'ADMOB_SETTINGS_BANNER_AD_UNIT_ID',
+  );
+
+  /// 설정 화면 하단 배너의 AdMob 광고 단위 ID.
+  ///
+  /// 화면별로 광고 단위를 나누면 AdMob 리포트에서 어느 자리가 얼마나 버는지
+  /// 따로 볼 수 있다. 주입하지 않으면 [admobBannerAdUnitId]를 그대로 쓰므로,
+  /// 단위를 하나만 만든 경우에도 설정이 필요 없다(광고를 끄려고 빈 값을
+  /// 주입한 경우에도 함께 꺼진다).
+  static String get admobSettingsBannerAdUnitId =>
+      _settingsBannerAdUnitId.isEmpty
+      ? admobBannerAdUnitId
+      : _settingsBannerAdUnitId;
 
   /// 지도용 바람장 격자 데이터(서버가 미리 뽑아 둔 정적 파일) URL.
   ///
