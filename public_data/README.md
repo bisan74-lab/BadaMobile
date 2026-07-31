@@ -25,6 +25,11 @@ badawindy-data    (공개)    이 폴더의 파일 + 바람장 릴리스
    GitHub Settings → Developer settings → Personal access tokens →
    **Fine-grained token** → Repository access: `badawindy-data`만 →
    Permissions: **Contents: Read and write** → 생성 후 값 복사.
+   > 값은 **생성 직후 한 번만** 보인다. `github_pat_`로 시작하는 **93자
+   > 전체**를 복사한다(classic 토큰이면 `ghp_`로 시작하는 40자). 앞부분을
+   > 빼먹거나 잘라 넣으면 워크플로가 `Bad credentials`로 실패한다 —
+   > 실제로 36자만 들어가 한 번 겪었다. 워크플로 첫 단계가 접두사·길이를
+   > 검사해 이 경우 수집 전에 바로 멈추고 알려 준다.
 5. **코드 저장소**(BadaMobile) Settings → Secrets and variables → Actions에
    `BADAWINDY_TK` 이름으로 그 PAT를 등록한다.
    저장소 이름을 다르게 지었다면 같은 화면 **Variables** 탭에
