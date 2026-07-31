@@ -43,6 +43,9 @@ jobs:
 
       # 스토어 제출용 빌드는 서명·광고 설정이 하나라도 빠지면 의미가 없다.
       # 조용히 debug 키/테스트 광고로 빌드되는 대신 여기서 바로 실패시킨다.
+      # 있는지뿐 아니라 **형태**도 본다 — 광고 ID는 앱 ID(`~`)와 광고 단위
+      # ID(`/`)의 앞부분이 같아 바꿔 넣기 쉬운데, 그러면 빌드는 성공하고
+      # 광고만 안 나와서 원인을 찾기 어렵다. 값은 출력하지 않는다.
       - name: 필수 Secret 확인
         env:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -51,17 +54,51 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
           ADMOB_BANNER_AD_UNIT_ID: ${{ secrets.ADMOB_BANNER_AD_UNIT_ID }}
+          ADMOB_SETTINGS_BANNER_AD_UNIT_ID:
+            ${{ secrets.ADMOB_SETTINGS_BANNER_AD_UNIT_ID }}
         run: |
           missing=""
           for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD \
                       ADMOB_APP_ID ADMOB_BANNER_AD_UNIT_ID; do
-            [ -z "${!name}" ] && missing="$missing $name"
+            if [ -z "${!name}" ]; then
+              missing="$missing $name"
+              echo "  $name: ❌ 없음"
+            else
+              echo "  $name: ✅ 있음"
+            fi
           done
+          if [ -n "$ADMOB_SETTINGS_BANNER_AD_UNIT_ID" ]; then
+            echo "  ADMOB_SETTINGS_BANNER_AD_UNIT_ID: ✅ 있음(설정 화면 별도 단위)"
+          else
+            echo "  ADMOB_SETTINGS_BANNER_AD_UNIT_ID: — 없음(선택. 물때 단위를 함께 씀)"
+          fi
           if [ -n "$missing" ]; then
             echo "::error::스토어 제출용 빌드에 필요한 Secret이 없습니다:$missing"
             echo "워크플로 파일 상단 주석의 Secret 목록을 참고해 등록한 뒤 다시 실행하세요."
             exit 1
           fi
+
+          # 광고 ID 형태 검사: 앱 ID는 물결(~), 광고 단위 ID는 슬래시(/).
+          bad=""
+          case "$ADMOB_APP_ID" in
+            ca-app-pub-*~*) ;;
+            *) bad="$bad ADMOB_APP_ID(물결 ~ 가 있는 앱 ID여야 함)" ;;
+          esac
+          for name in ADMOB_BANNER_AD_UNIT_ID ADMOB_SETTINGS_BANNER_AD_UNIT_ID; do
+            v="${!name}"
+            [ -z "$v" ] && continue
+            case "$v" in
+              ca-app-pub-*/*) ;;
+              *) bad="$bad $name(슬래시 / 가 있는 광고 단위 ID여야 함)" ;;
+            esac
+          done
+          if [ -n "$bad" ]; then
+            echo "::error::광고 ID 형태가 잘못되었습니다:$bad"
+            echo "AdMob에서 앱 ID(ca-app-pub-…~…)와 광고 단위 ID(ca-app-pub-…/…)를"
+            echo "서로 바꿔 넣지 않았는지 확인하세요."
+            exit 1
+          fi
+          echo "광고 ID 형태 정상(앱 ID는 ~, 광고 단위는 /)"
 
       - name: 업로드 키스토어 복원
         env:
