@@ -54,7 +54,7 @@ base64 -w0 upload-keystore.jks > keystore.base64.txt   # macOS는 -w0 대신 -b0
 | `ANDROID_KEY_PASSWORD` | 키 비밀번호 |
 | `ADMOB_APP_ID` | `ca-app-pub-XXXX~YYYY` |
 | `ADMOB_BANNER_AD_UNIT_ID` | `ca-app-pub-XXXX/YYYY` |
-| `PUBLIC_DATA_TOKEN` | 공개 데이터 저장소용 PAT (5단계 참고) |
+| `BADAWINDY_TK` | 공개 데이터 저장소용 PAT (5단계 참고) |
 | `DATA_GO_KR_API_KEY` | (이미 등록돼 있음) |
 
 ## 5. 공개 데이터 저장소 만들기 (개인정보처리방침 + 바람장)
@@ -71,7 +71,7 @@ base64 -w0 upload-keystore.jks > keystore.base64.txt   # macOS는 -w0 대신 -b0
 3. 그 저장소 Settings → Pages → Source: `main` / `/ (root)` → Save
    → `https://bisan74-lab.github.io/badawindy-data/privacy-policy.html`
 4. `badawindy-data`에 **Contents: Read and write** 권한만 가진 fine-grained PAT 발급
-5. 이 저장소 Secret에 `PUBLIC_DATA_TOKEN`으로 등록(4단계 표에도 포함)
+5. 이 저장소 Secret에 `BADAWINDY_TK`로 등록(4단계 표에도 포함)
 6. Actions → **Wind data refresh** 수동 실행 → 바람장이 공개 저장소에 올라오는지 확인
 
 > Play Console에 등록할 개인정보처리방침 URL은 3번에서 나온 주소이고,

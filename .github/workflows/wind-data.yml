@@ -7,8 +7,8 @@ name: Wind data refresh
 # **업로드 대상은 이 저장소가 아니라 공개 데이터 저장소다.** 코드 저장소는
 # 비공개라 릴리스 자산을 앱이 익명으로 못 받는다(인증 필요 → 404 → 합성
 # 데이터로 떨어짐). 그래서 기상 데이터만 공개 저장소에 올린다.
-# 필요한 Secret: PUBLIC_DATA_TOKEN — 공개 데이터 저장소에 contents:write
-# 권한이 있는 PAT.
+# 필요한 Secret: BADAWINDY_TK — 공개 데이터 저장소에 contents:write 권한이
+# 있는 PAT(fine-grained). 예전 이름 PUBLIC_DATA_TOKEN도 폴백으로 받는다.
 #
 # 실행 시각은 ECMWF 공개 주기에 맞춘다. ECMWF 0.25° 오픈데이터는 하루 4런
 # (00z/06z/12z/18z)이 초기시각+약 7.8시간에 공개된다(≈01:50/07:50/13:50/19:50
@@ -46,7 +46,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           repository: ${{ vars.PUBLIC_DATA_REPO || 'bisan74-lab/badawindy-data' }}
-          token: ${{ secrets.PUBLIC_DATA_TOKEN }}
+          token: ${{ secrets.BADAWINDY_TK || secrets.PUBLIC_DATA_TOKEN }}
           tag_name: wind-data
           name: 바람장 데이터 (자동 갱신)
           body: |

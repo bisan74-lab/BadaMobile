@@ -26,7 +26,7 @@ badawindy-data    (공개)    이 폴더의 파일 + 바람장 릴리스
    **Fine-grained token** → Repository access: `badawindy-data`만 →
    Permissions: **Contents: Read and write** → 생성 후 값 복사.
 5. **코드 저장소**(BadaMobile) Settings → Secrets and variables → Actions에
-   `PUBLIC_DATA_TOKEN` 이름으로 그 PAT를 등록한다.
+   `BADAWINDY_TK` 이름으로 그 PAT를 등록한다.
    저장소 이름을 다르게 지었다면 같은 화면 **Variables** 탭에
    `PUBLIC_DATA_REPO` = `소유자/저장소이름` 도 함께 등록한다.
 6. 코드 저장소 Actions → **Wind data refresh** 를 수동 실행해,
