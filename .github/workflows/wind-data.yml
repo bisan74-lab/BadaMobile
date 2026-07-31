@@ -44,6 +44,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 수집에 10~15분이 걸리므로, 업로드 토큰이 없으면 **시작하자마자** 멈춘다.
+      # (예전엔 다 받아놓고 마지막 업로드에서 "Parameter token is required"로
+      #  실패해 15분을 버렸다.)
+      - name: 업로드 토큰 확인
+        env:
+          TOKEN: ${{ secrets.BADAWINDY_TK || secrets.PUBLIC_DATA_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::공개 데이터 저장소 업로드 토큰이 비어 있습니다."
+            echo "다음을 확인하세요:"
+            echo " 1) 등록 위치: 이 저장소(BadaMobile)의"
+            echo "    Settings → Secrets and variables → Actions → [Secrets] 탭"
+            echo "    (badawindy-data 쪽에 넣으면 이 워크플로에서 못 봅니다)"
+            echo " 2) 탭 확인: [Variables]가 아니라 반드시 [Secrets] 탭"
+            echo " 3) 이름: BADAWINDY_TK (대소문자·오타 확인)"
+            echo " 4) Environment secret으로 넣었다면 repository secret으로 옮기세요"
+            exit 1
+          fi
+          echo "토큰 확인됨(길이 ${#TOKEN}자)."
+
       - name: 바람장 수집(배치로 한도 준수)
         run: python3 tool/fetch_wind.py
 
