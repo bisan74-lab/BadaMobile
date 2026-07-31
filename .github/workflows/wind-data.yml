@@ -49,20 +49,33 @@ jobs:
       #  실패해 15분을 버렸다.)
       - name: 업로드 토큰 확인
         env:
-          TOKEN: ${{ secrets.BADAWINDY_TK || secrets.PUBLIC_DATA_TOKEN }}
+          # 등록된 Secret 이름이 확실하지 않아 흔한 후보를 모두 본다.
+          # 값은 출력하지 않고 **어떤 이름이 채워졌는지만** 로그에 남긴다
+          # (Secret 이름 자체는 비밀이 아니다).
+          A: ${{ secrets.BADAWINDY_TK }}
+          B: ${{ secrets.BADAWINDY_TOKEN }}
+          C: ${{ secrets.BADAWINDY_DATA_TOKEN }}
+          D: ${{ secrets.BADAWINDY_PAT }}
+          E: ${{ secrets.PUBLIC_DATA_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
+          pick=""; name=""
+          for pair in "BADAWINDY_TK:$A" "BADAWINDY_TOKEN:$B" \
+                      "BADAWINDY_DATA_TOKEN:$C" "BADAWINDY_PAT:$D" \
+                      "PUBLIC_DATA_TOKEN:$E"; do
+            n="${pair%%:*}"; v="${pair#*:}"
+            if [ -n "$v" ]; then pick="$v"; name="$n"; break; fi
+          done
+          if [ -z "$pick" ]; then
             echo "::error::공개 데이터 저장소 업로드 토큰이 비어 있습니다."
-            echo "다음을 확인하세요:"
-            echo " 1) 등록 위치: 이 저장소(BadaMobile)의"
-            echo "    Settings → Secrets and variables → Actions → [Secrets] 탭"
-            echo "    (badawindy-data 쪽에 넣으면 이 워크플로에서 못 봅니다)"
-            echo " 2) 탭 확인: [Variables]가 아니라 반드시 [Secrets] 탭"
-            echo " 3) 이름: BADAWINDY_TK (대소문자·오타 확인)"
-            echo " 4) Environment secret으로 넣었다면 repository secret으로 옮기세요"
+            echo "확인한 이름: BADAWINDY_TK, BADAWINDY_TOKEN, BADAWINDY_DATA_TOKEN,"
+            echo "             BADAWINDY_PAT, PUBLIC_DATA_TOKEN — 전부 비어 있음."
+            echo "이 저장소(BadaMobile) → Settings → Secrets and variables →"
+            echo "Actions → [Secrets] 탭 → Repository secrets 에 등록된"
+            echo "**정확한 이름**을 확인해 위 목록 중 하나로 맞춰 주세요."
             exit 1
           fi
-          echo "토큰 확인됨(길이 ${#TOKEN}자)."
+          # 값은 어디에도 넘기지 않는다(업로드 단계가 직접 secrets를 읽는다).
+          echo "사용할 Secret: $name (길이 ${#pick}자)"
 
       - name: 바람장 수집(배치로 한도 준수)
         run: python3 tool/fetch_wind.py
@@ -71,7 +84,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           repository: ${{ vars.PUBLIC_DATA_REPO || 'bisan74-lab/badawindy-data' }}
-          token: ${{ secrets.BADAWINDY_TK || secrets.PUBLIC_DATA_TOKEN }}
+          token: ${{ secrets.BADAWINDY_TK || secrets.BADAWINDY_TOKEN
+            || secrets.BADAWINDY_DATA_TOKEN || secrets.BADAWINDY_PAT
+            || secrets.PUBLIC_DATA_TOKEN }}
           tag_name: wind-data
           name: 바람장 데이터 (자동 갱신)
           body: |
