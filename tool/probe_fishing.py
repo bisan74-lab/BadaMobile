@@ -32,13 +32,14 @@ KEEP = {
 }
 
 
-def fetch(ymd: str, rows: int, page: int = 1) -> tuple[float, int, bytes]:
+def fetch(ymd: str, rows: int, page: int = 1,
+          gubun: str = '갯바위') -> tuple[float, int, bytes]:
     """(경과초, HTTP 상태, 본문)"""
     q = urllib.parse.urlencode({
         'serviceKey': KEY,
         'type': 'json',
         'reqDate': ymd,
-        'gubun': '갯바위',
+        'gubun': gubun,
         'pageNo': str(page),
         'numOfRows': str(rows),
     })
@@ -65,8 +66,11 @@ def main() -> int:
         return 1
 
     ymd = time.strftime('%Y%m%d')
-    if os.environ.get('PROBE_MODE') == 'limit':
+    mode = os.environ.get('PROBE_MODE')
+    if mode == 'limit':
         return probe_limit(ymd)
+    if mode == 'gubun':
+        return probe_gubun(ymd)
     print(f'조회 날짜 {ymd}\n')
 
     print('== 앱과 같은 요청(numOfRows=3000)을 5번 ==')
@@ -190,6 +194,47 @@ def probe_limit(ymd: str) -> int:
     print(f'  쓰는 필드만 남긴 JSON  {len(raw):>9,}B')
     print(f'  gzip                  {len(gz):>9,}B   '
           f'← 앱이 받을 양(지금은 {page}번 요청 {elapsed:.0f}초)')
+    return 0
+
+
+def probe_gubun(ymd: str) -> int:
+    """구분(gubun)마다 어떤 어종·포인트가 오는지 본다.
+
+    앱은 지금 '갯바위'만 받는다. 쭈꾸미·갑오징어·문어처럼 갯바위가 아닌
+    낚시의 어종이 다른 구분에 있는지 확인하려는 것이다.
+    """
+    print(f'조회 날짜 {ymd}\n')
+    candidates = [
+        '갯바위', '방파제', '선상', '선상낚시', '백사장', '갯벌',
+        '좌대', '선박', '방파제/좌대', '',
+    ]
+    for gubun in candidates:
+        dt, status, body = fetch(ymd, 300, 1, gubun)
+        label = gubun or '(빈값)'
+        if status != 200:
+            print(f'  {label:12} {dt:5.2f}초  요청 실패')
+            time.sleep(1)
+            continue
+        try:
+            items = items_of(body)
+        except Exception as e:  # noqa: BLE001
+            print(f'  {label:12} {dt:5.2f}초  파싱 실패 {e}')
+            time.sleep(1)
+            continue
+        if not items:
+            head = body[:120].decode(errors='replace')
+            print(f'  {label:12} {dt:5.2f}초  0건  {head}')
+            time.sleep(1)
+            continue
+        doc = json.loads(body)
+        doc = doc.get('response', doc)
+        total = doc.get('body', {}).get('totalCount')
+        species = sorted({str(i.get('seafsTgfshNm')) for i in items})
+        points = {str(i.get('seafsPstnNm')) for i in items}
+        print(f'  {label:12} {dt:5.2f}초  totalCount={total} '
+              f'포인트 {len(points)}곳')
+        print(f'               어종: {", ".join(species)}')
+        time.sleep(1)
     return 0
 
 
