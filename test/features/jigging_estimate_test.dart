@@ -163,11 +163,11 @@ void main() {
     });
   });
 
-  group('"매우나쁨"은 날씨가 나쁠 때만', () {
-    test('조류가 아무리 나빠도 잔잔하면 "나쁨"에서 멈춘다', () {
+  group('"매우나쁨"은 성수기엔 안 나온다', () {
+    test('9~11월엔 조류가 아무리 세도 잔잔하면 "나쁨"에서 멈춘다', () {
       // 제철엔 물이 많이 흘러도 잡힌다 — 조류 하나로 바닥을 치면 안 된다.
       for (final s in estimatedSpeciesCatalog) {
-        for (var m = 1; m <= 12; m++) {
+        for (var m = 9; m <= 11; m++) {
           for (final tide in [0.0, 0.25, 0.5, 0.75, 1.0]) {
             expect(
               estimateJiggingGrade(species: s, tideStrength: tide, month: m),
@@ -209,20 +209,49 @@ void main() {
       }
     });
 
-    test('성수기 서해에서는 어떤 물때도 "나쁨" 아래로 안 간다', () {
-      for (final s in ['쭈꾸미', '갑오징어']) {
-        for (final tide in [0.0, 0.3, 0.6, 1.0]) {
+    test('성수기 등급 분포가 목표대로 나온다', () {
+      // 이 앱은 약간의 희망을 주자는 방침이라 목표 분포를 못박는다.
+      // 서해 기준 15개 물때가 놓이는 상대 세기(사리를 축으로 좌우 대칭이라
+      // 8개 값 중 사리만 홀수, 나머지는 두 칸씩).
+      const strengths = <double>[
+        0.011, 0.011, // 조금·무시
+        0.096, 0.096, // 1물·13물
+        0.250, 0.250, // 2물·12물
+        0.448, 0.448, // 3물·11물
+        0.655, 0.655, // 4물·10물
+        0.835, 0.835, // 5물·9물
+        0.957, 0.957, // 6물·8물
+        1.000, // 7물(사리)
+      ];
+      Map<FishingGrade, int> distribution(String s, int month) {
+        final counts = <FishingGrade, int>{};
+        for (final t in strengths) {
           final g = estimateJiggingGrade(
             species: s,
-            tideStrength: tide,
-            month: 10,
+            tideStrength: t,
+            month: month,
           );
-          expect(
-            g.score,
-            greaterThanOrEqualTo(FishingGrade.normal.score),
-            reason: '$s 10월 조류 $tide: ${g.label}',
-          );
+          counts[g] = (counts[g] ?? 0) + 1;
         }
+        return counts;
+      }
+
+      const peak = {
+        FishingGrade.veryGood: 2,
+        FishingGrade.good: 4,
+        FishingGrade.normal: 6,
+        FishingGrade.bad: 3,
+      };
+      const shoulder = {
+        FishingGrade.veryGood: 2,
+        FishingGrade.good: 2,
+        FishingGrade.normal: 8,
+        FishingGrade.bad: 3,
+      };
+      for (final s in estimatedSpeciesCatalog) {
+        expect(distribution(s, 9), peak, reason: '$s 9월');
+        expect(distribution(s, 10), shoulder, reason: '$s 10월');
+        expect(distribution(s, 11), shoulder, reason: '$s 11월');
       }
     });
   });
@@ -242,43 +271,50 @@ void main() {
       }
     });
 
-    test('쭈꾸미·갑오징어는 9·10월이 최고이고 11월에 급감한다', () {
-      // 사용자 실사용 경험: 9월 금어기 해제 직후부터 잘 나오고 10월까지
-      // 이어지다가, 11월엔 개체수가 거의 없어진다.
+    test('9월이 가장 높고 10·11월이 그다음이다', () {
+      // 9월 금어기 해제 직후가 최고. 10·11월은 한 단계 낮은 같은 값.
       for (final s in ['쭈꾸미', '갑오징어']) {
         final aug = calmScore(s, 0.05, 8);
         final sep = calmScore(s, 0.05, 9);
         final oct = calmScore(s, 0.05, 10);
         final nov = calmScore(s, 0.05, 11);
         expect(sep, greaterThan(aug * 1.5), reason: '$s: 9월 ≫ 8월(금어기 해제)');
-        expect((sep - oct).abs(), lessThan(0.05), reason: '$s: 9월 ≈ 10월');
-        expect(nov, lessThan(oct * 0.7), reason: '$s: 11월 ≪ 10월(개체수 급감)');
+        expect(sep, greaterThan(oct), reason: '$s: 9월 > 10월');
+        expect(oct, closeTo(nov, 0.001), reason: '$s: 10월 = 11월');
       }
     });
 
     test('비수기에도 물때 차이가 등급으로 드러난다', () {
-      // 제보 화면(8월, 조금)에서 세 어종이 모두 매우나쁨이던 문제.
+      // 제보 화면(8월)에서 세 어종이 물때와 무관하게 전부 매우나쁨이던 문제.
+      // 어종마다 좋아하는 물때가 다르므로, 특정 물때가 아니라 **한 달 안에서
+      // 등급이 갈리는지**를 본다.
+      const strengths = <double>[0.011, 0.096, 0.25, 0.448, 0.655, 0.835, 1.0];
       for (final s in estimatedSpeciesCatalog) {
-        final slack = estimateJiggingGrade(
-          species: s,
-          tideStrength: 0.02,
-          month: 8,
+        final grades = {
+          for (final t in strengths)
+            estimateJiggingGrade(species: s, tideStrength: t, month: 8),
+        };
+        expect(
+          grades.length,
+          greaterThanOrEqualTo(2),
+          reason: '$s 8월: 물때가 달라도 전부 ${grades.first.label}',
         );
-        final rush = estimateJiggingGrade(
-          species: s,
-          tideStrength: 1.0,
-          month: 8,
-        );
-        expect(slack, isNot(FishingGrade.veryBad), reason: '$s 8월 조금');
-        expect(slack.score, greaterThan(rush.score), reason: '$s 8월');
+        // 그 어종이 가장 좋아하는 물때는 바닥이 아니어야 한다.
+        final best = strengths
+            .map(
+              (t) =>
+                  estimateJiggingScore(species: s, tideStrength: t, month: 8),
+            )
+            .reduce((a, b) => a > b ? a : b);
+        expect(best, greaterThan(0.15), reason: '$s 8월: 최적 물때도 바닥');
       }
     });
   });
 
   group('조류 선호', () {
     test('쭈꾸미는 물이 느린 날이 좋다', () {
-      final slow = calmScore('쭈꾸미', 0.15, 10);
-      final fast = calmScore('쭈꾸미', 0.85, 10);
+      final slow = calmScore('쭈꾸미', 0.15, 9); // 성수기
+      final fast = calmScore('쭈꾸미', 0.85, 9);
       expect(slow, greaterThan(fast));
       expect(slow, greaterThan(0.7));
     });

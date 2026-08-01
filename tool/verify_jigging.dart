@@ -5,18 +5,18 @@
 // 전국 대표 지점(사리 조차가 크게 다른 곳들) × 15개 물때 × 12개월을 훑어
 // 등급 분포를 뽑고, 아래 불변식을 확인한다. 하나라도 깨지면 종료 코드 1.
 //
-//   1. 물때 변별력 — 성수기(10월) 조류를 뚜렷하게 타는 쭈꾸미·갑오징어가
-//      물때에 따라 최소 2단계(조차가 큰 서해는 3단계)로 갈려야 한다.
-//      (예전엔 절대 조차로 정규화해 서해가 전 물때 "매우나쁨" 한 칸이었다.)
-//   2. **"매우나쁨"은 날씨가 나쁠 때만** — 바람·파고가 잔잔하거나 정보가 없으면
-//      어떤 지점·달·물때·어종도 매우나쁨이 나오면 안 된다. 반대로 강풍+높은
+//   1. **등급 분포**(서해, 15개 물때, 바람 잔잔/없음) — 이 앱은 약간의 희망을
+//      주자는 방침이라 목표 분포를 직접 못박는다.
+//        · 9월(성수기)  매우좋음 2(13%) 좋음 4(27%) 보통 6(40%) 나쁨 3(20%)
+//        · 10·11월      매우좋음 2(13%) 좋음 2(13%) 보통 8(53%) 나쁨 3(20%)
+//      (물때는 사리를 축으로 좌우 대칭이라 등급이 **2칸 단위**로만 움직인다.
+//       그래서 최소 조정폭이 13%다 — 5%씩 옮기는 건 물때 구조상 불가능하다.)
+//   2. "매우나쁨"은 성수기(9~11월)에 잔잔하면 나오지 않는다. 반대로 강풍+높은
 //      파고에서는 나와야 한다(안 나오면 경고 기능이 죽은 것).
-//   3. 조차가 작은 곳(동해권)도 전 물때 "매우좋음"이면 안 된다
-//      — 1의 반대 방향 실패(세기 상한이 최적에 눌러앉는 경우).
+//   3. 조차가 작은 곳(동해권)도 전 물때 "매우좋음"이면 안 된다.
 //   4. 어종별 조류 선호 방향 — 쭈꾸미는 조금 > 사리, 갑오징어는
 //      약한중간 > 조금 > 중간 > 사리, 셋 다 조금 > 사리.
-//   5. 제철 흐름(쭈꾸미·갑오징어) — 9월(금어기 해제) ≈ 10월 > 8월,
-//      그리고 11월은 10월보다 확실히 낮다(개체수 급감).
+//   5. 제철 흐름 — 9월(금어기 해제)이 8월보다 확실히 높고 10·11월보다 높다.
 //   6. 바람 정보가 없으면 감점이 없다 — null로 넘긴 결과가 "잔잔한 날"과 같다.
 //   7. 실측 대조 — 사용자 제보 사례(무창포 2026-08-20 조금, 조차 376cm)에서
 //      쭈꾸미·갑오징어가 "매우나쁨"으로 떨어지지 않는다.
@@ -89,60 +89,110 @@ void check(bool ok, String what) {
   if (!ok) failures.add(what);
 }
 
-void main() {
-  // ── 1. 성수기(10월) 등급표 ────────────────────────────────────────────
-  print('■ 10월 물때별 추정 등급 (바람 정보 없음 = 물때·제철만)\n');
-  for (final site in sites) {
-    final muls = allMulTtae(site.system);
-    print('· ${site.name} (사리 조차 ${site.springRangeCm.toInt()}cm)');
-    for (final species in estimatedSpeciesCatalog) {
-      final row = [for (final m in muls) gradeFor(species, site, m, 10)];
-      final cells = [
-        for (var i = 0; i < muls.length; i++)
-          '${label(muls[i])}:${row[i].label}',
-      ];
-      print('    ${species.padRight(5)} ${cells.join(' ')}');
+/// 15개 물때를 물때 순서가 아니라 **사리에서 먼 순**(조금 → 사리)으로 정렬해
+/// 보여준다. 등급이 어떻게 갈리는지 한눈에 보려는 것.
+List<MulTtae> byStrength(MulTtaeSystem system) =>
+    allMulTtae(system)
+      ..sort((a, b) => springNeapPhase(a).compareTo(springNeapPhase(b)));
 
-      // 불변식 1: 성수기엔 물때로 등급이 갈려야 한다. 조차가 큰 서해는
-      // 위상 전 구간을 쓰므로 3단계, 조차가 작은 곳은 2단계까지 요구한다.
-      // (문어는 원래 조류를 크게 안 타므로 뺀다.)
-      if (species != '문어') {
-        final want = site.springRangeCm >= 450 ? 3 : 2;
+/// 목표 등급 분포(칸 수). 물때는 사리를 축으로 좌우 대칭이라 2칸 단위로만
+/// 움직인다 — 사리 1칸만 홀수다.
+const _wantPeak = {
+  FishingGrade.veryGood: 2,
+  FishingGrade.good: 4,
+  FishingGrade.normal: 6,
+  FishingGrade.bad: 3,
+  FishingGrade.veryBad: 0,
+};
+const _wantShoulder = {
+  FishingGrade.veryGood: 2,
+  FishingGrade.good: 2,
+  FishingGrade.normal: 8,
+  FishingGrade.bad: 3,
+  FishingGrade.veryBad: 0,
+};
+
+void main() {
+  // ── 1. 등급 분포 (서해 기준) ─────────────────────────────────────────
+  for (final (month, want, title) in [
+    (9, _wantPeak, '9월 (성수기)'),
+    (10, _wantShoulder, '10월'),
+    (11, _wantShoulder, '11월'),
+  ]) {
+    print('■ $title 물때별 추정 등급 — 무창포(서해), 바람 잔잔/정보 없음\n');
+    for (final species in estimatedSpeciesCatalog) {
+      final muls = byStrength(MulTtaeSystem.west7);
+      final row = [for (final m in muls) gradeFor(species, sites[1], m, month)];
+      print(
+        '    ${species.padRight(5)} '
+        '${[for (var i = 0; i < muls.length; i++) '${label(muls[i])}:${row[i].label}'].join(' ')}',
+      );
+      final counts = <FishingGrade, int>{};
+      for (final g in row) {
+        counts[g] = (counts[g] ?? 0) + 1;
+      }
+      print(
+        '           분포 '
+        '${[for (final g in FishingGrade.values.reversed) '${g.label} ${counts[g] ?? 0}칸(${(((counts[g] ?? 0) / 15) * 100).round()}%)'].join(' · ')}',
+      );
+      for (final g in FishingGrade.values) {
         check(
-          row.toSet().length >= want,
-          '${site.name} 10월 $species: 물때 변별력 부족 '
-          '(${row.toSet().map((g) => g.label).join('/')})',
+          (counts[g] ?? 0) == want[g],
+          '$month월 $species ${g.label}: ${counts[g] ?? 0}칸 (목표 ${want[g]}칸)',
         );
       }
     }
     print('');
   }
 
-  // ── 2·3. "매우나쁨"은 날씨가 나쁠 때만 ───────────────────────────────
+  // ── 1b. 다른 지점에서도 물때로 등급이 갈린다 ─────────────────────────
+  print('■ 9월 다른 지점 (조차가 작을수록 후하게 나온다)\n');
+  for (final site in sites) {
+    final muls = byStrength(site.system);
+    print('· ${site.name} (사리 조차 ${site.springRangeCm.toInt()}cm)');
+    for (final species in estimatedSpeciesCatalog) {
+      final row = [for (final m in muls) gradeFor(species, site, m, 9)];
+      print(
+        '    ${species.padRight(5)} '
+        '${[for (var i = 0; i < muls.length; i++) '${label(muls[i])}:${row[i].label}'].join(' ')}',
+      );
+      if (species != '문어') {
+        check(
+          row.toSet().length >= 2,
+          '${site.name} 9월 $species: 물때로 등급이 하나도 안 갈린다',
+        );
+      }
+    }
+    print('');
+  }
+
+  // ── 2·3. 성수기엔 "매우나쁨"이 안 나온다 ─────────────────────────────
   for (final site in sites) {
     for (final species in estimatedSpeciesCatalog) {
       for (var month = 1; month <= 12; month++) {
         for (final m in allMulTtae(site.system)) {
-          // 바람 정보가 없을 때(= 물때·제철만)와 잔잔할 때는 아무리 나빠도
-          // "나쁨"에서 멈춰야 한다.
-          check(
-            gradeFor(species, site, m, month) != FishingGrade.veryBad,
-            '${site.name} $month월 ${label(m)} $species: 날씨가 나쁘지도 않은데 '
-            '"매우나쁨"',
-          );
-          check(
-            gradeFor(
-                  species,
-                  site,
-                  m,
-                  month,
-                  windMs: 2,
-                  gustMs: 4,
-                  waveM: 0.3,
-                ) !=
-                FishingGrade.veryBad,
-            '${site.name} $month월 ${label(m)} $species: 잔잔한 날인데 "매우나쁨"',
-          );
+          // 9~11월엔 바람 정보가 없거나 잔잔하면 "나쁨"에서 멈춰야 한다.
+          if (month >= 9 && month <= 11) {
+            check(
+              gradeFor(species, site, m, month) != FishingGrade.veryBad,
+              '${site.name} $month월 ${label(m)} $species: 성수기에 날씨도 '
+              '나쁘지 않은데 "매우나쁨"',
+            );
+            check(
+              gradeFor(
+                    species,
+                    site,
+                    m,
+                    month,
+                    windMs: 2,
+                    gustMs: 4,
+                    waveM: 0.3,
+                  ) !=
+                  FishingGrade.veryBad,
+              '${site.name} $month월 ${label(m)} $species: 성수기 잔잔한 날인데 '
+              '"매우나쁨"',
+            );
+          }
         }
         final row = [
           for (final m in allMulTtae(site.system))
@@ -234,13 +284,10 @@ void main() {
       score(s, jogeum, 9) > score(s, jogeum, 8) * 1.5,
       '$s: 9월이 8월보다 확실히 높아야 한다(금어기 해제)',
     );
+    check(score(s, jogeum, 9) > score(s, jogeum, 10), '$s: 9월이 10월보다 높아야 한다');
     check(
-      (score(s, jogeum, 9) - score(s, jogeum, 10)).abs() < 0.05,
-      '$s: 9월과 10월이 비슷해야 한다',
-    );
-    check(
-      score(s, jogeum, 11) < score(s, jogeum, 10) * 0.7,
-      '$s: 11월은 10월보다 확실히 낮아야 한다(개체수 급감)',
+      (score(s, jogeum, 10) - score(s, jogeum, 11)).abs() < 0.001,
+      '$s: 10월과 11월은 같은 단계여야 한다',
     );
   }
 
