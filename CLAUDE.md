@@ -51,6 +51,19 @@ dart format lib test       # 커밋 전 포맷
   지나도 같은 위치는 같은 방식으로만 흔들려 지글거리지 않는다. 강도를
   바꾸려면 `_turbNoiseFreq`(소용돌이 크기)·`_turbMaxWarpDeg`(최대 뒤틀림)를
   조정한다.
+- **홈·낚시정보 카드의 예보도 서버 파일 우선**
+  (`features/weather/.../github_point_forecast_repository.dart`):
+  `.github/workflows/point-forecast.yml` → `tool/fetch_points.py`가 3시간마다
+  전국 지역(앱 `sample_locations.dart`를 파이썬이 그대로 읽는다)을 Open-Meteo
+  다지점 요청 4번으로 모아 롤링 릴리스 `point-forecast`의
+  `point_forecast.json.gz`(약 100KB)로 올린다. `OpenMeteoMarineRepository`는
+  **지역 하나당 요청이 5번**(WAM 총파고·WAM 너울·GFS·수온·육상예보) 나가서
+  새 지역마다 1~2초가 걸렸는데, 두 화면이 쓰는 건 날짜별 대표값 하나씩이라
+  3시간 간격 파일이면 충분하다. **상세 예보 화면(`marineForecastProvider`)은
+  이 파일을 쓰지 않는다** — 너울·파력이 필요하고 정밀도도 중요해서 직접
+  호출을 유지한다. 파일에 없는 지역·다운로드 실패는 직접 호출로 폴백한다.
+  값이 원본과 맞는지는 `tool/verify_points.py`가 표본 10곳을 같은 시각
+  Open-Meteo와 대조해 확인하며, 수집 워크플로가 업로드 직후 함께 돌린다.
 - **낚시지수도 서버 파일 우선**(`features/fishing/.../github_fishing_repository.dart`):
   GitHub Actions 크론(`.github/workflows/fishing-data.yml` → `tool/fetch_fishing.py`)이
   data.go.kr에서 전국 하루치를 모아 롤링 릴리스 `fishing-data`의
