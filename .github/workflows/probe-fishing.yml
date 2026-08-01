@@ -1,0 +1,17 @@
+name: Probe fishing API
+
+# 바다낚시지수 API의 실제 응답 시간·크기를 잰다(수동 실행 전용).
+# 앱이 지역을 바꿀 때마다 몇 초씩 멈추는 원인을 추측으로 고치지 않기 위한 계측.
+# 키가 로그에 찍히지 않도록 Secret으로만 넘긴다.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 측정
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: python3 tool/probe_fishing.py
