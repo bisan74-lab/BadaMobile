@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bada_mobile/core/network/data_go_kr.dart';
+import 'package:bada_mobile/core/storage/cache_store.dart';
 import 'package:bada_mobile/features/fishing/data/models/fishing_index.dart';
 import 'package:bada_mobile/features/fishing/data/repositories/data_go_kr_fishing_repository.dart';
 import 'package:bada_mobile/features/fishing/data/repositories/mock_fishing_repository.dart';
@@ -8,6 +9,7 @@ import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 2026-07-16 실제 응답의 item 형식 그대로.
 Map<String, dynamic> realItem({
@@ -147,6 +149,9 @@ void main() {
   });
 
   group('DataGoKrFishingRepository', () {
+    // 날짜별 원본 캐시가 static이라 테스트끼리 새어 나간다. 매번 비우고 시작한다.
+    setUp(DataGoKrFishingRepository.clearMemoryCache);
+
     test('가장 가까운 포인트를 골라 어종별 지수를 돌려준다', () async {
       final client = MockClient((request) async {
         expect(
@@ -203,5 +208,112 @@ void main() {
       expect(rep.first.timeSlot, '오전');
       expect(rep.last.grade, FishingGrade.veryGood);
     });
+
+    test('지역을 바꿔도 전국 원본은 한 번만 받는다', () async {
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return _nationwideResponse();
+      });
+      final repo = DataGoKrFishingRepository(
+        client: client,
+        serviceKey: 'test-key',
+      );
+
+      final jeju = sampleLocations.firstWhere((l) => l.id == 'jeju');
+      final other = sampleLocations.firstWhere((l) => l.id != 'jeju');
+      await repo.fetchForecast(jeju);
+      await repo.fetchForecast(other);
+      await repo.fetchForecast(jeju);
+
+      // 지역마다 다시 받으면 지역을 바꿀 때마다 몇 초씩 기다리게 된다.
+      expect(calls, 1);
+    });
+
+    test('디스크 캐시가 있으면 네트워크를 타지 않는다', () async {
+      SharedPreferences.setMockInitialValues({});
+      final cache = CacheStore(await SharedPreferences.getInstance());
+      final jeju = sampleLocations.firstWhere((l) => l.id == 'jeju');
+
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return _nationwideResponse();
+      });
+      await DataGoKrFishingRepository(
+        client: client,
+        serviceKey: 'test-key',
+        cache: cache,
+      ).fetchForecast(jeju);
+      expect(calls, 1);
+
+      // 저장은 일부러 await하지 않으므로(화면을 먼저 그리려고) 여기서 기다린다.
+      for (var i = 0; i < 100 && cache.readString(_dayKey()) == null; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(cache.readString(_dayKey()), isNotNull);
+
+      // 앱을 껐다 켠 상황: 메모리 캐시는 비었지만 디스크에는 남아 있다.
+      DataGoKrFishingRepository.clearMemoryCache();
+      final offline = MockClient(
+        (_) async => throw http.ClientException('오프라인'),
+      );
+      final forecast = await DataGoKrFishingRepository(
+        client: offline,
+        serviceKey: 'test-key',
+        cache: cache,
+      ).fetchForecast(jeju);
+
+      expect(forecast.indices, isNotEmpty);
+      expect(forecast.indices.every((i) => i.pointName == '김녕'), isTrue);
+    });
+  });
+
+  group('slimFishingItems', () {
+    test('쓰지 않는 필드를 버려 캐시 크기를 줄인다', () {
+      final body = jsonEncode({
+        'header': {'resultCode': '00', 'resultMsg': 'NORMAL_SERVICE'},
+        'body': {
+          'items': {
+            'item': [
+              {...realItem(), 'rowNum': 1, 'useless': 'x' * 500},
+            ],
+          },
+          'totalCount': 1,
+        },
+      });
+      final slim = slimFishingItems(body);
+
+      expect(slim, hasLength(1));
+      expect(slim.first.containsKey('useless'), isFalse);
+      expect(slim.first.containsKey('rowNum'), isFalse);
+      // 남긴 필드만으로 기존 변환이 그대로 동작해야 한다.
+      final index = mapFishingItem(slim.first);
+      expect(index.pointName, '가거도');
+      expect(index.grade, FishingGrade.good);
+    });
   });
 }
+
+/// 오늘 날짜의 전국 원본 캐시 키(리포지토리가 쓰는 것과 같은 규칙).
+String _dayKey() {
+  final n = DateTime.now();
+  return 'fishing_day_${n.year}'
+      '${n.month.toString().padLeft(2, '0')}'
+      '${n.day.toString().padLeft(2, '0')}';
+}
+
+/// 가거도·김녕 두 포인트가 섞인 전국 응답(형식은 실제 응답과 같다).
+http.Response _nationwideResponse() => http.Response(
+  jsonEncode({
+    'header': {'resultCode': '00', 'resultMsg': 'NORMAL_SERVICE'},
+    'body': {
+      'items': {
+        'item': [realItem(), realItem(point: '김녕', lat: 33.558, lot: 126.758)],
+      },
+      'totalCount': 2,
+    },
+  }),
+  200,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);

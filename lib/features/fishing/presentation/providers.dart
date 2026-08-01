@@ -18,9 +18,12 @@ import '../data/repositories/mock_fishing_repository.dart';
 final fishingRepositoryProvider = Provider<FishingRepository>((ref) {
   final mock = MockFishingRepository();
   if (Env.dataGoKrApiKey.isEmpty) return mock;
+  final cache = ref.watch(cacheStoreProvider);
   final cachedReal = CachingFishingRepository(
-    inner: DataGoKrFishingRepository(),
-    cache: ref.watch(cacheStoreProvider),
+    // 전국 하루치 원본은 리포지토리가 **날짜 단위로** 캐시한다(지역을 바꿔도
+    // 재요청 없음). 바깥 래퍼는 그 위에서 지역별 결과를 오프라인용으로 남긴다.
+    inner: DataGoKrFishingRepository(cache: cache),
+    cache: cache,
   );
   return FishingRepository.withFallback(primary: cachedReal, fallback: mock);
 });
