@@ -757,15 +757,23 @@ class _FishingPanel extends ConsumerWidget {
 
   /// 선택한 추정 어종의 오전·오후 등급을 만든다.
   ///
-  /// 이미 화면에 있는 값만 쓴다 — 그날 조위(조류 세기)와 지점 예보의 바람·
-  /// 파고. 추가 네트워크 호출이 없다. 예보를 아직 못 받았으면 바람은 잔잔한
-  /// 것으로 보고 조류·계절만으로 매긴다.
+  /// 이미 화면에 있는 값만 쓴다 — 그날 물때·조위(조류 세기)와 지점 예보의
+  /// 바람·파고. 추가 네트워크 호출이 없다. **그날 예보가 없으면 바람·파고를
+  /// null로 넘겨 감점에서 아예 뺀다**(물때·제철로만 판단).
   List<List<JiggingEstimate>> _estimatesFor(
     List<String> species,
     MarineForecast? marine,
   ) {
     if (species.isEmpty) return const [];
-    final strength = tideStrengthFraction(tide.hourlyHeightsCm);
+    // 절대 조차가 아니라 **그 지점 기준 상대 세기**를 쓴다 — 서해는 조금에도
+    // 조차가 커서 절대값으로는 늘 "급류"로 읽혔다.
+    final strength = relativeTideStrength(
+      mulTtae: mulTtaeFor(
+        date,
+        system: mulTtaeSystemForRegion(location.region),
+      ),
+      dayRangeCm: dailyTideRangeCm(tide.hourlyHeightsCm),
+    );
 
     /// 그날 [hour]시에 가장 가까운 예보.
     HourlyMarine? at(int hour) {
@@ -794,9 +802,9 @@ class _FishingPanel extends ConsumerWidget {
           grade: estimateJiggingGrade(
             species: s,
             tideStrength: strength,
-            windMs: h?.windSpeedMs ?? 0,
-            gustMs: h?.windGustMs ?? 0,
-            waveM: h?.waveHeightM ?? 0,
+            windMs: h?.windSpeedMs,
+            gustMs: h?.windGustMs,
+            waveM: h?.waveHeightM,
             month: date.month,
           ),
         );

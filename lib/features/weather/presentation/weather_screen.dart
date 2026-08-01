@@ -453,14 +453,26 @@ class _WindMapArea extends StatefulWidget {
   State<_WindMapArea> createState() => _WindMapAreaState();
 }
 
-class _WindMapAreaState extends State<_WindMapArea> {
-  ui.Image? _heatmap;
+/// 같은 시각으로 구운 히트맵 두 장(전체 bbox 배경 + 한반도 핵심영역 고해상도).
+///
+/// 한 벌로 묶어 두는 게 핵심이다 — 따로 들고 있으면 새 시각의 배경과 옛 시각의
+/// 핵심영역이 겹쳐 그려지는 중간 상태가 생긴다.
+class _HeatmapPair {
+  const _HeatmapPair({required this.background, required this.core});
 
-  /// 한반도 핵심영역([_coreBounds])만 따로 촘촘하게 구운 고해상도 래스터.
-  /// 전체 bbox 래스터는 남한을 ~63×62px로만 담아 확대 시 뭉개지므로, 이
-  /// 오버레이가 실제 보이는 디테일을 책임진다([WindHeatmapPainter]가 배경
-  /// 위에 덧그림).
-  ui.Image? _heatmapCore;
+  final ui.Image background;
+  final ui.Image core;
+
+  void dispose() {
+    background.dispose();
+    core.dispose();
+  }
+}
+
+class _WindMapAreaState extends State<_WindMapArea> {
+  /// 현재 그리고 있는 히트맵 한 벌. **배경과 핵심영역을 한 객체로 묶어** 둘이
+  /// 서로 다른 시각을 가리키는 상태가 아예 생기지 않게 한다.
+  _HeatmapPair? _heatmap;
   DateTime? _heatmapTime;
 
   /// 진행 중인 히트맵 빌드의 최신성 토큰 — 시간 스크럽 등으로 빌드가 겹치면
@@ -602,37 +614,40 @@ class _WindMapAreaState extends State<_WindMapArea> {
     // 회색 오버레이를 그리게 한다.
     if (!field.hasData) {
       _heatmap?.dispose();
-      _heatmapCore?.dispose();
       setState(() {
         _heatmap = null;
-        _heatmapCore = null;
         _heatmapTime = time;
       });
       return;
     }
-    // 전체 bbox 배경(작고 빠름)을 먼저 띄우고, 핵심영역 고해상도는 이어서.
-    final image = await buildWindHeatmapImage(field);
+    // 배경(전체 bbox)과 핵심영역(고해상도)을 **동시에** 굽고 **한 번에** 교체
+    // 한다. 예전엔 배경을 먼저 setState로 띄우고 핵심영역을 이어서 띄웠는데,
+    // 그 사이 몇 프레임 동안 새 시각의 배경 위에 **직전 시각의 핵심영역**이
+    // 덮여, 핵심영역 밖(화면 아래쪽 남중국해 띠 등)만 먼저 바뀌었다가 잠시 뒤
+    // 전체가 바뀌는 것처럼 보였다(시간 슬라이더를 옮길 때마다 발생. 실측:
+    // 아래 띠가 바뀐 뒤 약 0.12초 지나 전체 갱신).
+    //
+    // 두 빌드는 각자 아이솔레이트에서 도니 병렬로 돌려 총 시간도 둘 중 긴 쪽
+    // 정도로만 든다.
+    final built = await Future.wait([
+      buildWindHeatmapImage(field),
+      buildWindHeatmapImage(
+        field,
+        crop: _coreBounds,
+        width: _coreTexW,
+        height: _coreTexH,
+      ),
+    ]);
+    final pair = _HeatmapPair(background: built[0], core: built[1]);
     if (!mounted || requestId != _heatmapRequestId) {
-      image.dispose();
+      pair.dispose();
       return;
     }
     _heatmap?.dispose();
     setState(() {
-      _heatmap = image;
+      _heatmap = pair;
       _heatmapTime = time;
     });
-    final core = await buildWindHeatmapImage(
-      field,
-      crop: _coreBounds,
-      width: _coreTexW,
-      height: _coreTexH,
-    );
-    if (!mounted || requestId != _heatmapRequestId) {
-      core.dispose();
-      return;
-    }
-    _heatmapCore?.dispose();
-    setState(() => _heatmapCore = core);
   }
 
   @override
@@ -640,7 +655,6 @@ class _WindMapAreaState extends State<_WindMapArea> {
     _transformController.removeListener(_onTransformChanged);
     _transformController.dispose();
     _heatmap?.dispose();
-    _heatmapCore?.dispose();
     super.dispose();
   }
 
@@ -758,9 +772,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
                     if (heatmap != null)
                       CustomPaint(
                         painter: WindHeatmapPainter(
-                          image: heatmap,
+                          image: heatmap.background,
                           dstRect: fieldRect,
-                          coreImage: _heatmapCore,
+                          coreImage: heatmap.core,
                           coreDstRect: projection.rectFor(_coreBounds),
                         ),
                         size: mapSize,

@@ -1,3 +1,4 @@
+import 'package:bada_mobile/core/utils/mul_ttae.dart';
 import 'package:bada_mobile/features/fishing/data/models/fishing_index.dart';
 import 'package:bada_mobile/features/fishing/data/models/jigging_estimate.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,9 @@ double calmScore(String species, double tide, int month) =>
       waveM: 0.3,
       month: month,
     );
+
+MulTtae west(int index) =>
+    MulTtae(index: index, lunarDay: 1, system: MulTtaeSystem.west7);
 
 void main() {
   group('tideStrengthFraction', () {
@@ -28,6 +32,168 @@ void main() {
 
     test('상한을 넘겨도 1을 넘지 않는다', () {
       expect(tideStrengthFraction([0, 1200]), 1.0);
+    });
+  });
+
+  group('springNeapPhase', () {
+    test('사리가 1, 조금이 0에 가깝다', () {
+      expect(springNeapPhase(west(6)), closeTo(1.0, 0.001)); // 7물 = 사리
+      expect(springNeapPhase(west(13)), lessThan(0.05)); // 조금
+      expect(springNeapPhase(west(14)), lessThan(0.05)); // 무시
+      // 8물때식은 8물이 사리 한가운데.
+      expect(
+        springNeapPhase(
+          const MulTtae(index: 7, lunarDay: 1, system: MulTtaeSystem.south8),
+        ),
+        closeTo(1.0, 0.001),
+      );
+      expect(
+        springNeapPhase(
+          const MulTtae(index: 14, lunarDay: 1, system: MulTtaeSystem.south8),
+        ),
+        lessThan(0.05),
+      );
+    });
+
+    test('사리에서 멀어질수록 단조 감소한다', () {
+      var prev = springNeapPhase(west(6));
+      for (final i in [5, 4, 3, 2, 1, 0]) {
+        final v = springNeapPhase(west(i));
+        expect(v, lessThan(prev), reason: 'index $i');
+        prev = v;
+      }
+    });
+  });
+
+  group('relativeTideStrength', () {
+    test('서해 조금은 조차가 커도 "느린 물"이다', () {
+      // 제보 사례: 무창포 조금인데 조차가 376cm(절대 기준으론 0.47 = "보통").
+      // 절대값을 쓰면 최적을 한참 넘겨 거의 모든 날이 매우나쁨이 됐다.
+      final strength = relativeTideStrength(mulTtae: west(13), dayRangeCm: 376);
+      expect(strength, lessThan(0.1));
+      expect(tideStrengthFraction([0, 376]), greaterThan(0.4)); // 옛 방식
+    });
+
+    test('같은 물때면 지점이 달라도 세기가 비슷하다', () {
+      // 서해(사리 900cm)와 남해(사리 270cm)의 조금.
+      final west900 = relativeTideStrength(mulTtae: west(13), dayRangeCm: 405);
+      final south270 = relativeTideStrength(
+        mulTtae: const MulTtae(
+          index: 14,
+          lunarDay: 8,
+          system: MulTtaeSystem.south8,
+        ),
+        dayRangeCm: 122,
+      );
+      expect((west900 - south270).abs(), lessThan(0.05));
+    });
+
+    test('조차가 아주 작은 곳은 사리여도 세기 상한이 낮다', () {
+      final east = relativeTideStrength(mulTtae: west(6), dayRangeCm: 40);
+      final west900 = relativeTideStrength(mulTtae: west(6), dayRangeCm: 900);
+      expect(east, lessThan(west900));
+      // 그래도 조금과는 확실히 달라야 한다(전 물때가 한 등급으로 눌리면
+      // 물때 차이가 화면에서 사라진다).
+      expect(
+        east - relativeTideStrength(mulTtae: west(13), dayRangeCm: 18),
+        greaterThan(0.3),
+      );
+    });
+
+    test('물때가 사리로 갈수록 세기가 단조 증가한다', () {
+      double at(int index) => relativeTideStrength(
+        mulTtae: west(index),
+        dayRangeCm: 750 * (0.45 + 0.55 * springNeapPhase(west(index))),
+      );
+      var prev = at(13); // 조금
+      for (final i in [0, 1, 2, 3, 4, 5, 6]) {
+        final v = at(i);
+        expect(v, greaterThan(prev), reason: 'index $i');
+        prev = v;
+      }
+    });
+  });
+
+  group('바람 정보 없음', () {
+    test('null로 넘기면 그 항목은 감점하지 않는다', () {
+      // 예보 범위 밖 날짜(2주 뒤 등)엔 바람·파고가 아예 없다. 이때는
+      // 물때·제철로만 판단해야 한다.
+      final noData = estimateJiggingScore(
+        species: '쭈꾸미',
+        tideStrength: 0.05,
+        month: 10,
+      );
+      final calm = estimateJiggingScore(
+        species: '쭈꾸미',
+        tideStrength: 0.05,
+        windMs: 0,
+        gustMs: 0,
+        waveM: 0,
+        month: 10,
+      );
+      expect(noData, closeTo(calm, 0.0001));
+      expect(noData, greaterThan(0.5));
+    });
+
+    test('일부만 있으면 있는 항목만 감점한다', () {
+      // 육지 쪽 지점은 파고가 없고 바람만 온다.
+      final windOnly = estimateJiggingScore(
+        species: '쭈꾸미',
+        tideStrength: 0.05,
+        windMs: 12,
+        month: 10,
+      );
+      final none = estimateJiggingScore(
+        species: '쭈꾸미',
+        tideStrength: 0.05,
+        month: 10,
+      );
+      expect(windOnly, lessThan(none));
+      // 파고까지 있으면 더 떨어진다.
+      expect(
+        estimateJiggingScore(
+          species: '쭈꾸미',
+          tideStrength: 0.05,
+          windMs: 12,
+          waveM: 2.5,
+          month: 10,
+        ),
+        lessThan(windOnly),
+      );
+    });
+  });
+
+  group('제철 가중치', () {
+    test('12개월이 모두 채워져 있다', () {
+      // 빠진 달이 하한(0.30)으로 떨어지면 그 달은 물때가 아무리 좋아도
+      // 한 등급으로 눌려 물때 차이가 화면에서 사라진다.
+      for (final s in estimatedSpeciesCatalog) {
+        for (var m = 1; m <= 12; m++) {
+          expect(
+            calmScore(s, 0.05, m),
+            greaterThan(0.15),
+            reason: '$s $m월: 최적 물때인데도 "나쁨" 아래로 눌렸다',
+          );
+        }
+      }
+    });
+
+    test('비수기에도 물때 차이가 등급으로 드러난다', () {
+      // 제보 화면(8월, 조금)에서 세 어종이 모두 매우나쁨이던 문제.
+      for (final s in estimatedSpeciesCatalog) {
+        final slack = estimateJiggingGrade(
+          species: s,
+          tideStrength: 0.02,
+          month: 8,
+        );
+        final rush = estimateJiggingGrade(
+          species: s,
+          tideStrength: 1.0,
+          month: 8,
+        );
+        expect(slack, isNot(FishingGrade.veryBad), reason: '$s 8월 조금');
+        expect(slack.score, greaterThan(rush.score), reason: '$s 8월');
+      }
     });
   });
 

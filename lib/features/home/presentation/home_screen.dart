@@ -56,15 +56,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// 관측 지수가 없는 어종(쭈꾸미·갑오징어·문어)의 추정 등급.
   ///
-  /// 이미 화면에 있는 값만 쓴다 — 그날 조위(조류 세기)와 지점 예보의 바람·
-  /// 파고. 조위나 예보를 아직 못 받았으면 null(행이 안 뜬다).
+  /// 이미 화면에 있는 값만 쓴다 — 그날 물때·조위(조류 세기)와 지점 예보의
+  /// 바람·파고. 조위를 아직 못 받았으면 null(행이 안 뜬다). **그날 예보가
+  /// 없으면 바람·파고를 null로 넘겨 감점에서 아예 뺀다**(물때·제철로만 판단).
   List<JiggingEstimate>? _estimateFor(
     String species,
     TideDay? tide,
     MarineForecast? marine,
+    MulTtae mulTtae,
   ) {
     if (tide == null) return null;
-    final strength = tideStrengthFraction(tide.hourlyHeightsCm);
+    // 절대 조차가 아니라 **그 지점 기준 상대 세기**를 쓴다(서해는 조금에도
+    // 조차가 커서 절대값으로는 늘 "급류"로 읽혔다).
+    final strength = relativeTideStrength(
+      mulTtae: mulTtae,
+      dayRangeCm: dailyTideRangeCm(tide.hourlyHeightsCm),
+    );
 
     HourlyMarine? at(int hour) {
       if (marine == null) return null;
@@ -89,9 +96,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       grade: estimateJiggingGrade(
         species: species,
         tideStrength: strength,
-        windMs: h?.windSpeedMs ?? 0,
-        gustMs: h?.windGustMs ?? 0,
-        waveM: h?.waveHeightM ?? 0,
+        windMs: h?.windSpeedMs,
+        gustMs: h?.windGustMs,
+        waveM: h?.waveHeightM,
         month: _date.month,
       ),
     );
@@ -350,6 +357,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         species[slot],
                                         tideAsync.valueOrNull,
                                         forecastAsync.valueOrNull,
+                                        mulTtae,
                                       )
                                     : null,
                                 onTap: () => _pickSpecies(
