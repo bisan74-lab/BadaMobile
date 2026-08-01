@@ -82,6 +82,19 @@ class Env {
         'fishing-data/fishing_index.json.gz',
   );
 
+  /// 홈 화면·낚시정보 카드용 지역별 예보 파일 URL.
+  ///
+  /// `.github/workflows/point-forecast.yml`이 3시간마다 Open-Meteo에서 전국
+  /// 지역을 모아 올린다. 앱이 직접 받으면 지역 하나당 요청이 5번 나가
+  /// 1~2초가 걸리는데, 이 파일은 한 번에 끝난다. 없으면 직접 호출로 폴백한다.
+  /// `--dart-define=POINT_FORECAST_URL=...` 로 재정의 가능(빈 값이면 직접 호출).
+  static const pointForecastUrl = String.fromEnvironment(
+    'POINT_FORECAST_URL',
+    defaultValue:
+        'https://github.com/bisan74-lab/badawindy-data/releases/download/'
+        'point-forecast/point_forecast.json.gz',
+  );
+
   /// 지도용 바람장 격자 데이터(서버가 미리 뽑아 둔 정적 파일) URL.
   ///
   /// GitHub Actions 크론(`.github/workflows/wind-data.yml`)이 Open-Meteo에서

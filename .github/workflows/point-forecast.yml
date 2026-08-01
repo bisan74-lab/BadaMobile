@@ -14,6 +14,11 @@ name: Point forecast refresh
 # 필요한 Secret: BADAWINDY_TK (공개 데이터 저장소 contents:write PAT)
 on:
   workflow_dispatch:
+    inputs:
+      verify_only:
+        description: 수집 없이 공개된 파일만 검증한다
+        type: boolean
+        default: false
   schedule:
     - cron: '35 2,5,8,11,14,17,20,23 * * *'
 
@@ -52,9 +57,11 @@ jobs:
           echo "BADAWINDY_TK 확인: $kind 토큰, ${n}자 — 형태 정상"
 
       - name: 지점 예보 수집
+        if: inputs.verify_only != true
         run: python3 tool/fetch_points.py
 
       - name: 공개 데이터 저장소의 롤링 릴리스에 업로드
+        if: inputs.verify_only != true
         uses: softprops/action-gh-release@v2
         with:
           repository: ${{ vars.PUBLIC_DATA_REPO || 'bisan74-lab/badawindy-data' }}
@@ -67,3 +74,8 @@ jobs:
             `point_forecast.json.gz` 하나만 올라옵니다.
           files: point_forecast.json.gz
           prerelease: true
+
+      # 올린 파일을 앱과 같은 경로로 다시 받아 **같은 시각 Open-Meteo 원본과
+      # 값을 대조**한다. 압축·재배열에서 값이 어긋나면 여기서 걸린다.
+      - name: 공개된 파일 검증
+        run: python3 tool/verify_points.py
