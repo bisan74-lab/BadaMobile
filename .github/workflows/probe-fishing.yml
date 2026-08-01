@@ -1,10 +1,20 @@
 name: Probe fishing API
 
-# 바다낚시지수 API의 실제 응답 시간·크기를 잰다(수동 실행 전용).
+# 바다낚시지수 API의 실제 응답 시간·크기·건수를 잰다(수동 실행 전용).
 # 앱이 지역을 바꿀 때마다 몇 초씩 멈추는 원인을 추측으로 고치지 않기 위한 계측.
 # 키가 로그에 찍히지 않도록 Secret으로만 넘긴다.
+#
+# 모드:
+#   limit(기본) — numOfRows 상한을 찾고 그 값으로 전 페이지를 받아 총 시간을 잰다.
+#   fixed       — 앱이 쓰던 numOfRows=3000 요청을 반복해 응답을 확인한다.
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 측정 모드
+        type: choice
+        default: limit
+        options: [limit, fixed]
 
 jobs:
   probe:
@@ -14,4 +24,5 @@ jobs:
       - name: 측정
         env:
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+          PROBE_MODE: ${{ inputs.mode }}
         run: python3 tool/probe_fishing.py

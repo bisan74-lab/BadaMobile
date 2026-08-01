@@ -32,14 +32,14 @@ KEEP = {
 }
 
 
-def fetch(ymd: str, rows: int) -> tuple[float, int, bytes]:
+def fetch(ymd: str, rows: int, page: int = 1) -> tuple[float, int, bytes]:
     """(경과초, HTTP 상태, 본문)"""
     q = urllib.parse.urlencode({
         'serviceKey': KEY,
         'type': 'json',
         'reqDate': ymd,
         'gubun': '갯바위',
-        'pageNo': '1',
+        'pageNo': str(page),
         'numOfRows': str(rows),
     })
     req = urllib.request.Request(f'{HOST}/{OP}?{q}')
@@ -65,6 +65,8 @@ def main() -> int:
         return 1
 
     ymd = time.strftime('%Y%m%d')
+    if os.environ.get('PROBE_MODE') == 'limit':
+        return probe_limit(ymd)
     print(f'조회 날짜 {ymd}\n')
 
     print('== 앱과 같은 요청(numOfRows=3000)을 5번 ==')
@@ -119,6 +121,75 @@ def main() -> int:
         print(f'  numOfRows={rows:<5} {dt:6.2f}초  {mark}')
         time.sleep(1)
 
+    return 0
+
+
+def probe_limit(ymd: str) -> int:
+    """numOfRows 상한을 찾고, 그 값으로 전 페이지를 받아 총 시간을 잰다."""
+    print(f'조회 날짜 {ymd}\n')
+
+    print('== numOfRows 상한 찾기 ==')
+    best = 0
+    for rows in (50, 100, 150, 200, 300, 500, 1000):
+        dt, status, body = fetch(ymd, rows)
+        try:
+            n = len(items_of(body))
+        except Exception:
+            n = -1
+        ok = n > 0
+        if ok:
+            best = max(best, rows)
+        print(f'  numOfRows={rows:<5} {dt:5.2f}초  {len(body):>8,}B  {n:>4}건  '
+              f'{"OK" if ok else "빈 응답"}')
+        if not ok and len(body) < 400:
+            print(f'      본문: {body.decode(errors="replace")[:300]}')
+        time.sleep(1)
+
+    if best == 0:
+        print('\n::error::어떤 numOfRows로도 데이터를 받지 못했습니다.')
+        return 1
+    print(f'\n  → 쓸 수 있는 최대 numOfRows = {best}')
+
+    print(f'\n== numOfRows={best}로 전 페이지 받기 ==')
+    all_items, page, t0 = [], 1, time.monotonic()
+    total = None
+    while page <= 60:
+        dt, status, body = fetch(ymd, best, page)
+        if status != 200:
+            print(f'  {page}쪽 실패: {body[:120].decode(errors="replace")}')
+            break
+        doc = json.loads(body)
+        doc = doc.get('response', doc)
+        if total is None:
+            total = doc.get('body', {}).get('totalCount')
+        got = items_of(body)
+        print(f'  {page:>2}쪽 {dt:5.2f}초 {len(got):>4}건 (누적 {len(all_items) + len(got)})')
+        all_items += got
+        if not got or (total and len(all_items) >= int(total)):
+            break
+        page += 1
+        time.sleep(0.2)
+
+    elapsed = time.monotonic() - t0
+    print(f'\n  총 {len(all_items)}건 / totalCount={total} / {elapsed:.1f}초 '
+          f'({page}쪽)')
+
+    if not all_items:
+        return 1
+
+    slim = [{k: v for k, v in it.items() if k in KEEP} for it in all_items]
+    raw = json.dumps(slim, ensure_ascii=False, separators=(',', ':')).encode()
+    gz = gzip.compress(raw, 9)
+    points = {it.get('seafsPstnNm') for it in all_items}
+    species = sorted({it.get('seafsTgfshNm') for it in all_items})
+    dates = sorted({it.get('predcYmd') for it in all_items})
+
+    print(f'\n  포인트 {len(points)}곳 · 어종 {len(species)}종 · 날짜 {dates}')
+    print(f'  어종: {", ".join(str(s) for s in species)}')
+    print('\n== 서버가 미리 받아 gz로 올릴 때의 크기 ==')
+    print(f'  쓰는 필드만 남긴 JSON  {len(raw):>9,}B')
+    print(f'  gzip                  {len(gz):>9,}B   '
+          f'← 앱이 받을 양(지금은 {page}번 요청 {elapsed:.0f}초)')
     return 0
 
 
