@@ -39,13 +39,27 @@ void main() {
       expect(slow, greaterThan(0.7));
     });
 
-    test('갑오징어는 조금 흐를 때가 좋다', () {
-      final still = calmScore('갑오징어', 0.05, 10);
-      final some = calmScore('갑오징어', 0.45, 10);
-      final fast = calmScore('갑오징어', 0.95, 10);
-      // 정지도 급류도 아닌 중간이 가장 좋아야 한다.
-      expect(some, greaterThan(still));
-      expect(some, greaterThan(fast));
+    test('갑오징어는 약한 중간 > 정지 > 중간 > 급류 순', () {
+      // 사용자 실사용 경험. 바닥 채비 낚시라 과한 조류가 없는 조류보다
+      // 훨씬 해롭다 — 좌우 대칭 곡선으로는 이 순서가 나오지 않는다.
+      final weak = calmScore('갑오징어', 0.30, 10); // 약한 중간
+      final still = calmScore('갑오징어', 0.05, 10); // 정지
+      final mid = calmScore('갑오징어', 0.50, 10); // 중간
+      final fast = calmScore('갑오징어', 0.95, 10); // 급류
+      expect(weak, greaterThan(still));
+      expect(still, greaterThan(mid));
+      expect(mid, greaterThan(fast));
+    });
+
+    test('세 어종 모두 정지가 급류보다 낫다', () {
+      // 조류가 세면 라인이 눕고 바닥을 못 잡아 조작 자체가 안 된다.
+      for (final s in ['쭈꾸미', '갑오징어', '문어']) {
+        expect(
+          calmScore(s, 0.02, 10),
+          greaterThan(calmScore(s, 0.95, 10)),
+          reason: '$s: 정지가 급류보다 나아야 한다',
+        );
+      }
     });
 
     test('문어는 조류를 크게 타지 않는다', () {

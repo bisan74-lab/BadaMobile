@@ -26,17 +26,26 @@ const allSelectableSpecies = <String>[
   ...estimatedSpeciesCatalog,
 ];
 
-/// 어종별 조류 선호. [optimum]은 가장 좋은 조류 세기(0~1), [tolerance]는
-/// 그 주변으로 얼마나 너그러운지다(클수록 조류를 덜 탄다).
+/// 어종별 조류 선호. [optimum]이 가장 좋은 조류 세기(0~1)이고, 거기서
+/// 멀어질수록 종 모양으로 떨어진다.
 ///
-/// - 쭈꾸미: 물이 느린 날에 잘 된다 → 낮은 쪽에 좁게
-/// - 갑오징어: 조금 흘러야 잘 된다 → 중간에서 조금 낮은 쪽
-/// - 문어: 조류를 크게 타지 않는다 → 넓게
-const _tidePreference = <String, ({double optimum, double tolerance})>{
-  '쭈꾸미': (optimum: 0.18, tolerance: 0.24),
-  '갑오징어': (optimum: 0.45, tolerance: 0.26),
-  '문어': (optimum: 0.40, tolerance: 0.48),
-};
+/// **좌우가 비대칭이다.** [slowTolerance]는 최적보다 느린 쪽, [fastTolerance]는
+/// 빠른 쪽의 너그러움이다(클수록 완만하게 떨어진다). 셋 다 바닥에 채비를
+/// 붙여 놓고 하는 낚시라 **조류가 과한 것이 없는 것보다 훨씬 해롭다** —
+/// 물이 세면 라인이 눕고 바닥을 못 잡아 조작 자체가 안 되지만, 물이 죽으면
+/// 조작은 오히려 쉽고 이 어종들은 바닥에서 매복하다 물어 주기 때문이다.
+/// 좌우 대칭으로 두면 "정지"가 "급류"만큼 나쁘게 나와 실제와 어긋난다.
+///
+/// - 쭈꾸미: 느린 물이 좋고 정지도 나쁘지 않다. 조금만 세져도 급락.
+/// - 갑오징어: 약한 중간이 가장 좋다. 정지 > 중간 > 급류 순
+///   (사용자 실사용 경험을 반영했다).
+/// - 문어: 조류를 크게 타지 않아 양쪽 모두 완만하다.
+const _tidePreference =
+    <String, ({double optimum, double slowTolerance, double fastTolerance})>{
+      '쭈꾸미': (optimum: 0.16, slowTolerance: 0.40, fastTolerance: 0.20),
+      '갑오징어': (optimum: 0.30, slowTolerance: 0.34, fastTolerance: 0.17),
+      '문어': (optimum: 0.35, slowTolerance: 0.55, fastTolerance: 0.40),
+    };
 
 /// 어종별 제철(월). 이 세 어종은 계절을 크게 타서, 조류·바람이 아무리 좋아도
 /// 철이 아니면 잘 안 나온다. 값은 그 달의 가중치(0~1)다.
@@ -98,8 +107,11 @@ double estimateJiggingScore({
   final pref = _tidePreference[species];
   if (pref == null) return 0;
 
-  // 선호 세기에서 멀어질수록 종 모양으로 떨어진다.
-  final d = (tideStrength - pref.optimum) / pref.tolerance;
+  // 선호 세기에서 멀어질수록 종 모양으로 떨어진다(빠른 쪽이 더 가파르다).
+  final tolerance = tideStrength < pref.optimum
+      ? pref.slowTolerance
+      : pref.fastTolerance;
+  final d = (tideStrength - pref.optimum) / tolerance;
   final byTide = math.exp(-d * d);
 
   final bySeason = _season[species]?[month] ?? 0.25;
