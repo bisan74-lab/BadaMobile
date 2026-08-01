@@ -32,6 +32,9 @@ URL = os.environ.get(
 )
 SAMPLE_COUNT = 20
 
+# 어종별 값으로 의미가 없는 항목. 앱의 nonSpeciesLabels와 같아야 한다.
+NON_SPECIES = {'기타어종', '-', ''}
+
 
 def app_locations() -> list[dict]:
     """앱의 지역 목록(`sample_locations.dart`)을 그대로 읽는다."""
@@ -60,7 +63,7 @@ def usable_points(data: dict) -> list[dict]:
     have: set[int] = set()
     for r in data['rows']:
         sp = data['species'][r[3]] if 0 <= r[3] < len(data['species']) else ''
-        if sp and sp != '-':
+        if sp not in NON_SPECIES:
             have.add(r[0])
     pts = [p for i, p in enumerate(data['points']) if i in have]
     return pts or data['points']
@@ -128,7 +131,7 @@ def main() -> int:
         rows = [
             r for r in published['rows']
             if r[0] == pi and r[1] == di
-            and published['species'][r[3]] not in ('', '-')
+            and published['species'][r[3]] not in NON_SPECIES
         ]
         grades = {}
         for r in rows:
@@ -162,10 +165,13 @@ def main() -> int:
             re.S,
         ).group(1),
     )
-    api_species = set(published['species'])
+    api_species = set(published['species']) - NON_SPECIES
     missing = [s for s in catalog if s not in api_species]
+    extra = sorted(api_species - set(catalog))
     print(f'  앱 목록 {catalog}')
-    print(f'  API    {sorted(api_species)}')
+    print(f'  API    {sorted(api_species)}  (묶음/빈값 {sorted(NON_SPECIES - {""})} 제외)')
+    if extra:
+        print(f'  참고: API에는 있는데 앱 목록에 없는 어종 {extra}')
     if missing:
         print(f'  ❌ API에 없는 어종: {missing} — 고르면 영영 빈칸이 된다')
         fails.append(f'API에 없는 어종이 목록에 있다: {missing}')

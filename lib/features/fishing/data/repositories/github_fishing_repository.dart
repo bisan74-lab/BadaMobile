@@ -156,7 +156,7 @@ class FishingIndexFile {
   }
 
   bool _hasSpecies(String point) => (indicesByPoint[point] ?? const []).any(
-    (i) => i.species != null && i.species!.isNotEmpty && i.species != '-',
+    (i) => i.species != null && !nonSpeciesLabels.contains(i.species),
   );
 }
 

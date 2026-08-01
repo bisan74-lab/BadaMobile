@@ -75,9 +75,18 @@ dart format lib test       # 커밋 전 포맷
   실제 응답을 먼저 확인한다.
 - **어종 목록은 API가 실제로 주는 것만 담는다**(`fishing_index.dart`의
   `fishingSpeciesCatalog`): 2026-08 실측 기준 감성돔·농어·돌돔·벵에돔·우럭·
-  참돔·기타어종. 광어·문어·쭈꾸미처럼 API에 없는 어종을 넣으면 데이터가
-  멀쩡해도 지수가 영영 빈칸이다. `seasonalSpecies`·`preferredSpeciesForRegion`도
-  이 목록 안에서만 고른다(테스트가 강제한다).
+  참돔 **6종이 전부**다. `gubun`을 바꿔도 늘지 않는다 — 유효값은 `갯바위`·
+  `선상` 둘뿐이고 두 응답이 서로 같다(나머지는 INVALID_REQUEST_PARAMETER_ERROR).
+  그래서 광어·문어·쭈꾸미·갑오징어는 이 API로 얻을 수 없고, 목록에 넣으면
+  지수가 영영 빈칸이다. API가 함께 주는 `기타어종`(묶음)·`-`(빈 값)도
+  `nonSpeciesLabels`로 걸러 화면·선택 목록에서 제외한다.
+  `seasonalSpecies`·`preferredSpeciesForRegion`도 이 목록 안에서만 고른다
+  (테스트가 강제한다). 목록을 바꿀 땐 `tool/probe_fishing.py`(mode=gubun)로
+  실제 어종을 먼저 확인한다.
+- **어종 선택 목록은 그 지역에 값이 있는 어종만 보여준다**
+  (`FishingForecast.availableSpecies`): 포인트마다 주는 어종이 달라서, 전체
+  카탈로그를 그대로 띄우면 고르고도 빈칸이 나온다. 물때 화면·홈 화면의 선택
+  UI 둘 다 이 집합으로 좁힌다(예보를 아직 못 받았으면 카탈로그 전체).
 - **앱이 Open-Meteo를 직접 호출하는 경로(폴백)의 격자 총 좌표 수는 600 미만
   유지**(현재 21×24=504): 무료 한도가 분당 600콜이고 다지점 요청은 좌표
   1개=1콜이라, 넘기면 요청 한 번에 한도를 초과해 **매번 429 → 합성 폴백**이

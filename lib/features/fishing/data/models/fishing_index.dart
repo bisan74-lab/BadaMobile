@@ -8,19 +8,21 @@ List<String> preferredSpeciesForRegion(String region) => switch (region) {
 
 /// 사용자가 고를 수 있는 대표 어종 후보.
 ///
-/// **바다낚시지수 API가 실제로 주는 어종만 담는다**(2026-08 실측:
-/// 감성돔·농어·돌돔·벵에돔·우럭·참돔·기타어종). 예전엔 광어·문어·쭈꾸미처럼
-/// API에 없는 어종이 목록에 있어서, 그걸 고르면 데이터가 있어도 영영 빈칸이
-/// 나왔다. 목록을 바꿀 땐 `tool/probe_fishing.py`로 실제 어종을 먼저 확인한다.
-const fishingSpeciesCatalog = <String>[
-  '우럭',
-  '참돔',
-  '감성돔',
-  '농어',
-  '돌돔',
-  '벵에돔',
-  '기타어종',
-];
+/// **바다낚시지수 API가 실제로 주는 어종만 담는다.** 2026-08 실측 기준
+/// 감성돔·농어·돌돔·벵에돔·우럭·참돔 6종이 전부다. `gubun`을 바꿔도
+/// (유효값은 `갯바위`·`선상` 둘뿐이고 응답이 서로 같다) 어종은 늘지 않으므로
+/// 광어·문어·쭈꾸미·갑오징어는 이 API로 얻을 수 없다. 목록에 넣으면 고를 수는
+/// 있어도 지수가 영영 빈칸이라 넣지 않는다.
+///
+/// API가 함께 주는 `기타어종`(특정 어종이 아닌 묶음)과 `-`(빈 값)도 뺀다 —
+/// 사용자가 고를 값으로 의미가 없다.
+///
+/// 목록을 바꿀 땐 `tool/probe_fishing.py`(mode=gubun)로 실제 어종을 먼저
+/// 확인한다.
+const fishingSpeciesCatalog = <String>['우럭', '참돔', '감성돔', '농어', '돌돔', '벵에돔'];
+
+/// 지수 값이 어종별로 의미가 없는 항목. 화면·선택 목록에서 모두 제외한다.
+const nonSpeciesLabels = <String>{'기타어종', '-', ''};
 
 /// 홈 대표 어종 기본값(사용자 미설정 시). 최대 3종.
 const defaultFishingSpecies = <String>['우럭', '참돔', '감성돔'];
@@ -110,6 +112,17 @@ class FishingForecast {
 
   /// 날짜·시간대 순.
   final List<FishingIndex> indices;
+
+  /// 이 예보에 **실제로 값이 있는** 어종. 선택 목록을 이걸로 좁히면
+  /// 사용자가 고를 수 있는 어종에는 항상 지수가 뜬다.
+  ///
+  /// API는 포인트마다 주는 어종이 다르고, 특정 어종이 아닌 묶음 값
+  /// (`기타어종`)이나 빈 값(`-`)도 섞여 오므로 그건 제외한다.
+  Set<String> get availableSpecies => {
+    for (final i in indices)
+      if (i.species != null && !nonSpeciesLabels.contains(i.species))
+        i.species!,
+  };
 
   /// [date]와 같은 날짜의 지수들 (모든 어종).
   List<FishingIndex> forDate(DateTime date) => indices

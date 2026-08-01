@@ -52,8 +52,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return best;
   }
 
-  /// 대표 어종 변경 메뉴 — 후보 어종 중 하나를 골라 [slot]에 반영한다.
-  Future<void> _pickSpecies(int slot, String current) async {
+  /// 대표 어종 변경 메뉴 — **이 지역에 값이 있는 어종** 중 하나를 골라
+  /// [slot]에 반영한다.
+  ///
+  /// [available]은 이 지역 예보에 실제로 값이 있는 어종이다. 지수가 없는
+  /// 어종을 고르면 화면이 빈칸으로 남으므로 목록에서 뺀다. 예보를 아직 못
+  /// 받았으면(null) 후보 전체를 보여준다.
+  Future<void> _pickSpecies(
+    int slot,
+    String current,
+    Set<String>? available,
+  ) async {
+    final options = [
+      for (final s in fishingSpeciesCatalog)
+        if (available == null || available.contains(s)) s,
+    ];
     final chosen = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -66,11 +79,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               Text('대표 어종 선택', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
+              if (options.isEmpty) const Text('이 지역에는 어종별 지수가 없습니다.'),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final s in fishingSpeciesCatalog)
+                  for (final s in options)
                     ChoiceChip(
                       label: Text(s),
                       selected: s == current,
@@ -277,7 +291,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     .forDate(_date)
                                     .where((i) => i.species == species[slot])
                                     .toList(),
-                                onTap: () => _pickSpecies(slot, species[slot]),
+                                onTap: () => _pickSpecies(
+                                  slot,
+                                  species[slot],
+                                  fishing.availableSpecies,
+                                ),
                               ),
                           ],
                         ),

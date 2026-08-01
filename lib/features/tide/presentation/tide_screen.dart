@@ -675,9 +675,14 @@ class _FishingPanel extends ConsumerWidget {
                   ),
                 ),
               ),
-              // 어종 변경 버튼 — 카탈로그에서 최대 5종을 골라 바꾼다.
+              // 어종 변경 버튼 — **이 지역에 값이 있는 어종만** 골라 바꾼다.
               InkWell(
-                onTap: () => _editSpecies(context, ref, custom),
+                onTap: () => _editSpecies(
+                  context,
+                  ref,
+                  custom,
+                  fishingAsync.valueOrNull?.availableSpecies,
+                ),
                 borderRadius: BorderRadius.circular(8),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -735,43 +740,57 @@ class _FishingPanel extends ConsumerWidget {
 
   /// 어종 선택 다이얼로그. 칩으로 최대 5종을 고르고, "제철 어종(자동)"을
   /// 누르면 선택을 비워 달별 제철 어종으로 되돌린다. 취소는 변경 없음.
+  ///
+  /// [available]은 이 지역 예보에 **실제로 값이 있는** 어종이다. 지수가 없는
+  /// 어종을 고르면 화면이 빈칸으로 남으므로 아예 목록에서 뺀다. 예보를 아직
+  /// 못 받았으면(null) 후보 전체를 보여준다.
   Future<void> _editSpecies(
     BuildContext context,
     WidgetRef ref,
     List<String> current,
+    Set<String>? available,
   ) async {
+    final options = [
+      for (final s in fishingSpeciesCatalog)
+        if (available == null || available.contains(s)) s,
+    ];
     // 자동 모드였다면 현재 화면의 제철 어종을 초기 선택으로 보여준다.
+    // 값이 없는 어종은 초기 선택에서도 뺀다.
     final picked = [
-      ...(current.isNotEmpty ? current : seasonalSpecies(date.month)),
+      for (final s
+          in (current.isNotEmpty ? current : seasonalSpecies(date.month)))
+        if (options.contains(s)) s,
     ];
     final result = await showDialog<List<String>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('어종 선택 (최대 5종)'),
-          content: SingleChildScrollView(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: -4,
-              children: [
-                for (final s in fishingSpeciesCatalog)
-                  FilterChip(
-                    label: Text(s),
-                    selected: picked.contains(s),
-                    onSelected: (v) => setState(() {
-                      if (v) {
-                        if (picked.length <
-                            TideFishingSpeciesNotifier.maxCount) {
-                          picked.add(s);
-                        }
-                      } else {
-                        picked.remove(s);
-                      }
-                    }),
+          content: options.isEmpty
+              ? const Text('이 지역에는 어종별 지수가 없습니다.')
+              : SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: -4,
+                    children: [
+                      for (final s in options)
+                        FilterChip(
+                          label: Text(s),
+                          selected: picked.contains(s),
+                          onSelected: (v) => setState(() {
+                            if (v) {
+                              if (picked.length <
+                                  TideFishingSpeciesNotifier.maxCount) {
+                                picked.add(s);
+                              }
+                            } else {
+                              picked.remove(s);
+                            }
+                          }),
+                        ),
+                    ],
                   ),
-              ],
-            ),
-          ),
+                ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, const <String>[]),

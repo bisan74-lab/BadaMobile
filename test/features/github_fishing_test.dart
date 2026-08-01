@@ -25,7 +25,7 @@ String sampleFile() => jsonEncode({
     {'n': '제주항 북측', 'la': 33.52, 'lo': 126.53},
   ],
   'dates': ['2026-08-01', '2026-08-02'],
-  'species': ['감성돔', '우럭', '-'],
+  'species': ['감성돔', '우럭', '-', '기타어종'],
   'tides': ['대조기'],
   'slots': ['오전', '오후'],
   // [포인트, 날짜, 오전/오후, 어종, 등급, 파고m, 수온C, 물때]
@@ -37,6 +37,8 @@ String sampleFile() => jsonEncode({
     [1, 1, 0, 0, '매우나쁨', 1.5, 25.1, 0],
     [2, 0, 0, 2, '좋음', 0.5, 26.0, 0],
     [2, 0, 1, 2, '보통', 0.5, 26.0, 0],
+    // API가 함께 주는 묶음 값 — 선택 목록에는 나오면 안 된다.
+    [1, 0, 0, 3, '보통', 0.9, 25.3, 0],
   ],
 });
 
@@ -86,7 +88,7 @@ void main() {
       expect(file.generated, DateTime.utc(2026, 8, 1, 9));
 
       final kimnyeong = file.indicesByPoint['김녕']!;
-      expect(kimnyeong, hasLength(4));
+      expect(kimnyeong, hasLength(5)); // 어종 4건 + 묶음(기타어종) 1건
 
       final first = kimnyeong.first;
       expect(first.date, DateTime(2026, 8, 1));
@@ -224,6 +226,29 @@ void main() {
       ).fetchForecast(_jeju);
 
       expect(forecast.indices.first.pointName, '김녕');
+    });
+  });
+
+  group('availableSpecies', () {
+    test('묶음(기타어종)·빈 값(-)은 선택 목록에서 뺀다', () {
+      final file = parseFishingIndexFile(sampleFile());
+      final available = file.forecastFor(_jeju).availableSpecies;
+
+      expect(available, contains('감성돔'));
+      expect(available, contains('우럭'));
+      // 특정 어종이 아니라 사용자가 고를 값으로 의미가 없다.
+      expect(available, isNot(contains('기타어종')));
+      expect(available, isNot(contains('-')));
+    });
+
+    test('후보 목록은 API가 주는 어종만 담는다', () {
+      // 광어·문어·쭈꾸미·갑오징어는 이 API에 없다(gubun을 바꿔도 없다).
+      // 목록에 넣으면 고를 수는 있어도 지수가 영영 빈칸이 된다.
+      for (final absent in ['광어', '문어', '쭈꾸미', '갑오징어', '삼치', '볼락']) {
+        expect(fishingSpeciesCatalog, isNot(contains(absent)));
+      }
+      expect(fishingSpeciesCatalog, isNot(contains('기타어종')));
+      expect(fishingSpeciesCatalog, hasLength(6));
     });
   });
 
