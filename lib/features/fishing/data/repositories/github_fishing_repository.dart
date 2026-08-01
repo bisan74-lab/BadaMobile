@@ -124,13 +124,23 @@ class FishingIndexFile {
   final DateTime? generated;
 
   /// [location]에서 가장 가까운 포인트의 지수를 돌려준다.
+  ///
+  /// **어종별 지수가 있는 포인트만 후보로 본다.** 전국 49곳 중 15곳은 총 지수만
+  /// 있고 어종이 `-`로 와서(2026-08 실측), 그런 곳이 걸리면 화면에 "이 날짜의
+  /// 낚시지수가 없습니다"만 뜬다. 조금 더 멀어도 값이 있는 포인트를 고른다.
   FishingForecast forecastFor(SeaLocation location) {
     if (points.isEmpty) {
       throw const FormatException('낚시지수 파일에 포인트가 없음');
     }
-    var best = points.first;
+    final usable = [
+      for (final p in points)
+        if (_hasSpecies(p.name)) p,
+    ];
+    final candidates = usable.isNotEmpty ? usable : points;
+
+    var best = candidates.first;
     var bestD2 = double.infinity;
-    for (final p in points) {
+    for (final p in candidates) {
       final dLat = p.latitude - location.latitude;
       final dLon = p.longitude - location.longitude;
       final d2 = dLat * dLat + dLon * dLon;
@@ -144,6 +154,10 @@ class FishingIndexFile {
       indices: indicesByPoint[best.name] ?? const [],
     );
   }
+
+  bool _hasSpecies(String point) => (indicesByPoint[point] ?? const []).any(
+    (i) => i.species != null && i.species!.isNotEmpty && i.species != '-',
+  );
 }
 
 @immutable

@@ -21,9 +21,11 @@ String sampleFile() => jsonEncode({
   'points': [
     {'n': '가거도', 'la': 34.073, 'lo': 125.088},
     {'n': '김녕', 'la': 33.558, 'lo': 126.758},
+    // 총 지수만 있고 어종이 '-'인 포인트(실제 파일의 49곳 중 15곳이 이렇다).
+    {'n': '제주항 북측', 'la': 33.52, 'lo': 126.53},
   ],
   'dates': ['2026-08-01', '2026-08-02'],
-  'species': ['감성돔', '우럭'],
+  'species': ['감성돔', '우럭', '-'],
   'tides': ['대조기'],
   'slots': ['오전', '오후'],
   // [포인트, 날짜, 오전/오후, 어종, 등급, 파고m, 수온C, 물때]
@@ -33,6 +35,8 @@ String sampleFile() => jsonEncode({
     [1, 0, 1, 0, '매우좋음', 0.8, 25.5, 0],
     [1, 0, 0, 1, '보통', 0.9, 25.3, 0],
     [1, 1, 0, 0, '매우나쁨', 1.5, 25.1, 0],
+    [2, 0, 0, 2, '좋음', 0.5, 26.0, 0],
+    [2, 0, 1, 2, '보통', 0.5, 26.0, 0],
   ],
 });
 
@@ -78,7 +82,7 @@ void main() {
     test('색인 기반 행을 지수 목록으로 되돌린다', () {
       final file = parseFishingIndexFile(sampleFile());
 
-      expect(file.points, hasLength(2));
+      expect(file.points, hasLength(3));
       expect(file.generated, DateTime.utc(2026, 8, 1, 9));
 
       final kimnyeong = file.indicesByPoint['김녕']!;
@@ -103,6 +107,25 @@ void main() {
 
       expect(file.forecastFor(_jeju).indices.first.pointName, '김녕');
       expect(file.forecastFor(_far).indices.first.pointName, '가거도');
+    });
+
+    test('어종이 없는 포인트는 더 가까워도 건너뛴다', () {
+      final file = parseFishingIndexFile(sampleFile());
+      // 제주시내는 '제주항 북측'(어종 '-'만 있음)이 훨씬 가깝지만, 그곳을
+      // 고르면 화면에 "이 날짜의 낚시지수가 없습니다"만 뜬다.
+      const jejuCity = SeaLocation(
+        id: 'jeju_city',
+        name: '제주시',
+        region: '제주',
+        latitude: 33.51,
+        longitude: 126.52,
+      );
+      final picked = file.forecastFor(jejuCity);
+      expect(picked.indices.first.pointName, '김녕');
+      expect(
+        picked.indices.any((i) => i.species != null && i.species != '-'),
+        isTrue,
+      );
     });
   });
 
