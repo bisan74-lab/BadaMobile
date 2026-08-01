@@ -67,6 +67,21 @@ class Env {
       ? admobBannerAdUnitId
       : _settingsBannerAdUnitId;
 
+  /// 낚시지수 데이터(서버가 미리 모아 둔 정적 파일) URL.
+  ///
+  /// `.github/workflows/fishing-data.yml`이 하루 한 번 data.go.kr에서 전국
+  /// 하루치를 모아 **공개 데이터 저장소**의 롤링 릴리스에 올린 파일이다.
+  /// data.go.kr의 이 API는 numOfRows 상한이 300이라 앱이 직접 받으면 6쪽을
+  /// 나눠 받아야 하고 6초쯤 걸린다 — 서버가 모아 두면 앱은 약 20KB 파일
+  /// 하나로 끝난다. 못 받으면 앱이 data.go.kr 직접 호출로 폴백한다.
+  /// `--dart-define=FISHING_DATA_URL=...` 로 재정의 가능(빈 값이면 직접 호출).
+  static const fishingDataUrl = String.fromEnvironment(
+    'FISHING_DATA_URL',
+    defaultValue:
+        'https://github.com/bisan74-lab/badawindy-data/releases/download/'
+        'fishing-data/fishing_index.json.gz',
+  );
+
   /// 지도용 바람장 격자 데이터(서버가 미리 뽑아 둔 정적 파일) URL.
   ///
   /// GitHub Actions 크론(`.github/workflows/wind-data.yml`)이 Open-Meteo에서

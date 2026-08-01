@@ -1,0 +1,74 @@
+name: Fishing data refresh
+
+# 바다낚시지수 전국 하루치를 모아 공개 데이터 저장소의 롤링 릴리스에 올린다.
+# 앱은 이 파일 하나(약 20KB)만 받으면 되고, data.go.kr을 직접 호출하지 않는다.
+#
+# **왜 서버가 대신 받나** — 이 API는 numOfRows 상한이 300이라 전국 1,750건을
+# 받으려면 6쪽을 나눠 받아야 하고 6초쯤 걸린다(실측). 낚시지수는 하루 한 번
+# 갱신되는 예보라 기기마다 그걸 반복할 이유가 없다. 덤으로 앱에서 data.go.kr
+# 인증키를 쓰는 경로가 하나 줄어든다.
+#
+# 필요한 Secret:
+#   DATA_GO_KR_API_KEY  공공데이터포털 인증키
+#   BADAWINDY_TK        공개 데이터 저장소에 contents:write 권한이 있는 PAT
+#
+# 실행 시각: 낚시지수는 하루 한 번 갱신된다. 새벽에 한 번 받고, 혹시 그때
+# 아직 갱신 전이면 대비해 오전에 한 번 더 받는다(같은 값이면 무해).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 20 * * *' # 05:10 KST
+    - cron: '10 0 * * *' # 09:10 KST
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fishing-data
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 토큰이 없거나 잘려 있으면 수집 전에 멈춘다(wind-data.yml과 같은 이유).
+      - name: 업로드 토큰 확인
+        env:
+          TK: ${{ secrets.BADAWINDY_TK }}
+        run: |
+          if [ -z "$TK" ]; then
+            echo "::error::Secret BADAWINDY_TK 가 비어 있습니다."
+            exit 1
+          fi
+          n=${#TK}
+          case "$TK" in
+            github_pat_*) kind="fine-grained"; want=93 ;;
+            ghp_*)        kind="classic";      want=40 ;;
+            *)            kind="";             want=0  ;;
+          esac
+          if [ -z "$kind" ] || [ "$n" -ne "$want" ]; then
+            echo "::error::BADAWINDY_TK 값이 GitHub 토큰 형태가 아닙니다(${n}자)."
+            exit 1
+          fi
+          echo "BADAWINDY_TK 확인: $kind 토큰, ${n}자 — 형태 정상"
+
+      - name: 낚시지수 수집
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: python3 tool/fetch_fishing.py
+
+      - name: 공개 데이터 저장소의 롤링 릴리스에 업로드
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ vars.PUBLIC_DATA_REPO || 'bisan74-lab/badawindy-data' }}
+          token: ${{ secrets.BADAWINDY_TK }}
+          tag_name: fishing-data
+          name: 낚시지수 데이터 (자동 갱신)
+          body: |
+            앱 낚시정보용 바다낚시지수입니다(자동 갱신).
+            해양수산부 공공데이터 기반. `fishing_index.json.gz` 하나만
+            올라오며, 앱이 이 파일을 내려받아 씁니다.
+          files: fishing_index.json.gz
+          prerelease: true

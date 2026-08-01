@@ -8,24 +8,34 @@ import '../data/models/fishing_index.dart';
 import '../data/repositories/caching_fishing_repository.dart';
 import '../data/repositories/data_go_kr_fishing_repository.dart';
 import '../data/repositories/fishing_repository.dart';
+import '../data/repositories/github_fishing_repository.dart';
 import '../data/repositories/mock_fishing_repository.dart';
 
 /// 낚시지수 리포지토리 주입 지점.
 ///
-/// data.go.kr 인증키가 주입되면 실데이터(가장 가까운 포인트의 어종별 지수)를
-/// 사용한다. 실데이터는 성공 시 로컬에 캐시되고(FR-11), 네트워크 실패 시
-/// 캐시 → 그래도 없으면 합성 데이터로 폴백한다. 키가 없으면 합성 데이터 사용.
+/// 체인은 **서버 파일 → data.go.kr 직접 호출 → 캐시 → 합성**이다.
+///
+/// 서버 파일(`fishing-data.yml`이 하루 한 번 올리는 약 20KB gz)을 먼저 쓴다 —
+/// data.go.kr의 이 API는 한 쪽에 300건까지만 주므로 앱이 직접 받으면 6쪽을
+/// 나눠 받아야 하고 6초쯤 걸린다(실측). 서버 파일을 못 받으면 예전처럼 직접
+/// 호출하고, 그것도 실패하면 캐시 → 합성 데이터로 내려간다.
+///
+/// 인증키가 없으면 직접 호출 경로가 없으므로 서버 파일 → 합성으로 간다.
 final fishingRepositoryProvider = Provider<FishingRepository>((ref) {
   final mock = MockFishingRepository();
-  if (Env.dataGoKrApiKey.isEmpty) return mock;
   final cache = ref.watch(cacheStoreProvider);
-  final cachedReal = CachingFishingRepository(
-    // 전국 하루치 원본은 리포지토리가 **날짜 단위로** 캐시한다(지역을 바꿔도
-    // 재요청 없음). 바깥 래퍼는 그 위에서 지역별 결과를 오프라인용으로 남긴다.
-    inner: DataGoKrFishingRepository(cache: cache),
-    cache: cache,
-  );
-  return FishingRepository.withFallback(primary: cachedReal, fallback: mock);
+
+  // 직접 호출 경로(키가 있을 때만). 성공하면 지역별로 캐시해 오프라인 대비.
+  final direct = Env.dataGoKrApiKey.isEmpty
+      ? mock
+      : CachingFishingRepository(
+          // 전국 하루치 원본은 리포지토리가 **날짜 단위로** 캐시한다.
+          inner: DataGoKrFishingRepository(cache: cache),
+          cache: cache,
+        );
+
+  final fromServer = GithubFishingRepository(direct: direct, cache: cache);
+  return FishingRepository.withFallback(primary: fromServer, fallback: mock);
 });
 
 final fishingForecastProvider =

@@ -40,6 +40,20 @@ class DataGoKrFishingRepository implements FishingRepository {
   static const _host = 'apis.data.go.kr';
   static const _basePath = '/1192136/fcstFishingv2';
 
+  /// 한 쪽에 받을 건수. **이 API의 실측 상한은 300이다.**
+  /// 그보다 크게 넣으면 HTTP 200에 `resultCode: 10
+  /// INVALID_REQUEST_PARAMETER_ERROR`만 담긴 76B가 돌아온다 — 예전에 3000으로
+  /// 요청하다가 늘 빈 응답을 받고 조용히 합성 데이터로 폴백하던 원인이었다.
+  /// 이 값을 올릴 땐 `tool/probe_fishing.py`로 실제 응답을 먼저 확인한다.
+  static const _pageRows = 300;
+
+  /// 전국 하루치는 현재 1,750건(6쪽)이다. 안전장치로 넉넉히 잡는다.
+  static const _maxPages = 20;
+
+  /// 응답이 없을 때 무한정 기다리지 않는다 — 예전엔 타임아웃이 없어서
+  /// API가 느리면 화면이 그만큼 로딩에 머물렀다.
+  static const _timeout = Duration(seconds: 10);
+
   /// 날짜별 디스크 캐시 키. **지역이 아니라 날짜 단위**여야 한다 —
   /// 받아 오는 건 전국 원본이라 지역별로 저장하면 새 지역마다 같은 데이터를
   /// 다시 받게 된다(실제로 지역을 바꿀 때마다 3~5초씩 걸리던 원인).
@@ -69,19 +83,24 @@ class DataGoKrFishingRepository implements FishingRepository {
     }
 
     try {
-      final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiServicev2', {
-        'serviceKey': _serviceKey,
-        'type': 'json',
-        'reqDate': ymd,
-        'gubun': '갯바위',
-        'pageNo': '1',
-        'numOfRows': '3000', // 전체 포인트×어종×오전/오후 (하루 약 1,750건)
-      });
-      final res = await _client.get(uri);
-      if (res.statusCode != 200) {
-        throw http.ClientException('바다낚시지수 응답 오류 ${res.statusCode}', uri);
+      final items = <Map<String, dynamic>>[];
+      for (var page = 1; page <= _maxPages; page++) {
+        final uri = Uri.https(_host, '$_basePath/GetFcstFishingApiServicev2', {
+          'serviceKey': _serviceKey,
+          'type': 'json',
+          'reqDate': ymd,
+          'gubun': '갯바위',
+          'pageNo': '$page',
+          'numOfRows': '$_pageRows',
+        });
+        final res = await _client.get(uri).timeout(_timeout);
+        if (res.statusCode != 200) {
+          throw http.ClientException('바다낚시지수 응답 오류 ${res.statusCode}', uri);
+        }
+        final got = await _parse(res.body);
+        items.addAll(got);
+        if (got.length < _pageRows) break; // 마지막 쪽
       }
-      final items = await _parse(res.body);
       if (items.isEmpty) {
         throw const FormatException('바다낚시지수 응답에 데이터가 없음');
       }

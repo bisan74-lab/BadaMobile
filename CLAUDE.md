@@ -51,6 +51,20 @@ dart format lib test       # 커밋 전 포맷
   지나도 같은 위치는 같은 방식으로만 흔들려 지글거리지 않는다. 강도를
   바꾸려면 `_turbNoiseFreq`(소용돌이 크기)·`_turbMaxWarpDeg`(최대 뒤틀림)를
   조정한다.
+- **낚시지수도 서버 파일 우선**(`features/fishing/.../github_fishing_repository.dart`):
+  GitHub Actions 크론(`.github/workflows/fishing-data.yml` → `tool/fetch_fishing.py`)이
+  data.go.kr에서 전국 하루치를 모아 롤링 릴리스 `fishing-data`의
+  `fishing_index.json.gz`(약 20KB)로 올리고, 앱은 그 파일 하나만 받는다.
+  **이 API의 `numOfRows` 상한은 300이다** — 넘기면 HTTP 200에
+  `resultCode: 10 INVALID_REQUEST_PARAMETER_ERROR`만 담긴 76B가 오고, 예전에
+  3000으로 요청하다 늘 빈 응답을 받아 조용히 합성 데이터로 폴백했다(지역을
+  바꿀 때마다 5~9초 걸리던 원인). 값을 바꿀 땐 `tool/probe_fishing.py`로
+  실제 응답을 먼저 확인한다.
+- **어종 목록은 API가 실제로 주는 것만 담는다**(`fishing_index.dart`의
+  `fishingSpeciesCatalog`): 2026-08 실측 기준 감성돔·농어·돌돔·벵에돔·우럭·
+  참돔·기타어종. 광어·문어·쭈꾸미처럼 API에 없는 어종을 넣으면 데이터가
+  멀쩡해도 지수가 영영 빈칸이다. `seasonalSpecies`·`preferredSpeciesForRegion`도
+  이 목록 안에서만 고른다(테스트가 강제한다).
 - **앱이 Open-Meteo를 직접 호출하는 경로(폴백)의 격자 총 좌표 수는 600 미만
   유지**(현재 21×24=504): 무료 한도가 분당 600콜이고 다지점 요청은 좌표
   1개=1콜이라, 넘기면 요청 한 번에 한도를 초과해 **매번 429 → 합성 폴백**이
