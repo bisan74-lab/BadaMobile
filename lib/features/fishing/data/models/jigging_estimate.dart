@@ -53,7 +53,7 @@ const _tideCurve = <String, List<(double, double)>>{
     (0.096, 0.92),
     (0.250, 0.54),
     (0.448, 0.46),
-    (0.655, 0.40),
+    (0.655, 0.42),
     (0.835, 0.35),
     (0.957, 0.22),
     (1.000, 0.18),
@@ -63,7 +63,7 @@ const _tideCurve = <String, List<(double, double)>>{
     (0.096, 0.60),
     (0.250, 0.92),
     (0.448, 0.46),
-    (0.655, 0.40),
+    (0.655, 0.42),
     (0.835, 0.35),
     (0.957, 0.22),
     (1.000, 0.18),
@@ -74,7 +74,7 @@ const _tideCurve = <String, List<(double, double)>>{
     (0.250, 0.60),
     (0.448, 0.92),
     (0.655, 0.54),
-    (0.835, 0.40),
+    (0.835, 0.37),
     (0.957, 0.22),
     (1.000, 0.18),
   ],
@@ -106,13 +106,16 @@ double? _tideFactor(String species, double strength) {
 /// 그래서 비수기 하한을 [_seasonFloor] 근처로 둔다 — 비수기라는 사실은 등급을
 /// 확실히 낮추되, 그 안에서 조금/사리 차이는 여전히 드러나게 한다.
 ///
-/// **[_peakSeason]과 [_shoulderSeason]이 화면의 등급 분포를 정한다.** 성수기
-/// (1.0)엔 15개 물때가 매우좋음 2 / 좋음 4 / 보통 6 / 나쁨 3으로 갈리고,
-/// 성수기 다음 단계(0.85)에선 좋음 한 쌍이 보통으로 내려가 매우좋음 2 / 좋음 2
-/// / 보통 8 / 나쁨 3이 된다. 값을 바꾸면 `tool/verify_jigging.dart`로 분포를
-/// 다시 확인한다.
+/// **[_peakSeason]·[_shoulderSeason]·[_lateSeason] 세 단계가 화면의 등급 분포를
+/// 정한다**(15개 물때 기준):
+///
+///     성수기 1.00 (9월)     매우좋음 2 / 좋음 4 / 보통 6 / 나쁨 3
+///     그다음 0.85 (10월 등) 매우좋음 2 / 좋음 2 / 보통 8 / 나쁨 3
+///     끝물   0.72 (11월)              좋음 2 / 보통 8 / 나쁨 5
+///
+/// 값을 바꾸면 `tool/verify_jigging.dart`로 분포를 다시 확인한다.
 const _season = <String, Map<int, double>>{
-  // 9월(금어기 해제 직후)이 최고, 10·11월이 그다음.
+  // 9월(금어기 해제 직후)이 최고, 10월이 그다음, 11월은 끝물.
   '쭈꾸미': {
     1: 0.40,
     2: 0.40,
@@ -124,7 +127,7 @@ const _season = <String, Map<int, double>>{
     8: 0.45,
     9: _peakSeason,
     10: _shoulderSeason,
-    11: _shoulderSeason,
+    11: _lateSeason,
     12: 0.50,
   },
   // 쭈꾸미와 같은 배에서 같은 시기에 난다. 봄엔 산란기 큰 개체(왕갑오)가
@@ -140,7 +143,7 @@ const _season = <String, Map<int, double>>{
     8: 0.50,
     9: _peakSeason,
     10: _shoulderSeason,
-    11: _shoulderSeason,
+    11: _lateSeason,
     12: 0.55,
   },
   // 가을이 가장 좋고 봄에도 한 번 더 붙는다.
@@ -155,7 +158,7 @@ const _season = <String, Map<int, double>>{
     8: 0.45,
     9: _peakSeason,
     10: _shoulderSeason,
-    11: _shoulderSeason,
+    11: _lateSeason,
     12: 0.60,
   },
 };
@@ -164,9 +167,13 @@ const _season = <String, Map<int, double>>{
 /// 15개 물때가 매우좋음 2 / 좋음 4 / 보통 6 / 나쁨 3으로 갈린다.
 const double _peakSeason = 1.0;
 
-/// 성수기 다음 단계(10·11월 등) 가중치. 좋음 한 쌍이 보통으로 내려가
+/// 성수기 다음 단계(10월·봄철 등) 가중치. 좋음 한 쌍이 보통으로 내려가
 /// 매우좋음 2 / 좋음 2 / 보통 8 / 나쁨 3이 된다.
 const double _shoulderSeason = 0.85;
+
+/// 시즌 끝물(11월) 가중치. **개체수가 확 줄어드는 시기**(사용자 실사용 경험)라
+/// 매우좋음이 아예 없어지고 나쁨이 늘어, 좋음 2 / 보통 8 / 나쁨 5가 된다.
+const double _lateSeason = 0.72;
 
 /// 제철 가중치의 하한. 달 정보가 없거나 표에 빠진 달에도 이 값을 쓴다.
 const double _seasonFloor = 0.40;

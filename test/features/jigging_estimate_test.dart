@@ -248,10 +248,16 @@ void main() {
         FishingGrade.normal: 8,
         FishingGrade.bad: 3,
       };
+      // 11월은 개체수가 확 줄어드는 끝물이라 매우좋음이 아예 없다.
+      const late = {
+        FishingGrade.good: 2,
+        FishingGrade.normal: 8,
+        FishingGrade.bad: 5,
+      };
       for (final s in estimatedSpeciesCatalog) {
         expect(distribution(s, 9), peak, reason: '$s 9월');
         expect(distribution(s, 10), shoulder, reason: '$s 10월');
-        expect(distribution(s, 11), shoulder, reason: '$s 11월');
+        expect(distribution(s, 11), late, reason: '$s 11월');
       }
     });
   });
@@ -271,16 +277,21 @@ void main() {
       }
     });
 
-    test('9월이 가장 높고 10·11월이 그다음이다', () {
-      // 9월 금어기 해제 직후가 최고. 10·11월은 한 단계 낮은 같은 값.
-      for (final s in ['쭈꾸미', '갑오징어']) {
-        final aug = calmScore(s, 0.05, 8);
+    test('9월 > 10월 > 11월 순으로 내려간다', () {
+      // 9월 금어기 해제 직후가 최고이고, 11월은 개체수가 확 줄어드는 끝물.
+      for (final s in estimatedSpeciesCatalog) {
         final sep = calmScore(s, 0.05, 9);
         final oct = calmScore(s, 0.05, 10);
         final nov = calmScore(s, 0.05, 11);
-        expect(sep, greaterThan(aug * 1.5), reason: '$s: 9월 ≫ 8월(금어기 해제)');
         expect(sep, greaterThan(oct), reason: '$s: 9월 > 10월');
-        expect(oct, closeTo(nov, 0.001), reason: '$s: 10월 = 11월');
+        expect(oct, greaterThan(nov), reason: '$s: 10월 > 11월');
+      }
+      for (final s in ['쭈꾸미', '갑오징어']) {
+        expect(
+          calmScore(s, 0.05, 9),
+          greaterThan(calmScore(s, 0.05, 8) * 1.5),
+          reason: '$s: 9월 ≫ 8월(금어기 해제)',
+        );
       }
     });
 
