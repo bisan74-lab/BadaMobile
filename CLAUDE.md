@@ -83,6 +83,15 @@ dart format lib test       # 커밋 전 포맷
   `seasonalSpecies`·`preferredSpeciesForRegion`도 이 목록 안에서만 고른다
   (테스트가 강제한다). 목록을 바꿀 땐 `tool/probe_fishing.py`(mode=gubun)로
   실제 어종을 먼저 확인한다.
+- **쭈꾸미·갑오징어·문어는 관측이 아니라 추정이다**
+  (`fishing/data/models/jigging_estimate.dart`): 공공데이터에 이 어종 지수가
+  없어서, 그날 조류 세기(`tideStrengthFraction` — 물때 화면 조류세기 막대와
+  **같은 값**)와 지점 예보의 바람·돌풍·파고, 그리고 달별 제철 가중치로
+  계산한다. 조류 선호는 쭈꾸미=느린 물, 갑오징어=중간, 문어=넓게로 두었다.
+  **추가 네트워크 호출이 없다** — 화면이 이미 갖고 있는 조위·예보만 쓴다.
+  화면에는 반드시 **"추정" 배지**를 달아 관측 지수와 구분하고, 설정 >
+  데이터 출처와 스토어 설명에도 추정임을 명시한다. 상수를 바꾸면
+  `jigging_estimate_test.dart`가 선호 방향(느린 물/중간/넓게)을 지킨다.
 - **어종 선택 목록은 그 지역에 값이 있는 어종만 보여준다**
   (`FishingForecast.availableSpecies`): 포인트마다 주는 어종이 달라서, 전체
   카탈로그를 그대로 띄우면 고르고도 빈칸이 나온다. 물때 화면·홈 화면의 선택

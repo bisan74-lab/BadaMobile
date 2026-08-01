@@ -5,6 +5,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../../core/widgets/ad_placeholder.dart';
 import '../../fishing/data/models/fishing_index.dart';
+import '../../fishing/data/models/jigging_estimate.dart';
 import '../../fishing/presentation/providers.dart';
 import '../../kma_weather/data/weather_code.dart';
 import '../../kma_weather/presentation/providers.dart';
@@ -13,7 +14,8 @@ import '../../locations/data/models/sea_location.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
 import '../../settings/presentation/providers.dart';
-import '../../weather/data/models/marine_weather.dart' show HourlyMarine;
+import '../../weather/data/models/marine_weather.dart'
+    show HourlyMarine, MarineForecast;
 import '../../weather/presentation/providers.dart'
     show homeMarineForecastProvider;
 import '../data/models/tide_data.dart';
@@ -30,13 +32,14 @@ enum _Panel { timeline, fishing, weather, calendar, chart }
 
 /// 달별 제철 어종(낚시정보 기본값).
 ///
-/// **[fishingSpeciesCatalog] 안의 어종만 쓴다** — 바다낚시지수 API가 주지
-/// 않는 어종(광어·문어·쭈꾸미 등)을 넣으면 지수가 영영 빈칸으로 남는다.
+/// **[fishingSpeciesCatalog](관측)와 [estimatedSpeciesCatalog](추정) 안의
+/// 어종만 쓴다** — 둘 중 어디에도 없는 어종을 넣으면 지수가 영영 빈칸으로
+/// 남는다(테스트가 막는다). 가을엔 쭈꾸미·갑오징어가 제철이라 기본으로 넣는다.
 List<String> seasonalSpecies(int month) => switch (month) {
-  >= 3 && <= 5 => const ['참돔', '감성돔', '농어', '우럭', '돌돔'],
+  >= 3 && <= 5 => const ['참돔', '감성돔', '농어', '문어', '우럭'],
   >= 6 && <= 8 => const ['농어', '참돔', '우럭', '벵에돔', '돌돔'],
-  >= 9 && <= 11 => const ['감성돔', '벵에돔', '참돔', '우럭', '농어'],
-  _ => const ['우럭', '감성돔', '참돔', '돌돔', '농어'],
+  >= 9 && <= 11 => const ['쭈꾸미', '갑오징어', '감성돔', '벵에돔', '문어'],
+  _ => const ['우럭', '감성돔', '참돔', '문어', '농어'],
 };
 
 /// 물때 & 날씨 화면 — 앱의 메인 탭.
@@ -606,7 +609,16 @@ class _FishingPanel extends ConsumerWidget {
     final fishingAsync = ref.watch(fishingForecastProvider(location));
     // 사용자가 어종을 직접 골랐으면 그 목록을, 아니면 제철 어종을 쓴다.
     final custom = ref.watch(tideFishingSpeciesProvider);
-    final species = custom.isNotEmpty ? custom : seasonalSpecies(date.month);
+    final chosen = custom.isNotEmpty ? custom : seasonalSpecies(date.month);
+    // 관측 기반(API)과 추정(물때·바람)을 나눠서 다룬다.
+    final species = [
+      for (final s in chosen)
+        if (!estimatedSpeciesCatalog.contains(s)) s,
+    ];
+    final estimated = _estimatesFor([
+      for (final s in chosen)
+        if (estimatedSpeciesCatalog.contains(s)) s,
+    ], marineAsync.valueOrNull);
 
     String tideLine() {
       if (tide.extremes.isEmpty) return '정보 없음';
@@ -716,7 +728,7 @@ class _FishingPanel extends ConsumerWidget {
                 date,
                 preferredSpecies: species,
               );
-              if (groups.isEmpty) {
+              if (groups.isEmpty && estimated.isEmpty) {
                 return const Text(
                   '이 날짜의 낚시지수가 없습니다',
                   style: TextStyle(color: Colors.white70),
@@ -729,6 +741,11 @@ class _FishingPanel extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 6),
                       child: _SpeciesIndexRow(indices: g),
                     ),
+                  for (final e in estimated)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _EstimatedIndexRow(estimates: e),
+                    ),
                 ],
               );
             },
@@ -736,6 +753,57 @@ class _FishingPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// 선택한 추정 어종의 오전·오후 등급을 만든다.
+  ///
+  /// 이미 화면에 있는 값만 쓴다 — 그날 조위(조류 세기)와 지점 예보의 바람·
+  /// 파고. 추가 네트워크 호출이 없다. 예보를 아직 못 받았으면 바람은 잔잔한
+  /// 것으로 보고 조류·계절만으로 매긴다.
+  List<List<JiggingEstimate>> _estimatesFor(
+    List<String> species,
+    MarineForecast? marine,
+  ) {
+    if (species.isEmpty) return const [];
+    final strength = tideStrengthFraction(tide.hourlyHeightsCm);
+
+    /// 그날 [hour]시에 가장 가까운 예보.
+    HourlyMarine? at(int hour) {
+      if (marine == null) return null;
+      final target = DateTime(date.year, date.month, date.day, hour);
+      HourlyMarine? best;
+      var bestDiff = const Duration(days: 999);
+      for (final h in marine.hourly) {
+        final diff = h.time.difference(target).abs();
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = h;
+        }
+      }
+      // 그날 값이 아니면(예보 범위 밖) 쓰지 않는다.
+      return best != null && DateUtils.isSameDay(best.time, date) ? best : null;
+    }
+
+    final morning = at(9);
+    final afternoon = at(15);
+
+    JiggingEstimate one(String s, String slot, HourlyMarine? h) =>
+        JiggingEstimate(
+          species: s,
+          timeSlot: slot,
+          grade: estimateJiggingGrade(
+            species: s,
+            tideStrength: strength,
+            windMs: h?.windSpeedMs ?? 0,
+            gustMs: h?.windGustMs ?? 0,
+            waveM: h?.waveHeightM ?? 0,
+            month: date.month,
+          ),
+        );
+
+    return [
+      for (final s in species) [one(s, '오전', morning), one(s, '오후', afternoon)],
+    ];
   }
 
   /// 어종 선택 다이얼로그. 칩으로 최대 5종을 고르고, "제철 어종(자동)"을
@@ -753,6 +821,8 @@ class _FishingPanel extends ConsumerWidget {
     final options = [
       for (final s in fishingSpeciesCatalog)
         if (available == null || available.contains(s)) s,
+      // 추정 어종은 관측 데이터와 무관하게(물때·바람으로) 계산하므로 항상 뜬다.
+      ...estimatedSpeciesCatalog,
     ];
     // 자동 모드였다면 현재 화면의 제철 어종을 초기 선택으로 보여준다.
     // 값이 없는 어종은 초기 선택에서도 뺀다.
@@ -898,6 +968,73 @@ class _SpeciesIndexRow extends StatelessWidget {
               ),
               child: Text(
                 '${i.timeSlot} ${i.grade.label}',
+                style: const TextStyle(color: Colors.white, fontSize: 10.5),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 추정 어종 한 줄. 관측 기반 행([_SpeciesIndexRow])과 같은 모양이되
+/// **"추정" 배지**를 달아 관측값과 구분한다 — 이 값은 물때·바람으로 계산한
+/// 것이라 관측 지수와 같은 근거가 아니다.
+class _EstimatedIndexRow extends StatelessWidget {
+  const _EstimatedIndexRow({required this.estimates});
+
+  final List<JiggingEstimate> estimates;
+
+  Color _gradeColor(FishingGrade g) => switch (g) {
+    FishingGrade.veryGood => const Color(0xFF2E9E5B),
+    FishingGrade.good => const Color(0xFF6BB94D),
+    FishingGrade.normal => const Color(0xFFC9A227),
+    FishingGrade.bad => const Color(0xFFCC7A29),
+    FishingGrade.veryBad => const Color(0xFFC24444),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Text(
+            estimates.first.species,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white38),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              '추정',
+              style: TextStyle(color: Colors.white70, fontSize: 9.5),
+            ),
+          ),
+          const Spacer(),
+          for (final e in estimates) ...[
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: _gradeColor(e.grade),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${e.timeSlot} ${e.grade.label}',
                 style: const TextStyle(color: Colors.white, fontSize: 10.5),
               ),
             ),

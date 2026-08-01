@@ -5,9 +5,11 @@ import '../../../app/theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../fishing/data/models/fishing_index.dart';
+import '../../fishing/data/models/jigging_estimate.dart';
 import '../../fishing/presentation/providers.dart';
 import '../../locations/presentation/providers.dart';
 import '../../locations/presentation/widgets/region_selector_action.dart';
+import '../../tide/data/models/tide_data.dart';
 import '../../tide/presentation/providers.dart';
 import '../../weather/data/models/marine_weather.dart';
 import '../../weather/presentation/providers.dart';
@@ -52,6 +54,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return best;
   }
 
+  /// 관측 지수가 없는 어종(쭈꾸미·갑오징어·문어)의 추정 등급.
+  ///
+  /// 이미 화면에 있는 값만 쓴다 — 그날 조위(조류 세기)와 지점 예보의 바람·
+  /// 파고. 조위나 예보를 아직 못 받았으면 null(행이 안 뜬다).
+  List<JiggingEstimate>? _estimateFor(
+    String species,
+    TideDay? tide,
+    MarineForecast? marine,
+  ) {
+    if (tide == null) return null;
+    final strength = tideStrengthFraction(tide.hourlyHeightsCm);
+
+    HourlyMarine? at(int hour) {
+      if (marine == null) return null;
+      final target = DateTime(_date.year, _date.month, _date.day, hour);
+      HourlyMarine? best;
+      var bestDiff = const Duration(days: 999);
+      for (final h in marine.hourly) {
+        final diff = h.time.difference(target).abs();
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = h;
+        }
+      }
+      return best != null && DateUtils.isSameDay(best.time, _date)
+          ? best
+          : null;
+    }
+
+    JiggingEstimate one(String slot, HourlyMarine? h) => JiggingEstimate(
+      species: species,
+      timeSlot: slot,
+      grade: estimateJiggingGrade(
+        species: species,
+        tideStrength: strength,
+        windMs: h?.windSpeedMs ?? 0,
+        gustMs: h?.windGustMs ?? 0,
+        waveM: h?.waveHeightM ?? 0,
+        month: _date.month,
+      ),
+    );
+
+    return [one('오전', at(9)), one('오후', at(15))];
+  }
+
   /// 대표 어종 변경 메뉴 — **이 지역에 값이 있는 어종** 중 하나를 골라
   /// [slot]에 반영한다.
   ///
@@ -66,6 +113,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final options = [
       for (final s in fishingSpeciesCatalog)
         if (available == null || available.contains(s)) s,
+      // 추정 어종은 관측 데이터와 무관하게(물때·바람으로) 계산하므로 항상 뜬다.
+      ...estimatedSpeciesCatalog,
     ];
     final chosen = await showModalBottomSheet<String>(
       context: context,
@@ -291,6 +340,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     .forDate(_date)
                                     .where((i) => i.species == species[slot])
                                     .toList(),
+                                // 관측 지수가 없는 어종(쭈꾸미·갑오징어·문어)은
+                                // 물때·바람으로 추정한 등급을 대신 보여준다.
+                                estimated:
+                                    estimatedSpeciesCatalog.contains(
+                                      species[slot],
+                                    )
+                                    ? _estimateFor(
+                                        species[slot],
+                                        tideAsync.valueOrNull,
+                                        forecastAsync.valueOrNull,
+                                      )
+                                    : null,
                                 onTap: () => _pickSpecies(
                                   slot,
                                   species[slot],
@@ -323,10 +384,16 @@ class _SpeciesRow extends StatelessWidget {
     required this.species,
     required this.indices,
     required this.onTap,
+    this.estimated,
   });
 
   final String species;
   final List<FishingIndex> indices;
+
+  /// 관측 지수가 없는 어종의 **추정** 등급(오전·오후). 있으면 [indices] 대신
+  /// 이걸 보여주고 "추정" 배지를 단다 — 근거가 달라 구분해야 한다.
+  final List<JiggingEstimate>? estimated;
+
   final VoidCallback onTap;
 
   @override
@@ -354,13 +421,41 @@ class _SpeciesRow extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (estimated != null) ...[
+                    const SizedBox(width: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: scheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '추정',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                   Icon(Icons.arrow_drop_down, size: 20, color: scheme.primary),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 4),
-          if (sorted.isEmpty)
+          if (estimated != null)
+            Row(
+              children: [
+                for (final e in estimated!) ...[
+                  FishingLevelBadge(timeSlot: e.timeSlot, grade: e.grade),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            )
+          else if (sorted.isEmpty)
             Text(
               '이 날짜의 지수 정보가 없습니다',
               style: Theme.of(context).textTheme.bodySmall,

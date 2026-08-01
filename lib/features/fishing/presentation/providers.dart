@@ -5,6 +5,7 @@ import '../../../core/storage/cache_store.dart';
 import '../../../core/storage/prefs.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../data/models/fishing_index.dart';
+import '../data/models/jigging_estimate.dart';
 import '../data/repositories/caching_fishing_repository.dart';
 import '../data/repositories/data_go_kr_fishing_repository.dart';
 import '../data/repositories/fishing_repository.dart';
@@ -54,13 +55,13 @@ class FishingSpeciesNotifier extends Notifier<List<String>> {
     final saved = ref.read(sharedPreferencesProvider).getStringList(_prefsKey);
     final list = (saved == null || saved.isEmpty)
         ? defaultFishingSpecies
-        : saved.where(fishingSpeciesCatalog.contains).toList();
+        : saved.where(allSelectableSpecies.contains).toList();
     return list.isEmpty ? defaultFishingSpecies : list;
   }
 
   /// [slot]번째(0~2) 어종을 [species]로 바꾼다. 중복이면 무시.
   void setAt(int slot, String species) {
-    if (!fishingSpeciesCatalog.contains(species)) return;
+    if (!allSelectableSpecies.contains(species)) return;
     final next = [...state];
     while (next.length <= slot && next.length < _maxCount) {
       next.add(species);
@@ -93,14 +94,14 @@ class TideFishingSpeciesNotifier extends Notifier<List<String>> {
   @override
   List<String> build() {
     final saved = ref.read(sharedPreferencesProvider).getStringList(_prefsKey);
-    return (saved ?? const []).where(fishingSpeciesCatalog.contains).toList();
+    return (saved ?? const []).where(allSelectableSpecies.contains).toList();
   }
 
   /// [species]로 교체한다(카탈로그에 있는 어종만, 최대 [maxCount]종).
   /// 빈 목록을 넘기면 제철 어종 자동 모드로 돌아간다.
   void set(List<String> species) {
     final list = species
-        .where(fishingSpeciesCatalog.contains)
+        .where(allSelectableSpecies.contains)
         .take(maxCount)
         .toList();
     state = list;

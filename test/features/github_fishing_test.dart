@@ -3,6 +3,7 @@ import 'dart:io' show gzip;
 
 import 'package:bada_mobile/core/storage/cache_store.dart';
 import 'package:bada_mobile/features/fishing/data/models/fishing_index.dart';
+import 'package:bada_mobile/features/fishing/data/models/jigging_estimate.dart';
 import 'package:bada_mobile/features/fishing/data/repositories/fishing_repository.dart';
 import 'package:bada_mobile/features/fishing/data/repositories/github_fishing_repository.dart';
 import 'package:bada_mobile/features/locations/data/models/sea_location.dart';
@@ -254,13 +255,14 @@ void main() {
 
   group('어종 목록', () {
     test('제철 어종은 모두 후보 목록 안에 있다', () {
-      // API가 주지 않는 어종을 기본값으로 두면 지수가 영영 빈칸으로 남는다.
+      // 관측·추정 어느 쪽에도 없는 어종을 기본값으로 두면 빈칸이 된다.
+      final known = {...fishingSpeciesCatalog, ...estimatedSpeciesCatalog};
       for (final month in List.generate(12, (i) => i + 1)) {
         for (final s in seasonalSpecies(month)) {
           expect(
-            fishingSpeciesCatalog,
+            known,
             contains(s),
-            reason: '$month월 제철 어종 "$s"가 후보 목록에 없다',
+            reason: '$month월 제철 어종 "$s"가 관측·추정 목록 어디에도 없다',
           );
         }
       }
