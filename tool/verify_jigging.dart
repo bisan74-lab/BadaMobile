@@ -5,17 +5,20 @@
 // 전국 대표 지점(사리 조차가 크게 다른 곳들) × 15개 물때 × 12개월을 훑어
 // 등급 분포를 뽑고, 아래 불변식을 확인한다. 하나라도 깨지면 종료 코드 1.
 //
-//   1. 물때 변별력 — 성수기(10월) **모든 지점**에서 조류를 뚜렷하게 타는
-//      쭈꾸미·갑오징어가 물때에 따라 최소 3단계로 갈려야 한다.
+//   1. 물때 변별력 — 성수기(10월) 조류를 뚜렷하게 타는 쭈꾸미·갑오징어가
+//      물때에 따라 최소 2단계(조차가 큰 서해는 3단계)로 갈려야 한다.
 //      (예전엔 절대 조차로 정규화해 서해가 전 물때 "매우나쁨" 한 칸이었다.)
-//   2. 어떤 지점·달·어종도 15개 물때가 전부 "매우나쁨"이면 안 된다
-//      — 사용자가 제보한 증상 그 자체.
+//   2. **"매우나쁨"은 날씨가 나쁠 때만** — 바람·파고가 잔잔하거나 정보가 없으면
+//      어떤 지점·달·물때·어종도 매우나쁨이 나오면 안 된다. 반대로 강풍+높은
+//      파고에서는 나와야 한다(안 나오면 경고 기능이 죽은 것).
 //   3. 조차가 작은 곳(동해권)도 전 물때 "매우좋음"이면 안 된다
 //      — 1의 반대 방향 실패(세기 상한이 최적에 눌러앉는 경우).
 //   4. 어종별 조류 선호 방향 — 쭈꾸미는 조금 > 사리, 갑오징어는
 //      약한중간 > 조금 > 중간 > 사리, 셋 다 조금 > 사리.
-//   5. 바람 정보가 없으면 감점이 없다 — null로 넘긴 결과가 "잔잔한 날"과 같다.
-//   6. 실측 대조 — 사용자 제보 사례(무창포 2026-08-20 조금, 조차 376cm)에서
+//   5. 제철 흐름(쭈꾸미·갑오징어) — 9월(금어기 해제) ≈ 10월 > 8월,
+//      그리고 11월은 10월보다 확실히 낮다(개체수 급감).
+//   6. 바람 정보가 없으면 감점이 없다 — null로 넘긴 결과가 "잔잔한 날"과 같다.
+//   7. 실측 대조 — 사용자 제보 사례(무창포 2026-08-20 조금, 조차 376cm)에서
 //      쭈꾸미·갑오징어가 "매우나쁨"으로 떨어지지 않는다.
 //
 // 문어는 원래 조류를 크게 타지 않아 변별력 조건에서 뺀다(같은 등급이 이어져도
@@ -100,11 +103,13 @@ void main() {
       ];
       print('    ${species.padRight(5)} ${cells.join(' ')}');
 
-      // 불변식 1: 성수기엔 어느 지점이든 물때로 최소 3단계 갈려야 한다.
+      // 불변식 1: 성수기엔 물때로 등급이 갈려야 한다. 조차가 큰 서해는
+      // 위상 전 구간을 쓰므로 3단계, 조차가 작은 곳은 2단계까지 요구한다.
       // (문어는 원래 조류를 크게 안 타므로 뺀다.)
       if (species != '문어') {
+        final want = site.springRangeCm >= 450 ? 3 : 2;
         check(
-          row.toSet().length >= 3,
+          row.toSet().length >= want,
           '${site.name} 10월 $species: 물때 변별력 부족 '
           '(${row.toSet().map((g) => g.label).join('/')})',
         );
@@ -113,27 +118,64 @@ void main() {
     print('');
   }
 
-  // ── 2·3. 12개월 × 15물때가 한쪽 끝으로 눌리지 않는다 ─────────────────
+  // ── 2·3. "매우나쁨"은 날씨가 나쁠 때만 ───────────────────────────────
   for (final site in sites) {
     for (final species in estimatedSpeciesCatalog) {
       for (var month = 1; month <= 12; month++) {
+        for (final m in allMulTtae(site.system)) {
+          // 바람 정보가 없을 때(= 물때·제철만)와 잔잔할 때는 아무리 나빠도
+          // "나쁨"에서 멈춰야 한다.
+          check(
+            gradeFor(species, site, m, month) != FishingGrade.veryBad,
+            '${site.name} $month월 ${label(m)} $species: 날씨가 나쁘지도 않은데 '
+            '"매우나쁨"',
+          );
+          check(
+            gradeFor(
+                  species,
+                  site,
+                  m,
+                  month,
+                  windMs: 2,
+                  gustMs: 4,
+                  waveM: 0.3,
+                ) !=
+                FishingGrade.veryBad,
+            '${site.name} $month월 ${label(m)} $species: 잔잔한 날인데 "매우나쁨"',
+          );
+        }
         final row = [
           for (final m in allMulTtae(site.system))
             gradeFor(species, site, m, month),
         ];
-        check(
-          !row.every((g) => g == FishingGrade.veryBad),
-          '${site.name} $month월 $species: 15개 물때가 전부 "매우나쁨" '
-          '— 제보와 같은 증상',
-        );
         // 조차가 작은 곳에서 반대로 전부 "매우좋음"이 되는 것도 막는다.
-        check(
-          !row.every((g) => g == FishingGrade.veryGood),
-          '${site.name} $month월 $species: 15개 물때가 전부 "매우좋음" '
-          '— 세기 상한이 최적에 눌러앉았다',
-        );
+        // (문어는 원래 조류를 크게 안 타서 제철엔 대체로 좋은 게 맞다.)
+        if (species != '문어') {
+          check(
+            !row.every((g) => g == FishingGrade.veryGood),
+            '${site.name} $month월 $species: 15개 물때가 전부 "매우좋음" '
+            '— 세기 상한이 최적에 눌러앉았다',
+          );
+        }
       }
     }
+  }
+
+  // 반대 방향: 강풍 + 높은 파고면 "매우나쁨"이 나와야 한다(경고가 죽으면 안 됨).
+  for (final species in estimatedSpeciesCatalog) {
+    check(
+      gradeFor(
+            species,
+            sites[1],
+            allMulTtae(MulTtaeSystem.west7)[13], // 조금
+            10,
+            windMs: 15,
+            gustMs: 23,
+            waveM: 3.0,
+          ) ==
+          FishingGrade.veryBad,
+      '$species: 강풍·높은 파고에서도 "매우나쁨"이 안 나온다',
+    );
   }
 
   // ── 4. 어종별 조류 선호 방향 ─────────────────────────────────────────
@@ -175,7 +217,34 @@ void main() {
     check(score(s, jogeum, 10) > score(s, sari, 10), '$s: 조금 > 사리여야 한다');
   }
 
-  // ── 5. 바람 정보가 없으면 감점하지 않는다 ────────────────────────────
+  // ── 5. 제철 흐름 (쭈꾸미·갑오징어) ───────────────────────────────────
+  print('■ 월별 추정 점수 (무창포 조금, 바람 정보 없음)\n');
+  print('   어종      1월  2월  3월  4월  5월  6월  7월  8월  9월 10월 11월 12월');
+  for (final s in estimatedSpeciesCatalog) {
+    final cells = [
+      for (var m = 1; m <= 12; m++)
+        score(s, jogeum, m).toStringAsFixed(2).padLeft(5),
+    ];
+    print('   ${s.padRight(7)}${cells.join()}');
+  }
+  print('');
+
+  for (final s in ['쭈꾸미', '갑오징어']) {
+    check(
+      score(s, jogeum, 9) > score(s, jogeum, 8) * 1.5,
+      '$s: 9월이 8월보다 확실히 높아야 한다(금어기 해제)',
+    );
+    check(
+      (score(s, jogeum, 9) - score(s, jogeum, 10)).abs() < 0.05,
+      '$s: 9월과 10월이 비슷해야 한다',
+    );
+    check(
+      score(s, jogeum, 11) < score(s, jogeum, 10) * 0.7,
+      '$s: 11월은 10월보다 확실히 낮아야 한다(개체수 급감)',
+    );
+  }
+
+  // ── 6. 바람 정보가 없으면 감점하지 않는다 ────────────────────────────
   for (final s in estimatedSpeciesCatalog) {
     final noWind = gradeFor(s, site, jogeum, 10);
     final calm = gradeFor(s, site, jogeum, 10, windMs: 0, gustMs: 0, waveM: 0);
@@ -192,7 +261,7 @@ void main() {
     check(blow.score < noWind.score, '$s: 바람 정보가 있고 강풍이면 등급이 내려가야 한다');
   }
 
-  // ── 6. 실측 대조 (사용자 제보 화면) ──────────────────────────────────
+  // ── 7. 실측 대조 (사용자 제보 화면) ──────────────────────────────────
   // 무창포항(보령) 2026-08-20, 음력 8일 = 조금. 화면의 조류세기 47%
   // → 하루 조차 = 0.47 × 800 = 376cm. 예보 범위 밖이라 바람 정보 없음.
   const reportedRangeCm = 376.0;

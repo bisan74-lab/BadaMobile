@@ -163,6 +163,70 @@ void main() {
     });
   });
 
+  group('"매우나쁨"은 날씨가 나쁠 때만', () {
+    test('조류가 아무리 나빠도 잔잔하면 "나쁨"에서 멈춘다', () {
+      // 제철엔 물이 많이 흘러도 잡힌다 — 조류 하나로 바닥을 치면 안 된다.
+      for (final s in estimatedSpeciesCatalog) {
+        for (var m = 1; m <= 12; m++) {
+          for (final tide in [0.0, 0.25, 0.5, 0.75, 1.0]) {
+            expect(
+              estimateJiggingGrade(species: s, tideStrength: tide, month: m),
+              isNot(FishingGrade.veryBad),
+              reason: '$s $m월 조류 $tide: 날씨가 나쁘지도 않은데 매우나쁨',
+            );
+            expect(
+              estimateJiggingGrade(
+                species: s,
+                tideStrength: tide,
+                windMs: 2,
+                gustMs: 4,
+                waveM: 0.3,
+                month: m,
+              ),
+              isNot(FishingGrade.veryBad),
+              reason: '$s $m월 조류 $tide: 잔잔한 날인데 매우나쁨',
+            );
+          }
+        }
+      }
+    });
+
+    test('강풍·높은 파고에서는 "매우나쁨"이 나온다', () {
+      // 반대 방향 — 경고가 죽으면 안 된다.
+      for (final s in estimatedSpeciesCatalog) {
+        expect(
+          estimateJiggingGrade(
+            species: s,
+            tideStrength: 0.05, // 조류는 최상
+            windMs: 15,
+            gustMs: 23,
+            waveM: 3.0,
+            month: 10, // 성수기
+          ),
+          FishingGrade.veryBad,
+          reason: '$s: 강풍·높은 파고인데 매우나쁨이 아니다',
+        );
+      }
+    });
+
+    test('성수기 서해에서는 어떤 물때도 "나쁨" 아래로 안 간다', () {
+      for (final s in ['쭈꾸미', '갑오징어']) {
+        for (final tide in [0.0, 0.3, 0.6, 1.0]) {
+          final g = estimateJiggingGrade(
+            species: s,
+            tideStrength: tide,
+            month: 10,
+          );
+          expect(
+            g.score,
+            greaterThanOrEqualTo(FishingGrade.normal.score),
+            reason: '$s 10월 조류 $tide: ${g.label}',
+          );
+        }
+      }
+    });
+  });
+
   group('제철 가중치', () {
     test('12개월이 모두 채워져 있다', () {
       // 빠진 달이 하한(0.30)으로 떨어지면 그 달은 물때가 아무리 좋아도
@@ -175,6 +239,20 @@ void main() {
             reason: '$s $m월: 최적 물때인데도 "나쁨" 아래로 눌렸다',
           );
         }
+      }
+    });
+
+    test('쭈꾸미·갑오징어는 9·10월이 최고이고 11월에 급감한다', () {
+      // 사용자 실사용 경험: 9월 금어기 해제 직후부터 잘 나오고 10월까지
+      // 이어지다가, 11월엔 개체수가 거의 없어진다.
+      for (final s in ['쭈꾸미', '갑오징어']) {
+        final aug = calmScore(s, 0.05, 8);
+        final sep = calmScore(s, 0.05, 9);
+        final oct = calmScore(s, 0.05, 10);
+        final nov = calmScore(s, 0.05, 11);
+        expect(sep, greaterThan(aug * 1.5), reason: '$s: 9월 ≫ 8월(금어기 해제)');
+        expect((sep - oct).abs(), lessThan(0.05), reason: '$s: 9월 ≈ 10월');
+        expect(nov, lessThan(oct * 0.7), reason: '$s: 11월 ≪ 10월(개체수 급감)');
       }
     });
 

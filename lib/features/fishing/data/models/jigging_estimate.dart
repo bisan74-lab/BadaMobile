@@ -37,17 +37,20 @@ const allSelectableSpecies = <String>[
 /// 조작은 오히려 쉽고 이 어종들은 바닥에서 매복하다 물어 주기 때문이다.
 /// 좌우 대칭으로 두면 "정지"가 "급류"만큼 나쁘게 나와 실제와 어긋난다.
 ///
-/// - 쭈꾸미: 느린 물이 좋고 정지도 나쁘지 않다. 조금만 세져도 급락.
+/// - 쭈꾸미: 느린 물이 좋고 정지도 나쁘지 않다. 세지면 떨어진다.
 /// - 갑오징어: 약한 중간이 가장 좋다. 정지 > 중간 > 급류 순
 ///   (사용자 실사용 경험을 반영했다).
 /// - 문어: 조류를 크게 타지 않아 양쪽 모두 완만하다.
 ///
 /// 값은 [relativeTideStrength]가 내는 **지점 상대 세기**(조금=0, 그 지점의
 /// 사리=1) 기준이다. 절대 조차(cm) 기준이 아니다 — 자세한 이유는 그 함수 참고.
+///
+/// 종 모양 곡선은 [_tideFloor] 위에서만 움직인다 — 조류가 아무리 세도 조류
+/// 하나로 바닥까지 떨어지지는 않는다(제철엔 물이 많이 흘러도 잡힌다).
 const _tidePreference =
     <String, ({double optimum, double slowTolerance, double fastTolerance})>{
       '쭈꾸미': (optimum: 0.10, slowTolerance: 0.30, fastTolerance: 0.42),
-      '갑오징어': (optimum: 0.28, slowTolerance: 0.55, fastTolerance: 0.26),
+      '갑오징어': (optimum: 0.28, slowTolerance: 0.62, fastTolerance: 0.34),
       '문어': (optimum: 0.35, slowTolerance: 0.60, fastTolerance: 0.50),
     };
 
@@ -62,35 +65,37 @@ const _tidePreference =
 /// 그래서 비수기 하한을 [_seasonFloor] 근처로 둔다 — 비수기라는 사실은 등급을
 /// 확실히 낮추되, 그 안에서 조금/사리 차이는 여전히 드러나게 한다.
 const _season = <String, Map<int, double>>{
-  // 가을이 성수기(9~11월). 5월 중순~8월 말은 산란·금어기라 아주 낮다.
+  // 9월 금어기 해제 직후가 최고이고 10월까지 이어진다. **11월엔 개체수가 거의
+  // 없어진다**(사용자 실사용 경험). 8월 말까지는 금어기라 낮게 둔다.
   '쭈꾸미': {
     1: 0.35,
-    2: 0.30,
-    3: 0.30,
-    4: 0.32,
-    5: 0.30,
-    6: 0.30,
-    7: 0.30,
-    8: 0.38,
-    9: 0.95,
+    2: 0.35,
+    3: 0.35,
+    4: 0.35,
+    5: 0.35,
+    6: 0.35,
+    7: 0.35,
+    8: 0.40,
+    9: 1.0,
     10: 1.0,
-    11: 0.90,
-    12: 0.55,
+    11: 0.50,
+    12: 0.35,
   },
-  // 쭈꾸미보다 늦게 시작해 겨울까지 이어지고, 봄엔 큰 개체(왕갑오)가 붙는다.
+  // 쭈꾸미와 같은 배에서 같은 시기에 난다 — 9·10월이 최고, 11월부터 급감.
+  // 봄엔 산란기 큰 개체(왕갑오)가 붙어 가을만큼은 아니어도 조금 올라간다.
   '갑오징어': {
-    1: 0.55,
-    2: 0.45,
-    3: 0.45,
-    4: 0.55,
-    5: 0.60,
-    6: 0.55,
-    7: 0.32,
+    1: 0.40,
+    2: 0.40,
+    3: 0.40,
+    4: 0.50,
+    5: 0.55,
+    6: 0.50,
+    7: 0.35,
     8: 0.45,
-    9: 0.80,
+    9: 1.0,
     10: 1.0,
-    11: 1.0,
-    12: 0.85,
+    11: 0.60,
+    12: 0.45,
   },
   // 봄·가을 두 번 좋고 한여름·한겨울에 처진다.
   '문어': {
@@ -110,7 +115,16 @@ const _season = <String, Map<int, double>>{
 };
 
 /// 제철 가중치의 하한. 달 정보가 없거나 표에 빠진 달에도 이 값을 쓴다.
-const double _seasonFloor = 0.30;
+const double _seasonFloor = 0.35;
+
+/// 조류 선호 곡선의 하한.
+///
+/// 조류가 최적에서 아무리 벗어나도 이 아래로는 내려가지 않는다. **"매우나쁨"은
+/// 정말 못 나가는 날(강풍·높은 파고)에만 쓰려는 것**이 목적이다 — 조류 하나로
+/// 바닥을 치면, 제철에 물이 많이 흘러도 잘 잡히는 날(9월 금어기 해제 직후 등)이
+/// 매우나쁨으로 나온다. 조류는 등급을 몇 칸 낮출 뿐이고, 바닥까지 끌어내리는
+/// 건 날씨(와 완전한 비수기)만 할 수 있다.
+const double _tideFloor = 0.30;
 
 /// 그날 조위 변화폭을 **절대 기준**(대조기 조차 약 800cm)으로 정규화한 값.
 ///
@@ -166,10 +180,12 @@ double relativeTideStrength({
   // 우리나라 연안의 조금 조차는 대체로 사리의 40~50% 수준이다.
   final springRangeCm = dayRangeCm / (0.45 + 0.55 * phase);
   // 사리 조차 450cm 이상이면 상한 그대로, 작을수록 세기 상한을 낮춘다.
-  // **하한 0.5는 일부러 높게 잡았다** — 더 낮추면 조차가 작은 동해·남해
+  // **하한 0.65는 일부러 높게 잡았다** — 더 낮추면 조차가 작은 동해·남해
   // 일부에서 세기 상한이 최적 근처에 박혀 15개 물때가 전부 같은 등급으로
   // 눌린다(검증 스크립트가 잡아낸 문제. 절대값 방식의 반대 방향 실패다).
-  final scale = (springRangeCm / 450).clamp(0.50, 1.0);
+  // 그래서 이 보정은 "동해 사리는 서해 사리만큼 세지 않다" 정도로만 약하게
+  // 작용하고, 물때에 따른 변화는 어디서나 그대로 남는다.
+  final scale = (springRangeCm / 450).clamp(0.65, 1.0);
   return (phase * scale).clamp(0.0, 1.0);
 }
 
@@ -212,7 +228,7 @@ double estimateJiggingScore({
       ? pref.slowTolerance
       : pref.fastTolerance;
   final d = (tideStrength - pref.optimum) / tolerance;
-  final byTide = math.exp(-d * d);
+  final byTide = _tideFloor + (1 - _tideFloor) * math.exp(-d * d);
 
   final bySeason = _season[species]?[month] ?? _seasonFloor;
   final byWeather = _weatherFactor(windMs, gustMs, waveM);
@@ -237,10 +253,13 @@ FishingGrade estimateJiggingGrade({
     waveM: waveM,
     month: month,
   );
-  if (score >= 0.72) return FishingGrade.veryGood;
-  if (score >= 0.52) return FishingGrade.good;
-  if (score >= 0.32) return FishingGrade.normal;
-  if (score >= 0.15) return FishingGrade.bad;
+  // "매우나쁨"의 문턱을 일부러 낮게(0.08) 뒀다 — 조류만으로는 [_tideFloor]
+  // 때문에 여기까지 못 내려가고, 강풍·높은 파고가 겹쳐야 닿는다. 나머지 나쁜
+  // 조건은 "나쁨"에서 멈춘다.
+  if (score >= 0.68) return FishingGrade.veryGood;
+  if (score >= 0.48) return FishingGrade.good;
+  if (score >= 0.28) return FishingGrade.normal;
+  if (score >= 0.08) return FishingGrade.bad;
   return FishingGrade.veryBad;
 }
 
