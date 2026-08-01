@@ -1,0 +1,69 @@
+name: Point forecast refresh
+
+# 앱 지역별 대표 예보(바람·돌풍·풍향·파고·주기·수온·기온)를 모아 공개 데이터
+# 저장소의 롤링 릴리스에 올린다. 홈 화면과 낚시정보 카드가 이 파일을 쓴다.
+#
+# **왜 서버가 대신 받나** — 앱이 직접 받으면 지역 하나당 Open-Meteo 요청이
+# 5번 나가서(WAM 총파고/WAM 너울/GFS/수온/육상예보) 새 지역마다 1~2초가
+# 걸린다. 두 화면이 쓰는 건 날짜별 대표값 하나씩뿐이라 3시간 간격이면 충분하다.
+#
+# 실행 주기: ECMWF가 하루 4번(00/06/12/18z) 새 예보를 낸다. 공개 직후에 맞춰
+# 받고, 그 사이에도 한 번씩 더 돌려 파일이 3시간 이상 묵지 않게 한다.
+# 이 화면들은 1~2시간 정도의 시차는 문제되지 않는다.
+#
+# 필요한 Secret: BADAWINDY_TK (공개 데이터 저장소 contents:write PAT)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '35 2,5,8,11,14,17,20,23 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: point-forecast
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 토큰이 없거나 잘려 있으면 수집 전에 멈춘다(wind-data.yml과 같은 이유).
+      - name: 업로드 토큰 확인
+        env:
+          TK: ${{ secrets.BADAWINDY_TK }}
+        run: |
+          if [ -z "$TK" ]; then
+            echo "::error::Secret BADAWINDY_TK 가 비어 있습니다."
+            exit 1
+          fi
+          n=${#TK}
+          case "$TK" in
+            github_pat_*) kind="fine-grained"; want=93 ;;
+            ghp_*)        kind="classic";      want=40 ;;
+            *)            kind="";             want=0  ;;
+          esac
+          if [ -z "$kind" ] || [ "$n" -ne "$want" ]; then
+            echo "::error::BADAWINDY_TK 값이 GitHub 토큰 형태가 아닙니다(${n}자)."
+            exit 1
+          fi
+          echo "BADAWINDY_TK 확인: $kind 토큰, ${n}자 — 형태 정상"
+
+      - name: 지점 예보 수집
+        run: python3 tool/fetch_points.py
+
+      - name: 공개 데이터 저장소의 롤링 릴리스에 업로드
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ vars.PUBLIC_DATA_REPO || 'bisan74-lab/badawindy-data' }}
+          token: ${{ secrets.BADAWINDY_TK }}
+          tag_name: point-forecast
+          name: 지점 예보 데이터 (자동 갱신)
+          body: |
+            앱 홈 화면·낚시정보 카드용 지역별 예보입니다(자동 갱신).
+            Open-Meteo ECMWF IFS/WAM 기반, 3시간 간격.
+            `point_forecast.json.gz` 하나만 올라옵니다.
+          files: point_forecast.json.gz
+          prerelease: true
