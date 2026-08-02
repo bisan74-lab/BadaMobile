@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -69,6 +70,20 @@ def usable_points(data: dict) -> list[dict]:
     return pts or data['points']
 
 
+def _read(url: str, timeout: int, retries: int = 3) -> bytes:
+    """재시도하며 받는다(일시적 네트워크 오류로 검증이 헛되이 실패하지 않게)."""
+    last: Exception | None = None
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as res:
+                return res.read()
+        except Exception as e:  # noqa: BLE001 - 재시도 후에도 실패하면 올린다
+            last = e
+            if attempt < retries - 1:
+                time.sleep(3 * (attempt + 1))
+    raise RuntimeError(f'{type(last).__name__}: {last}')
+
+
 def nearest(points: list[dict], lat: float, lon: float) -> dict:
     """앱(`FishingIndexFile.forecastFor`)과 같은 방식: 단순 위경도 거리."""
     return min(points, key=lambda p: (p['la'] - lat) ** 2 + (p['lo'] - lon) ** 2)
@@ -78,8 +93,10 @@ def main() -> int:
     fails: list[str] = []
 
     print('== 1. 앱과 같은 경로로 파일 받기 ==')
-    with urllib.request.urlopen(URL, timeout=30) as res:
-        blob = res.read()
+    # 재시도한다 — 러너에서 나가는 TLS 핸드셰이크가 이따금 통째로 타임아웃돼
+    # 한 번만 시도하면 데이터는 멀쩡한데 워크플로만 빨강이 된다
+    # (`verify_points.py`에서 실제로 겪었다).
+    blob = _read(URL, timeout=30)
     published = json.loads(gzip.decompress(blob))
     print(f'  OK  {len(blob):,}B (gzip) → {len(json.dumps(published)):,}B')
     print(f'  생성 {published["generated"]} · 포인트 {len(published["points"])}곳 '
