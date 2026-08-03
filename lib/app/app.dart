@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/remote_config/app_gate_provider.dart';
+import '../features/settings/app_info.dart';
 import '../features/settings/presentation/providers.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/tide/presentation/tide_screen.dart';
@@ -10,10 +11,14 @@ import 'app_tab_provider.dart';
 import 'force_upgrade_screen.dart';
 import 'theme.dart';
 
-/// 앱 진입점. `appGateProvider`가 강제 업데이트 상태(`forceUpgrade: true`)를
-/// 돌려주면 [AppShell] 대신 [ForceUpgradeScreen]을 띄워 실행을 막는다 —
-/// 무료 배포본을 나중에 광고 버전으로 전환할 때, 앱 재배포 없이
-/// 공개 데이터 저장소의 `app_gate.json` 값만 바꾸면 모든 설치 기기에 적용된다.
+/// 앱 진입점. `appGateProvider`가 받아온 설정이 **지금 버전을 막아야 한다고**
+/// 하면([AppGateConfig.blocks]) [AppShell] 대신 [ForceUpgradeScreen]을 띄워
+/// 실행을 막는다.
+///
+/// 새 버전을 Play에 올린 뒤 공개 데이터 저장소 `app_gate.json`의
+/// `minSupportedVersion`을 그 버전으로 올리면, **앱 재배포 없이** 구버전을
+/// 쓰던 기기가 다음 실행부터 업데이트 안내 화면만 보게 된다.
+///
 /// 설정 확인이 안 되면(오프라인 등) 항상 앱을 정상 실행한다.
 class BadaMobileApp extends ConsumerWidget {
   const BadaMobileApp({super.key});
@@ -30,7 +35,7 @@ class BadaMobileApp extends ConsumerWidget {
       darkTheme: buildDarkTheme(skin.seed),
       themeMode: themeMode,
       home: gateAsync.when(
-        data: (gate) => gate.forceUpgrade
+        data: (gate) => gate.blocks(AppInfo.appVersion)
             ? ForceUpgradeScreen(config: gate)
             : const AppShell(),
         loading: () =>

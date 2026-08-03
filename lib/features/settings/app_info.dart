@@ -1,10 +1,14 @@
 /// 설정 > 정보 화면에 표시하는 앱 메타데이터.
-/// [appVersion]은 pubspec.yaml의 version과 수동으로 맞춰 둔다.
+///
+/// [appVersion]은 pubspec.yaml의 version과 **반드시 같아야 한다** —
+/// 강제 업데이트 게이트(`AppGateConfig.blocks`)가 이 값으로 자기 버전을
+/// 판단하므로, 어긋나면 엉뚱한 기기가 잠기거나 잠기지 않는다.
+/// `app_gate_test.dart`가 두 값이 같은지 검사한다.
 class AppInfo {
   const AppInfo._();
 
   static const appName = '바다윈디';
-  static const appVersion = '0.4.5';
+  static const appVersion = '0.4.6';
   static const releaseDate = '2026-08-03';
 
   /// 오류신고 및 사업제휴 문의 이메일.

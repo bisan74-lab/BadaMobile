@@ -1,4 +1,5 @@
 {
+  "minSupportedVersion": "0.4.6",
   "forceUpgrade": false,
   "message": "더 나은 서비스를 위해 새 버전으로 업데이트가 필요합니다.\n아래 버튼을 눌러 새 버전을 설치해 주세요.",
   "storeUrl": "https://play.google.com/store/apps/details?id=com.badamobile.bada_mobile"

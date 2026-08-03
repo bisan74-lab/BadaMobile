@@ -179,14 +179,20 @@ dart format lib test       # 커밋 전 포맷
   확대 단계 노출)만 지도 앱처럼 표시하며, `island:true` 항목(제주·울릉도·
   강화도·백령도 등)은 하늘색 마름모로 구분해 확대 시 바다 위 섬 이름도
   드러난다.
-- **강제 업데이트 게이트**(`core/remote_config/`): `remote_config/app_gate.json`의
-  `forceUpgrade`를 true로 바꾸면(앱 재배포 없이) 이미 설치된 모든 기기에서
-  앱 실행이 막히고 업데이트 안내 화면(`ForceUpgradeScreen`)만 뜬다 — 무료
-  버전을 나중에 광고 버전으로 전환할 때 쓴다. 배포 전 `Env.forceUpgradeConfigUrl`
-  기본값(지금은 이 브랜치의 GitHub raw 경로)을 실제로 유지할 위치로 바꿔야
-  하고, `app_gate.json`의 `storeUrl`도 실제 스토어 링크로 채워야 한다. 설정을
-  못 받아오면(오프라인 등) 항상 앱을 정상 실행한다 — 이 폴백 규칙은 절대
-  건드리지 않는다.
+- **강제 업데이트 게이트**(`core/remote_config/`): 공개 저장소
+  `app_gate.json`의 **`minSupportedVersion`을 올리면**(앱 재배포 없이) 그보다
+  낮은 버전을 쓰던 기기는 다음 실행부터 앱이 막히고 업데이트 안내 화면
+  (`ForceUpgradeScreen`)만 뜬다. **새 버전이 Play에 실제로 노출된 뒤에**
+  올린다 — 순서를 뒤집으면 업데이트할 것이 없는 상태로 모두가 잠긴다.
+  `forceUpgrade: true`는 버전과 무관하게 전부 막는 비상 스위치다.
+  - 버전 비교는 숫자 단위(`0.10.0 > 0.9.0`)로 하고, **형식이 이상하면 비교를
+    건너뛰고 통과시킨다**(fail-open). 설정을 못 받아와도(오프라인 등) 항상
+    정상 실행한다 — 이 두 폴백 규칙은 절대 건드리지 않는다.
+  - **`AppInfo.appVersion`은 pubspec의 version과 반드시 같아야 한다** — 게이트가
+    이 값으로 자기 버전을 판단한다. `app_gate_test.dart`가 둘이 같은지, 그리고
+    커밋된 `public_data/app_gate.json`이 현재 빌드를 막지 않는지 검사한다.
+  - 배포 전 `Env.forceUpgradeConfigUrl` 기본값을 실제로 유지할 위치로 바꾸고,
+    `app_gate.json`의 `storeUrl`도 실제 스토어 링크로 채운다.
 
 - **광고는 부가 기능이라 절대 앱을 막지 않는다**(`core/widgets/ad_placeholder.dart`):
   배너 로드에 실패하거나 광고가 꺼져 있으면 같은 높이의 앱 소개 박스로 조용히

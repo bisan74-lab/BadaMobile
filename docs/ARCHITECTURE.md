@@ -10,7 +10,7 @@ AppShell (하단 탭, IndexedStack)
 ├── 날씨      KmaWeatherScreen   FR-20   기상청 단기예보(육상) 일자별·시간별 예보
 ├── 물때      TideScreen         FR-01~04, 15~17   그래픽 물때 카드, 조위 그래프, 만조/간조 타임라인
 ├── Windy     WeatherScreen      FR-05, FR-12   화면 전체 바람 지도(윈디 스타일) + 하단 정보 바
-└── 설정      SettingsScreen     FR-21   템플릿(스킨) / 정보(문의·버전·광고제거·약관)
+└── 설정      SettingsScreen     FR-21   템플릿(스킨) / 정보(문의·버전·약관)
 ```
 
 - 지역 선택은 모든 탭 AppBar 우측의 `RegionSelectorAction`(현재 지역명 + 아이콘)에서
@@ -22,14 +22,28 @@ AppShell (하단 탭, IndexedStack)
 
 ## 강제 업데이트 게이트 (`core/remote_config/`)
 
-무료 버전을 배포한 뒤 나중에 광고가 붙는 버전으로 전환할 때, **앱을
-재배포하지 않고** 기존에 설치된 모든 기기의 실행을 막기 위한 장치다.
+**구버전을 쓰던 기기가 새 버전으로 올라오게 강제하는 장치.** 앱을 재배포하지
+않고, 공개 데이터 저장소의 정적 파일 `app_gate.json` 값만 바꾸면 이미 설치된
+모든 기기에 적용된다. 앱은 시작할 때마다 `AppGateRepository.fetch()`로 이
+JSON을 받아 `AppGateConfig.blocks(AppInfo.appVersion)`이 true면 `AppShell`
+대신 `ForceUpgradeScreen`(업데이트 안내 + 스토어 링크 버튼)을 띄우고,
+뒤로가기로도 빠져나갈 수 없다.
 
-- `app_gate.json`(공개 데이터 저장소의 정적 파일, GitHub raw로
-  서빙)의 `forceUpgrade`를 `true`로 바꾸기만 하면 된다. 앱은 시작할 때마다
-  `AppGateRepository.fetch()`로 이 JSON을 받아와 `forceUpgrade`가 true면
-  `AppShell` 대신 `ForceUpgradeScreen`(업데이트 안내 + 스토어 링크 버튼)을
-  띄우고, 뒤로가기로도 빠져나갈 수 없다.
+막는 방법이 두 가지다.
+
+- **`minSupportedVersion`(평소 쓰는 방법)**: 이 값보다 낮은 버전만 막는다.
+  새 버전을 Play에 올려 **실제로 노출되는 것을 확인한 뒤** 이 값을 그 버전으로
+  올린다. **순서를 뒤집으면 업데이트할 것이 없는 상태에서 모두가 잠긴다.**
+- **`forceUpgrade: true`(비상 스위치)**: 버전과 무관하게 전부 막는다. 서버
+  데이터 형식을 갈아엎어 구버전이 전부 못 쓰게 된 경우에만.
+
+버전 비교는 `0.10.0 > 0.9.0`처럼 **숫자 단위**로 하고, 형식이 이상하면
+(오타·비어 있음·`v` 접두사 등) **비교를 건너뛰고 통과시킨다**(fail-open) —
+설정 실수로 이미 설치된 앱이 전부 못 켜지는 쪽이 훨씬 위험하기 때문이다.
+
+`AppInfo.appVersion`은 pubspec의 version과 **반드시 같아야 한다**(게이트가 이
+값으로 자기 버전을 판단한다). `app_gate_test.dart`가 두 값이 같은지, 그리고
+저장소에 커밋된 `public_data/app_gate.json`이 현재 빌드를 막지 않는지 검사한다.
 - **실패 시 항상 앱을 정상 실행한다**(`AppGateConfig.disabled`로 폴백) —
   오프라인이거나 설정 서버에 문제가 있다고 해서 사용자를 막으면 안 되기
   때문이다. 5초 타임아웃, 네트워크 예외, 200이 아닌 응답, JSON 파싱 실패
@@ -147,8 +161,10 @@ data (models, repository 인터페이스 + 구현: mock / 실API / caching / fal
   배경 그래픽 토글(`backdropEnabledProvider`, `sea_backdrop_enabled` — 물때 타임라인의
   `SeaBackdrop` 표시 여부). 모두 즉시 반영 + 영속화.
 - 정보: 오류신고·사업제휴 문의 메일 `bisan74@gmail.com`, 앱 버전·릴리즈 날짜
-  (`app_info.dart`), "광고 제거"(정식 배포 후 인앱 결제 예정, 현재는 안내),
-  "정책 및 이용약관"(`PolicyScreen`, 책임 제한 약관).
+  (`app_info.dart`), "정책 및 이용약관"(`PolicyScreen`, 책임 제한 약관).
+  "광고 제거" 항목은 **뺐다** — 인앱 결제가 없어 누르면 "준비 중"만 뜨는 빈
+  약속이었다. 사용자가 늘어 동영상 광고를 넣을 때, 배너·동영상을 한 번에
+  없애는 인앱 상품으로 다시 붙인다.
 
 ### features/locations — 지역
 - 전국 해안·낚시 포인트 731곳(`sample_locations.dart`, 서해/남해/동해/제주).
