@@ -91,6 +91,9 @@ Actions → **Play Store AAB** → Run workflow
 
 ## 7. Play Console 등록
 
+> **입력할 값을 그대로 모아 둔 문서가 따로 있다 —
+> [PLAY_CONSOLE_NEW_APP.md](PLAY_CONSOLE_NEW_APP.md).** 아래는 요약이다.
+
 1. 앱 만들기 — 이름 `바다윈디`, 언어 한국어, 앱/게임: **앱**, 무료
 2. **프로덕션(또는 내부 테스트)** → 새 버전 만들기 → `app-release.aab` 업로드
 3. 스토어 등록정보 준비물:
