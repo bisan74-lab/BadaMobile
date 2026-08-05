@@ -21,9 +21,22 @@ val keystoreProperties = Properties().apply {
 }
 val hasReleaseKeystore = keystoreProperties.getProperty("storeFile") != null
 
+// Play Console이 요구하는 대상 API 수준.
+//
+// **Flutter의 기본값(`flutter.targetSdkVersion`)을 그대로 쓰면 안 된다** —
+// Flutter 3.32.5의 기본값은 35(Android 15)인데, Google Play는 2026-08-31부터
+// **최신 Android 출시로부터 1년 이내**(현재 36 = Android 16)를 요구하고,
+// 그보다 낮으면 앱 업데이트 자체가 막힌다. Flutter를 올리지 않고도 대응할 수
+// 있도록 여기서 명시적으로 고정한다.
+//
+// Play가 요구 수준을 올리면(매년 8월경) 이 두 값을 올리고 AGP가 그 API를
+// 지원하는지 확인한다(`settings.gradle.kts`).
+val playTargetSdk = 36
+
 android {
     namespace = "com.badamobile.bada_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // compileSdk는 targetSdk 이상이어야 한다.
+    compileSdk = maxOf(playTargetSdk, flutter.compileSdkVersion)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -39,7 +52,7 @@ android {
         applicationId = "com.badamobile.bada_mobile"
         // Google Mobile Ads SDK가 API 23 이상을 요구한다.
         minSdk = maxOf(23, flutter.minSdkVersion)
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = playTargetSdk
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         // AndroidManifest의 AdMob 앱 ID. 기본값은 구글 공식 **테스트** 앱

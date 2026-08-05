@@ -207,6 +207,15 @@ dart format lib test       # 커밋 전 포맷
   **위젯 테스트가 광고 플랫폼 채널을 건드리면 안 되므로** `adsRuntimeEnabled`
   기본값은 false이고 `main()`에서만 켠다 — 테스트에서 이 값을 켜지 말 것.
 
+- **대상 API 수준은 `android/app/build.gradle.kts`의 `playTargetSdk`로 못박는다**
+  (현재 36 = Android 16). Flutter의 기본값(`flutter.targetSdkVersion`)을 그대로
+  쓰면 안 된다 — Flutter 3.32.5의 기본은 35라서 Google Play가 요구하는
+  "최신 Android 출시로부터 1년 이내"에 미달해 **앱 업데이트 자체가 막힌다**
+  (2026-08-31부터). Play가 요구 수준을 올리면(매년 8월경) 이 값을 올리고,
+  AGP가 그 API를 지원하는 버전인지 `settings.gradle.kts`에서 함께 확인한다.
+  릴리스 워크플로 두 개는 `sdkmanager`로 해당 플랫폼을 미리 설치한다 —
+  없으면 `failed to find target with hash string android-NN`으로 깨진다.
+
 ## 릴리스 빌드/전달
 
 기기 확인용 APK와 스토어 제출용 AAB는 **워크플로가 다르다**:

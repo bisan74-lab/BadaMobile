@@ -116,6 +116,16 @@ jobs:
             echo "keyPassword=$KEY_PASSWORD"
           } > android/key.properties
 
+      # Android 16(API 36)을 타겟팅하므로 해당 플랫폼이 러너에 있어야 한다.
+      # 러너 이미지에 이미 있으면 sdkmanager가 즉시 끝나고, 없으면 내려받는다
+      # (없는 상태로 빌드하면 "failed to find target with hash string
+      # android-36"으로 실패한다).
+      - name: Android SDK 36 확인
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-36" "build-tools;36.0.0"
+
       - name: 의존성 설치
         run: flutter pub get
 

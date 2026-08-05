@@ -18,7 +18,11 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.7.3" apply false
+    // Android 16(API 36)을 정식으로 지원하는 AGP. 8.7.3에서는 compileSdk 36이
+    // "지원하지 않는 버전" 경고를 내므로 함께 올렸다. Gradle 8.12·JDK 17·
+    // Kotlin 2.1.0과 맞는 조합이고, Flutter는 AGP 상한을 두지 않는다
+    // (하한만 검사한다 — DependencyVersionChecker).
+    id("com.android.application") version "8.9.1" apply false
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 
