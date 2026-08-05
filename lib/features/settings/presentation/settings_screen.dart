@@ -118,8 +118,10 @@ class _TemplateSection extends ConsumerWidget {
         if (backdrop) ...[
           _label(context, '배경 사진'),
           // 물때&날씨 전체화면 배경 사진 선택(자체 생성 이미지 5종, 썸네일).
+          // 높이를 상수로 두면 시스템 글자 크기를 키웠을 때 이름 줄이 넘친다
+          // — 썸네일(72) + 간격(2) + 라벨 한 줄을 **현재 배율로 계산**한다.
           SizedBox(
-            height: 96,
+            height: 72 + 2 + MediaQuery.textScalerOf(context).scale(16) + 6,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: backgroundImageChoices.length,
@@ -155,11 +157,17 @@ class _TemplateSection extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        choice.label,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          fontWeight: selected ? FontWeight.bold : null,
-                          color: selected ? scheme.primary : null,
+                      // 칸 폭이 64px로 좁아 배율이 커지면 가로로도 넘친다.
+                      Flexible(
+                        child: Text(
+                          choice.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                fontWeight: selected ? FontWeight.bold : null,
+                                color: selected ? scheme.primary : null,
+                              ),
                         ),
                       ),
                     ],

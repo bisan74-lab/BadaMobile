@@ -52,11 +52,16 @@ class TideTimeline extends StatelessWidget {
         builder: (context, constraints) {
           final size = constraints.biggest;
           final axisX = size.width * _axisFraction;
-          final cardWidth = axisX - 12 - _cardGap;
+          // **음수가 되지 않게 막는다.** 시스템 글자 크기를 크게 키우면 위쪽
+          // 요소(날짜 줄·조류세기·패널 머리말)가 부풀어 타임라인에 남는 높이가
+          // 76px(top 28 + bottom 48)보다 작아지고, 그대로 두면 자식에게 음수
+          // 제약이 내려가 "BoxConstraints has a negative minimum height"로
+          // 화면이 깨진다(작은 폰 360×640 · 배율 2.0x에서 실측).
+          final cardWidth = (axisX - 12 - _cardGap).clamp(0.0, double.infinity);
           const top = 28.0;
           // 아래쪽 여백을 더 확보해 24시 라벨·마지막 카드가 잘리지 않게 한다.
           final bottom = size.height - 48.0;
-          final trackHeight = bottom - top;
+          final trackHeight = (bottom - top).clamp(0.0, double.infinity);
 
           double yForMinutes(int minutes) =>
               top + (minutes / (24 * 60)) * trackHeight;
@@ -221,42 +226,58 @@ class _ExtremeCard extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(10),
       ),
+      // 이 카드는 타임라인 축 옆의 **좁은 칸**에 놓이므로(실측 폭 81px),
+      // 글자를 키우면 곧바로 넘친다. 두 줄 다 넘치지 않게 처리한다:
+      // 시각 줄은 한 줄 유지 + 축소(FittedBox), 조위 줄은 아이콘·숫자를
+      // Flexible로 감싼다. 잘라내지 않는 이유는 만조 시각·조위가 이 화면의
+      // 핵심 정보라서다.
       child: Column(
         crossAxisAlignment: crossAlign,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            '${isHigh ? '만조' : '간조'} ${formatHm(extreme.time)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+            child: Text(
+              '${isHigh ? '만조' : '간조'} ${formatHm(extreme.time)}',
+              maxLines: 1,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '(${extreme.heightCm.round()})',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              if (deltaCm != null) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  deltaCm! >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 12,
-                  color: Colors.white,
-                ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
-                  '${deltaCm!.abs().round()}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  '(${extreme.heightCm.round()})',
+                  maxLines: 1,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
+                if (deltaCm != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    deltaCm! >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                  Text(
+                    '${deltaCm!.abs().round()}',
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),

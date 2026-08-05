@@ -111,6 +111,18 @@ class _AppIntroBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // **이 박스만 글자 배율에 상한을 둔다.** 높이가 배너 광고 규격
+    // ([AdPlaceholder.height])에 묶여 있어 늘릴 수 없는데, 시스템 글자 크기를
+    // 키우면 안의 두 줄이 그대로 넘친다. 광고 자리를 메우는 장식이라 여기서만
+    // 배율을 제한하는 것이 맞다 — **본문 화면에는 이 방식을 쓰지 말 것**
+    // (사용자의 접근성 설정을 무시하게 된다).
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.2,
+      child: _box(context, scheme),
+    );
+  }
+
+  Widget _box(BuildContext context, ColorScheme scheme) {
     return Container(
       height: AdPlaceholder.height,
       padding: const EdgeInsets.symmetric(horizontal: 12),

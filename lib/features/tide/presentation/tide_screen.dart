@@ -222,15 +222,22 @@ class _DateHeader extends StatelessWidget {
           children: [
             MoonPhaseIcon(date: date, size: 20),
             const SizedBox(width: 8),
-            Text(
-              '${date.year}.${date.month}.${date.day} '
-              '(${_weekdays[date.weekday - 1]}) · '
-              '음력 ${mulTtae.lunarDay}일 ${mulTtae.label}$suffix',
-              // 전체화면 바다 배경 위라 흰색 + 그림자로 가독성 확보.
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+            // 시스템 글자 크기를 키우면 이 한 줄이 화면 폭을 넘긴다
+            // (실측: 412px 폰 1.0배에서도 7px, 2.0배에서 133px 초과).
+            // 날짜·물때는 잘라내면 안 되는 정보라 줄이는 대신 **줄바꿈**을
+            // 허용하고, 남는 폭 안에서만 놓이도록 Flexible로 감싼다.
+            Flexible(
+              child: Text(
+                '${date.year}.${date.month}.${date.day} '
+                '(${_weekdays[date.weekday - 1]}) · '
+                '음력 ${mulTtae.lunarDay}일 ${mulTtae.label}$suffix',
+                textAlign: TextAlign.center,
+                // 전체화면 바다 배경 위라 흰색 + 그림자로 가독성 확보.
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+                ),
               ),
             ),
             const Icon(Icons.arrow_drop_down, size: 20, color: Colors.white),
