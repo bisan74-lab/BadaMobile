@@ -147,6 +147,43 @@ def _light_path(horizon: int, x_frac: float, color, seed: int = 7):
     return amp[:, :, None] * np.array(color, dtype=np.float32)
 
 
+def _sun_rays(center, horizon: int, color, strength: float, seed: int = 21):
+    """해에서 뻗어 나오는 **햇살 줄기**(부챗살 모양 빛기둥).
+
+    "햇살이 내리쬐는 느낌"을 내는 핵심이고, 기존 `한낮 바다`(차가운 파랑 +
+    흰 구름)와 아침을 눈에 띄게 갈라 놓는 요소이기도 하다. 밝기만 올리면
+    두 배경이 비슷해 보인다.
+
+    각도에 대한 사인 몇 개를 겹쳐 굵기가 제각각인 줄기를 만들고, 해에서
+    멀어질수록·수평선을 지날수록 잦아들게 한다.
+    """
+    w, h = SIZE
+    cx, cy = center
+    yy, xx = np.mgrid[0:h, 0:w]
+    ang = np.arctan2(yy - cy, xx - cx)
+    r = np.hypot(xx - cx, yy - cy)
+
+    rng = np.random.default_rng(seed)
+    beams = np.zeros((h, w), dtype=np.float32)
+    for freq, weight in ((5, 0.44), (9, 0.30), (14, 0.16), (23, 0.10)):
+        beams += weight * np.sin(freq * ang + rng.uniform(0, 2 * np.pi))
+    beams = np.clip(beams * 1.15 + 0.34, 0, 1) ** 1.7
+
+    # 해 바로 옆(빛무리에 묻힘)과 아주 먼 곳에서는 줄기가 보이지 않는다.
+    near = np.clip((r - w * 0.10) / (w * 0.18), 0, 1)
+    far = np.clip(1 - (r - w * 0.28) / (w * 1.15), 0, 1) ** 1.3
+    # 수면 위에서는 빠르게 잦아든다 — 물 위까지 줄기가 뻗으면 어색하다.
+    below = np.clip(1 - (yy - horizon * 0.94) / (h * 0.08), 0, 1)
+
+    amp = beams * near * far * below * strength
+    amp = np.asarray(
+        Image.fromarray((np.clip(amp, 0, 1) * 255).astype(np.uint8)).filter(
+            ImageFilter.GaussianBlur(14)
+        )
+    ).astype(np.float32) / 255.0
+    return amp[:, :, None] * np.array(color, dtype=np.float32)
+
+
 def _island(img, horizon: int, color, opacity: float):
     """수평선 왼쪽의 먼 섬(다른 배경들과 같은 자리)."""
     silhouette = Image.new('L', SIZE, 0)
@@ -219,25 +256,33 @@ def make_morning(dst: Path) -> None:
     horizon = int(h * HORIZON)
     sun = (int(w * LIGHT_X), int(h * SKY_SAFE_TOP))
 
+    # **따뜻한 금빛으로 간다.** 기존 `한낮 바다`가 차가운 파랑·청록이라,
+    # 아침을 그냥 밝게만 만들면 둘이 비슷해 보인다(사용자 제보). 위쪽 하늘만
+    # 파랗게 남기고 수평선으로 갈수록 금빛으로 물들이며, 바다도 청록 대신
+    # 따뜻한 물빛으로 둔다.
     img = _vertical_gradient([
-        (0.00, (126, 182, 226)),
-        (0.16, (166, 206, 234)),
-        (0.28, (214, 226, 228)),
-        (0.34, (236, 226, 198)),  # 수평선 부근이 가장 밝다
-        (0.35, (96, 150, 178)),
-        (0.50, (66, 124, 158)),
-        (0.72, (40, 90, 128)),
-        (1.00, (20, 54, 88)),
+        (0.00, (118, 176, 224)),
+        (0.14, (176, 208, 230)),
+        (0.24, (228, 224, 206)),
+        (0.31, (252, 232, 182)),
+        (0.34, (255, 238, 190)),  # 수평선 부근이 가장 밝다(금빛)
+        (0.35, (108, 156, 172)),
+        (0.50, (74, 128, 152)),
+        (0.72, (44, 92, 124)),
+        (1.00, (22, 56, 86)),
     ])
 
-    img += _clouds(horizon, seed=9) * np.array([46, 44, 36], dtype=np.float32)
-    img += _glow(sun, 560, (255, 226, 158), 150)
-    img += _glow(sun, 190, (255, 246, 214), 205)
-    m, c = _disk(sun, 74, (255, 253, 240), softness=6.0)
+    img += _clouds(horizon, seed=9) * np.array([52, 44, 28], dtype=np.float32)
+    # 햇살 줄기 → 빛무리 → 원반 순서. 줄기를 먼저 깔아야 빛무리가 그 위를
+    # 부드럽게 덮어 해 주변에서 줄기가 튀지 않는다.
+    img += _sun_rays(sun, horizon, (255, 224, 150), 0.30)
+    img += _glow(sun, 620, (255, 212, 128), 96)
+    img += _glow(sun, 210, (255, 234, 172), 150)
+    m, c = _disk(sun, 78, (255, 253, 242), softness=6.0)
     img = img * (1 - m) + c * m
-    img += _light_path(horizon, LIGHT_X, (255, 240, 200), seed=3) * 0.55
+    img += _light_path(horizon, LIGHT_X, (255, 236, 186), seed=3) * 0.85
 
-    img = _island(img, horizon, (70, 96, 118), 0.72)
+    img = _island(img, horizon, (86, 104, 112), 0.66)
     img[horizon : horizon + 2] = np.clip(img[horizon : horizon + 2] + 22, 0, 255)
 
     _save(img, dst)
