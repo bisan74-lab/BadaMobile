@@ -14,8 +14,10 @@ library;
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:bada_mobile/core/storage/cache_store.dart';
 import 'package:bada_mobile/features/locations/data/models/sea_location.dart';
 import 'package:bada_mobile/features/weather/data/models/wind_field.dart';
+import 'package:bada_mobile/features/weather/data/repositories/caching_marine_weather_repository.dart';
 import 'package:bada_mobile/features/weather/data/repositories/open_meteo_marine_repository.dart';
 import 'package:bada_mobile/features/weather/presentation/widgets/coastline_painter.dart';
 import 'package:bada_mobile/features/weather/presentation/widgets/country_borders_data.dart';
@@ -23,6 +25,7 @@ import 'package:bada_mobile/features/weather/presentation/widgets/map_projection
 import 'package:bada_mobile/features/weather/presentation/widgets/wind_heatmap.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'perf_probe.dart';
 
@@ -174,12 +177,21 @@ void main() {
 
   test('기준선 — 지점 상세 예보 네트워크 호출', () async {
     // 지도에서 지점을 탭하면 상세 예보가 뜬다. 그때 몇 건을 던지는가.
+    //
+    // 앱이 실제로 쓰는 조립(`weather/presentation/providers.dart`)과 같게
+    // **캐시 래퍼를 씌워서** 잰다 — 재조회 비용은 이 래퍼가 결정한다.
+    SharedPreferences.setMockInitialValues({});
     final client = CountingClient(
       respond: _fakeHourly,
       // 실제 Open-Meteo 왕복을 흉내 낸다(한국에서 대략 이 정도).
       latency: const Duration(milliseconds: 120),
     );
-    final repo = OpenMeteoMarineRepository(client: client);
+    final repo = CachingMarineWeatherRepository(
+      inner: OpenMeteoMarineRepository(client: client),
+      cache: CacheStore(await SharedPreferences.getInstance()),
+      // 캐시가 "지나간 예보"로 판정되지 않도록 가짜 응답의 시간축에 맞춘다.
+      now: () => DateTime(2026, 8, 1),
+    );
 
     final first = await measure(
       '첫 조회',
@@ -204,11 +216,11 @@ void main() {
     // ignore: avoid_print
     print('  엔드포인트별: $endpoints\n');
 
-    // **여기가 핵심 지표다.** 지금은 지점 하나당 5건(GFS 파랑·WAM 총파고·
-    // WAM 너울·수온·육상예보)을 던진다. 줄이면 이 수가 줄어든다.
+    // 지점 하나당 5건(GFS 파랑·WAM 총파고·WAM 너울·수온·육상예보)이고,
+    // 이 다섯은 `Future.wait`로 병렬이라 총 시간은 가장 느린 한 건에 가깝다.
     expect(firstCount, 5, reason: '지점 1곳 상세 예보의 HTTP 요청 수');
-    // 같은 지점을 다시 봐도 또 5건을 던진다 — 캐시가 없다는 뜻이고,
-    // 개선하면 이 값이 0이 되어야 한다.
-    expect(secondCount, 5, reason: '재조회 시 요청 수(캐시가 생기면 0)');
+    // 예전엔 같은 지점을 다시 봐도 또 5건을 던졌다(캐시가 실패 폴백 전용).
+    // 지금은 30분 안이면 캐시를 먼저 쓰므로 0건이어야 한다.
+    expect(secondCount, 0, reason: '재조회 시 요청 수(신선한 캐시면 0)');
   });
 }

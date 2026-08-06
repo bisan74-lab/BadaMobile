@@ -38,6 +38,13 @@ dart format lib test       # 커밋 전 포맷
   (`core/config/env.dart`). Open-Meteo는 키 불필요.
 - **Repository는 항상 실API → 캐싱 → 폴백(합성 데이터) 체인**으로 조립한다.
   새 데이터 소스를 추가할 때도 이 패턴을 따른다.
+- **상세 예보 캐시는 "먼저 쓰는" 캐시다**
+  (`caching_marine_weather_repository.dart`): 30분 안에 받아 온 것이 있으면
+  네트워크를 아예 안 탄다(재조회 HTTP 5건 → 0건). 캐시로 답할 땐 지나간
+  시간을 떼어 내지만 **`pastDays > 0`(홈 화면)은 자르지 않는다** — 그 과거가
+  데이터다. 조회 실패 시 폴백은 나이를 안 따진다(오프라인에선 지나간 예보라도
+  없는 것보다 낫다). 저장 형식은 `{fetchedAt, forecast}` 봉투이고, 봉투 없는
+  옛 캐시는 신선하다고 보지 않는다.
 - **지도 바람장은 서버 파일 우선**(`features/weather/.../github_wind_field_repository.dart`):
   GitHub Actions 크론(`.github/workflows/wind-data.yml` → `tool/fetch_wind.py`)이
   Open-Meteo에서 격자(현재 64×66≈0.62°, 4224점)를 배치로 받아 롤링 릴리스 `wind-data`의
