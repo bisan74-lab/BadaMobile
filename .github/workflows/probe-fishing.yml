@@ -9,6 +9,10 @@ name: Probe fishing API
 #   fixed       — 앱이 쓰던 numOfRows=3000 요청을 반복해 응답을 확인한다.
 #   verify      — 공개된 fishing_index.json.gz를 API 원본·표본 지역과 대조한다.
 #   gubun       — 구분(갯바위/선상 등)마다 어떤 어종이 오는지 본다.
+#   diagnose    — 러너에서 data.go.kr에 왜 못 닿는지 DNS→TCP→TLS→HTTP로 갈라
+#                 본다. 2026-08-04부터 수집이 응답 없이 타임아웃하는데, 그것이
+#                 네트워크 차단인지 키 문제인지 구분하려고 만들었다. 키 값은
+#                 찍지 않고 길이·SHA-256 앞 12자만 남긴다.
 on:
   workflow_dispatch:
     inputs:
@@ -16,7 +20,7 @@ on:
         description: 측정 모드
         type: choice
         default: limit
-        options: [limit, fixed, verify, gubun]
+        options: [limit, fixed, verify, gubun, diagnose]
 
 jobs:
   probe:
@@ -28,7 +32,9 @@ jobs:
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
           PROBE_MODE: ${{ inputs.mode }}
         run: |
-          if [ "$PROBE_MODE" = verify ]; then
+          if [ "$PROBE_MODE" = diagnose ]; then
+            python3 tool/probe_datagokr.py
+          elif [ "$PROBE_MODE" = verify ]; then
             # 공개된 파일이 같은 시각 API 원본과 맞는지, 표본 지역에서 실제로
             # 값이 나오는지 확인한다(원본 대조는 키가 있어야 한다).
             python3 tool/verify_fishing.py
