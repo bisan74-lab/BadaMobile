@@ -33,14 +33,23 @@ const double navChipFontSize = 10;
 /// 아이콘 기준 크기.
 const double _iconBase = 16;
 
-/// 아이콘 배율 상한. 라벨과 함께 조금만 키운다.
-const double navChipIconMaxScale = 1.3;
+/// **세로 메뉴 칩만의 배율 상한(1.3).**
+///
+/// 앱 전체 상한은 1.5(`kMaxTextScale`)인데, 폭 52px 세로 칩은 그 배율에서
+/// 라벨이 두 줄로 쪼개지고 메뉴가 본문을 덮을 만큼 길어진다. 본문 글자는
+/// 1.5로 시원하게 두고 **메뉴만 1.3으로 눌러 둔다**(2026-08-06 사용자 요구:
+/// "오른쪽 메뉴 아이콘은 1.3배로 제한").
+///
+/// 라벨과 아이콘에 같은 값을 쓴다 — 따로 놀면 칩 안에서 균형이 깨진다.
+/// 접근성은 [Semantics] 라벨과 [Tooltip]이 받친다.
+const double navChipMaxScale = 1.3;
 
-double _iconSizeOf(BuildContext context) {
-  final scale =
-      MediaQuery.textScalerOf(context).scale(navChipFontSize) / navChipFontSize;
-  return _iconBase * scale.clamp(1.0, navChipIconMaxScale);
-}
+/// 칩이 실제로 쓰는 배율(앱 상한 위에 칩 상한을 한 번 더 건다).
+TextScaler _chipScaler(BuildContext context) =>
+    MediaQuery.textScalerOf(context).clamp(maxScaleFactor: navChipMaxScale);
+
+double _iconSizeOf(BuildContext context) =>
+    _iconBase * (_chipScaler(context).scale(navChipFontSize) / navChipFontSize);
 
 /// [context]의 글자 배율에서 이 칩들이 세로로 차지하는 높이(간격 포함).
 ///
@@ -59,7 +68,7 @@ double navChipsHeight(BuildContext context, List<String> labels) {
     final painter = TextPainter(
       text: TextSpan(text: label, style: style),
       textDirection: TextDirection.ltr,
-      textScaler: MediaQuery.textScalerOf(context),
+      textScaler: _chipScaler(context),
     )..layout(maxWidth: navChipWidth);
     total += _vPad * 2 + icon + _iconGap + painter.height + navChipGap;
   }
@@ -109,12 +118,15 @@ class NavChip extends StatelessWidget {
                 children: [
                   Icon(icon, size: _iconSizeOf(context), color: Colors.white),
                   const SizedBox(height: _iconGap),
-                  Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: navChipFontSize,
+                  MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: navChipMaxScale,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: navChipFontSize,
+                      ),
                     ),
                   ),
                 ],
