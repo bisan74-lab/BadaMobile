@@ -1,12 +1,18 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:bada_mobile/core/remote_config/app_gate_config.dart';
+import 'package:bada_mobile/core/remote_config/app_gate_provider.dart';
 import 'package:bada_mobile/core/remote_config/app_gate_repository.dart';
+import 'package:bada_mobile/core/storage/cache_store.dart';
+import 'package:bada_mobile/core/storage/prefs.dart';
 import 'package:bada_mobile/features/settings/app_info.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 AppGateConfig gate({bool force = false, String min = ''}) => AppGateConfig(
   forceUpgrade: force,
@@ -155,6 +161,131 @@ void main() {
       final repo = AppGateRepository(client: client);
       final config = await repo.fetch();
       expect(config.forceUpgrade, isFalse);
+    });
+
+    test('확인하지 못한 경우와 "막지 말라"는 응답을 구분한다', () async {
+      // 이 구분이 없으면 네트워크가 한 번 삐끗했을 때 캐시에 저장된 차단
+      // 설정을 disabled로 덮어써, 막아야 할 기기가 풀린다.
+      final offline = AppGateRepository(
+        client: MockClient((_) async => throw Exception('오프라인')),
+      );
+      expect(await offline.fetchOrNull(), isNull);
+
+      final allowed = AppGateRepository(
+        client: MockClient((_) async => http.Response('{}', 200)),
+      );
+      expect(await allowed.fetchOrNull(), isNotNull);
+    });
+  });
+
+  group('appGateProvider — 캐시 우선', () {
+    /// 캐시에 [config]가 저장된 상태로 컨테이너를 만든다.
+    Future<ProviderContainer> containerWith({
+      AppGateConfig? cached,
+      required AppGateRepository repo,
+    }) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = CacheStore(prefs);
+      if (cached != null) await repo.writeCache(cache, cached);
+      return ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          appGateRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+    }
+
+    const blocking = AppGateConfig(
+      forceUpgrade: true,
+      minSupportedVersion: '',
+      message: '업데이트가 필요합니다',
+      storeUrl: 'https://example.com',
+    );
+
+    test('캐시된 차단 설정은 기다리지 않고 곧바로 적용된다', () async {
+      // 서버는 영영 답하지 않는다 — 그래도 즉시 차단되어야 한다.
+      final repo = AppGateRepository(
+        client: MockClient((_) => Completer<http.Response>().future),
+      );
+      final container = await containerWith(cached: blocking, repo: repo);
+      addTearDown(container.dispose);
+
+      // read 한 번으로 끝 — await가 없다는 것 자체가 핵심이다.
+      expect(container.read(appGateProvider).blocks('0.0.1'), isTrue);
+    });
+
+    test('캐시가 없으면 앱을 먼저 띄우고, 응답이 오면 그때 막는다', () async {
+      final repo = AppGateRepository(
+        client: MockClient(
+          (_) async => http.Response('{"forceUpgrade": true}', 200),
+        ),
+      );
+      final container = await containerWith(repo: repo);
+      addTearDown(container.dispose);
+
+      // 첫 값은 "막지 않음" — 설치 후 첫 실행은 방금 스토어에서 받은
+      // 최신 버전이라 막을 것이 없다.
+      expect(container.read(appGateProvider).blocks('0.0.1'), isFalse);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(appGateProvider).blocks('0.0.1'), isTrue);
+    });
+
+    test('캐시가 있으면 새 설정은 저장만 하고 이번 실행에는 반영하지 않는다', () async {
+      // 쓰던 도중에 화면이 안내 화면으로 바뀌면 안 된다 — 다음 실행부터다.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = CacheStore(prefs);
+      final repo = AppGateRepository(
+        client: MockClient(
+          (_) async => http.Response('{"forceUpgrade": true}', 200),
+        ),
+      );
+      await repo.writeCache(cache, AppGateConfig.disabled);
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          appGateRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(appGateProvider).blocks('0.0.1'), isFalse);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        container.read(appGateProvider).blocks('0.0.1'),
+        isFalse,
+        reason: '이번 실행에서 갑자기 막히면 안 된다',
+      );
+      // 다음 실행에서 쓸 캐시에는 새 설정이 들어가 있어야 한다.
+      expect(repo.readCached(cache)!.forceUpgrade, isTrue);
+    });
+
+    test('설정을 확인하지 못하면 캐시된 차단 설정을 덮어쓰지 않는다', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = CacheStore(prefs);
+      final repo = AppGateRepository(
+        client: MockClient((_) async => throw Exception('오프라인')),
+      );
+      await repo.writeCache(cache, blocking);
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          appGateRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(appGateProvider).blocks('0.0.1'), isTrue);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        repo.readCached(cache)!.forceUpgrade,
+        isTrue,
+        reason: '오프라인이라고 차단이 풀리면 안 된다',
+      );
     });
   });
 }

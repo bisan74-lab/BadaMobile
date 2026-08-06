@@ -99,14 +99,14 @@ class _SlowFishingRepository implements FishingRepository {
   }
 }
 
-/// 게이트 설정을 [_gateLatency] 뒤에 "막지 않음"으로 답하는 가짜 서버.
-class _SlowGateRepository implements AppGateRepository {
+/// 게이트 설정을 [latency] 뒤에 "막지 않음"으로 답하는 가짜 서버.
+class _SlowGateRepository extends AppGateRepository {
   _SlowGateRepository(this.log, {required this.latency});
   final _Timeline log;
   final Duration latency;
 
   @override
-  Future<AppGateConfig> fetch() async {
+  Future<AppGateConfig?> fetchOrNull() async {
     log.mark('게이트 요청 시작');
     await Future<void>.delayed(latency);
     log.mark('게이트 응답 도착');
@@ -193,9 +193,9 @@ void main() {
     // ignore: avoid_print
     print(
       '  ※ 절대 시간은 테스트 프레임 루프 오버헤드가 섞여 부풀려져 있다.\n'
-      '     의미가 있는 것은 **순서**다: 게이트 → 조석 → 화면.\n'
-      '     즉 첫 데이터까지 **순차 왕복 2번**을 기다린다(게이트, 조석).\n'
-      '     게이트를 첫 화면 밖으로 빼면 1번이 된다.\n',
+      '     의미가 있는 것은 **순서**다. 개선 전에는 게이트 → 조석 → 화면\n'
+      '     순이라 첫 데이터까지 순차 왕복 2번을 기다렸다. 지금은 게이트와\n'
+      '     조석이 나란히 나가고 화면이 먼저 뜬다 — 순차 왕복 1번.\n',
     );
 
     final gateArrived = log['게이트 응답 도착'];
@@ -203,24 +203,23 @@ void main() {
     expect(gateArrived, isNotNull, reason: '게이트 응답이 안 왔다 — 측정이 잘못됐다');
     expect(firstScreen, isNotNull, reason: '첫 화면이 끝내 안 떴다');
 
-    // **핵심 구조 지표.** 지금은 게이트 응답이 온 뒤에야 첫 화면이 뜬다
-    // (그전까지 화면 전체가 스피너 하나). 게이트가 5초까지 기다릴 수 있으므로
-    // 느린 망에서는 그동안 앱이 아무것도 아니다.
-    // **게이트를 첫 화면 밖으로 빼면 이 단언을 뒤집어야 한다.**
+    // **핵심 구조 지표.** 게이트 응답을 기다리지 않고 화면이 먼저 뜬다.
+    // 예전에는 응답이 올 때까지 화면 전체가 스피너 하나였고, 게이트는 최대
+    // 5초까지 기다릴 수 있었다.
     expect(
       firstScreen! < gateArrived!,
-      isFalse,
-      reason: '게이트보다 화면이 먼저 떴다 — 개선됐다면 이 단언을 반대로 바꿔라',
+      isTrue,
+      reason: '게이트 응답을 기다린 뒤에야 화면이 떴다 — 게이트가 다시 첫 화면을 막고 있다',
     );
 
-    // 데이터 요청도 게이트를 기다린다 — 게이트가 응답할 때까지 위젯이 아예
-    // 안 만들어져서 요청조차 안 나간다. **게이트 지연이 데이터 지연에 그대로
-    // 더해진다**(병렬이 아니다). 여기가 첫 진입이 느린 진짜 이유다.
+    // 조석 요청도 게이트와 **나란히** 나간다. 예전엔 게이트가 응답할 때까지
+    // 위젯이 안 만들어져서 요청조차 안 나갔고, 그래서 게이트 시간이 데이터
+    // 시간에 그대로 더해졌다.
     expect(log['조석 요청 시작'], isNotNull, reason: '조석을 아예 안 불렀다 — 화면 구성이 바뀐 것');
     expect(
-      log['조석 요청 시작']! >= gateArrived,
+      log['조석 요청 시작']! < gateArrived,
       isTrue,
-      reason: '조석 요청이 게이트보다 먼저 나갔다 — 개선됐다면 이 단언을 반대로 바꿔라',
+      reason: '조석 요청이 게이트 응답을 기다렸다 — 두 대기가 다시 직렬로 붙었다',
     );
 
     // 첫 화면이 실제로 기다리는 것은 **조석 하나뿐**이다. 예보·낚시지수는

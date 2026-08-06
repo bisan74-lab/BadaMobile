@@ -11,7 +11,7 @@ import 'app_tab_provider.dart';
 import 'force_upgrade_screen.dart';
 import 'theme.dart';
 
-/// 앱 진입점. `appGateProvider`가 받아온 설정이 **지금 버전을 막아야 한다고**
+/// 앱 진입점. `appGateProvider`의 설정이 **지금 버전을 막아야 한다고**
 /// 하면([AppGateConfig.blocks]) [AppShell] 대신 [ForceUpgradeScreen]을 띄워
 /// 실행을 막는다.
 ///
@@ -19,13 +19,16 @@ import 'theme.dart';
 /// `minSupportedVersion`을 그 버전으로 올리면, **앱 재배포 없이** 구버전을
 /// 쓰던 기기가 다음 실행부터 업데이트 안내 화면만 보게 된다.
 ///
+/// **게이트를 기다리지 않는다** — `appGateProvider`가 지난 실행에서 캐시해 둔
+/// 설정을 곧바로 주고 새 설정은 백그라운드로 받는다. 그래서 여기엔 로딩
+/// 상태가 없다(예전에는 이 자리에서 최대 5초 동안 스피너만 돌았다).
 /// 설정 확인이 안 되면(오프라인 등) 항상 앱을 정상 실행한다.
 class BadaMobileApp extends ConsumerWidget {
   const BadaMobileApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final gateAsync = ref.watch(appGateProvider);
+    final gate = ref.watch(appGateProvider);
     final skin = ref.watch(skinProvider);
     final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
@@ -34,14 +37,9 @@ class BadaMobileApp extends ConsumerWidget {
       theme: buildLightTheme(skin.seed),
       darkTheme: buildDarkTheme(skin.seed),
       themeMode: themeMode,
-      home: gateAsync.when(
-        data: (gate) => gate.blocks(AppInfo.appVersion)
-            ? ForceUpgradeScreen(config: gate)
-            : const AppShell(),
-        loading: () =>
-            const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (_, _) => const AppShell(),
-      ),
+      home: gate.blocks(AppInfo.appVersion)
+          ? ForceUpgradeScreen(config: gate)
+          : const AppShell(),
     );
   }
 }

@@ -37,6 +37,15 @@ class AppGateConfig {
     storeUrl: '',
   );
 
+  /// 다음 실행에서 곧바로 쓰기 위해 기기에 저장할 때의 형식.
+  /// [AppGateConfig.fromJson]이 그대로 읽을 수 있어야 한다.
+  Map<String, dynamic> toJson() => {
+    'forceUpgrade': forceUpgrade,
+    'minSupportedVersion': minSupportedVersion,
+    'message': message,
+    'storeUrl': storeUrl,
+  };
+
   factory AppGateConfig.fromJson(Map<String, dynamic> json) => AppGateConfig(
     forceUpgrade: json['forceUpgrade'] as bool? ?? false,
     minSupportedVersion: json['minSupportedVersion'] as String? ?? '',
