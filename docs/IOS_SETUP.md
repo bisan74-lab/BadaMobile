@@ -88,8 +88,10 @@ AdMob → 앱 → 앱 추가 → **iOS** → 앱 ID·배너 단위 2개 발급 �
 | 실기기 설치·App Store 제출 | ✅ + Developer Program |
 
 즉 **개발과 검증은 Mac 없이 계속 가능하고**, Mac은 실제 배포 단계에서 필요하다.
-(macOS 러너는 요금이 ubuntu의 10배라 `ios-build.yml`은 `ios/`나 `pubspec.yaml`이
-바뀐 푸시와 수동 실행에서만 돈다.)
+(macOS 러너는 요금이 ubuntu의 10배라 `ios-build.yml`은 `ios/`나 `pubspec.lock`이
+바뀐 푸시와 수동 실행에서만 돈다. **`pubspec.yaml`을 트리거로 두면 안 된다** —
+커밋마다 `version:`을 올리므로 사실상 모든 푸시에서 돌아, 2026-08-06 하루에만
+11번 돌았다. `pubspec.lock`은 버전 줄이 없어 패키지가 실제로 바뀔 때만 변한다.)
 
 ## 화면이 iOS에서 달라 보일 수 있는 곳
 

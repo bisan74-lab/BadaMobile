@@ -6,12 +6,17 @@ name: iOS build (unsigned)
 #
 # macOS 러너는 ubuntu보다 분당 요금이 10배라, 매 푸시가 아니라 **손으로 돌리거나
 # iOS 관련 파일이 바뀐 푸시에서만** 실행한다.
+#
+# **`pubspec.yaml`을 트리거로 두면 안 된다.** 커밋마다 `version:`을 올리기
+# 때문에 사실상 모든 푸시에서 macOS 러너가 돈다(2026-08-06 하루에만 11회).
+# 의존성이 바뀐 것만 잡으려면 `pubspec.lock`을 본다 — 이 파일은 버전 줄이
+# 없어서 패키지가 실제로 바뀔 때만 변한다.
 on:
   workflow_dispatch:
   push:
     paths:
       - 'ios/**'
-      - 'pubspec.yaml'
+      - 'pubspec.lock'
       - '.github/workflows/ios-build.yml'
 
 jobs:
