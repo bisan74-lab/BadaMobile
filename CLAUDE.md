@@ -309,6 +309,15 @@ dart format lib test       # 커밋 전 포맷
   **위젯 테스트가 광고 플랫폼 채널을 건드리면 안 되므로** `adsRuntimeEnabled`
   기본값은 false이고 `main()`에서만 켠다 — 테스트에서 이 값을 켜지 말 것.
 
+- **화면은 세로로 고정한다.** 가로로 돌리면 물때표·상세예보 표·오른쪽 세로
+  메뉴가 전부 다른 배치를 필요로 해서 제약이 너무 많아진다(2026-08-06 사용자
+  요구). 고정하는 자리가 **세 곳**이라 바꿀 땐 함께 바꾼다 —
+  `AndroidManifest.xml`의 `android:screenOrientation`, iOS `Info.plist`의
+  `UISupportedInterfaceOrientations`(+`UIRequiresFullScreen`, iPad에서 네 방향을
+  다 지원하지 않으려면 필요하다), `main()`의 `setPreferredOrientations`.
+  **Dart 쪽만 걸면 안 된다** — 앱이 켜지는 순간 가로로 한 프레임이 그려진다.
+  그래서 레이아웃 검사(`text_scale_layout_test.dart`)의 화면 크기도 세로만
+  둔다.
 - **대상 API 수준은 `android/app/build.gradle.kts`의 `playTargetSdk`로 못박는다**
   (현재 36 = Android 16). Flutter의 기본값(`flutter.targetSdkVersion`)을 그대로
   쓰면 안 된다 — Flutter 3.32.5의 기본은 35라서 Google Play가 요구하는

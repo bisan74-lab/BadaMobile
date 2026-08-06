@@ -28,19 +28,23 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<!-- **세로 고정**(사용자 요구, 2026-08-06). 가로로 돌리면 물때표·상세예보
+	     표·오른쪽 세로 메뉴가 전부 다른 배치를 필요로 해서 제약이 너무 많아
+	     진다. Android는 AndroidManifest의 `android:screenOrientation`,
+	     Dart는 `main()`의 `setPreferredOrientations`가 같은 일을 한다 —
+	     **셋을 함께 바꿔야** 한 플랫폼만 돌아가는 일이 없다. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- iPad에서 네 방향을 다 지원하지 않으려면 멀티태스킹(Split View)을
+	     끄고 전체화면 전용으로 선언해야 한다 — 안 그러면 심사에서 걸린다. -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<!-- AdMob iOS 앱 ID. 기본값은 **구글 공식 테스트 앱 ID**라 설정 없이
