@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/formatters.dart';
+import '../../../app/app.dart' show sideNavRailHeight;
+import '../../../core/widgets/nav_chip.dart';
 import '../../../core/utils/mul_ttae.dart';
 import '../../../core/widgets/ad_placeholder.dart';
 import '../../fishing/data/models/fishing_index.dart';
@@ -185,6 +187,36 @@ class _TideScreenState extends ConsumerState<TideScreen> {
               ),
             ),
           ),
+          // 오른쪽 미니 메뉴는 **화면 최상위 스택**에 둔다.
+          //
+          // 예전엔 본문 안쪽 스택에 넣고 "레일 자리만큼 아래를 비운다"를
+          // 상수로 박아 뒀는데, 그 안쪽 스택의 바닥이 글자 배율에 따라
+          // 움직여서 큰 글자에서 앱 탭 레일과 겹쳤다(2026-08-06 사용자 제보).
+          // 지금은 탭 레일과 **같은 기준(화면 바닥)**으로 놓고 레일 바로 위에
+          // 붙여, 계산이 어긋날 여지 자체를 없앤다.
+          if (_tideAvailable)
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  // 위쪽은 날짜 머리말을 침범하지 않을 만큼 비운다. 공간이
+                  // 모자라면 메뉴가 이 안에서 스크롤된다.
+                  top: kToolbarHeight + 120,
+                  right: 6,
+                  // 탭 레일(화면 바닥에서 88) 바로 위.
+                  bottom: 88 + sideNavRailHeight(context) + 10,
+                ),
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: _MiniMenu(
+                    key: const Key('tide_mini_menu'),
+                    panel: _panel,
+                    onPanel: (p) => setState(
+                      () => _panel = _panel == p ? _Panel.timeline : p,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -477,18 +509,6 @@ class _TideBody extends ConsumerWidget {
                       _Panel.chart => _ChartPanel(tide: tide, isToday: isToday),
                     },
                   ),
-                  Positioned(
-                    right: 0,
-                    top: 4,
-                    // 우하단 앱 탭 레일(물날씨/Windy/설정)이 이 영역의 아래쪽에
-                    // 겹치므로(레일은 화면 기준 bottom 88 + 높이 ≈135, 이 스택
-                    // 바닥은 화면 아래 72px 위), 그만큼 아래를 비워 둬야 낮은
-                    // 화면에서 아래 칩(물때달력·조위)이 레일에 가려 안 눌리는
-                    // 문제가 없다. 공간이 모자라면 메뉴가 이 범위 안에서
-                    // 스크롤된다.
-                    bottom: 155,
-                    child: _MiniMenu(panel: panel, onPanel: onPanel),
-                  ),
                 ],
               ),
             ),
@@ -499,13 +519,16 @@ class _TideBody extends ConsumerWidget {
   }
 }
 
-/// 그래프 오른쪽에 겹치는 반투명(50%) 미니 메뉴. 누르면 중앙 패널이 그
+/// 그래프 오른쪽에 겹치는 반투명(55%) 미니 메뉴. 누르면 중앙 패널이 그
 /// 내용으로 바뀐다. 맨 위 '물때'가 기본 화면(만조·간조 타임라인)으로
 /// 돌아오는 명시적 버튼이다 — 다른 패널을 보다가 물때로 돌아오는 경로가
 /// "켜진 버튼을 다시 누르기"뿐이면 어색하다는 사용자 지적으로 추가.
 /// (활성 항목을 다시 눌러도 여전히 타임라인으로 돌아온다.)
+///
+/// 앱 탭 레일과 **같은 [NavChip]**을 쓴다 — 둘이 오른쪽 가장자리를 나눠 쓰므로
+/// 배율에 따른 높이 변화를 같은 식으로 계산해야 겹치지 않는다.
 class _MiniMenu extends StatelessWidget {
-  const _MiniMenu({required this.panel, required this.onPanel});
+  const _MiniMenu({super.key, required this.panel, required this.onPanel});
 
   final _Panel panel;
   final ValueChanged<_Panel> onPanel;
@@ -520,40 +543,18 @@ class _MiniMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
     return Opacity(
       opacity: 0.55,
       child: SingleChildScrollView(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             for (final (p, icon, label) in _items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: InkWell(
-                  onTap: () => onPanel(panel == p ? _Panel.timeline : p),
-                  borderRadius: BorderRadius.circular(9),
-                  child: Container(
-                    width: 46,
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    decoration: BoxDecoration(
-                      color: panel == p ? primary : Colors.black54,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(icon, size: 16, color: Colors.white),
-                        const SizedBox(height: 2),
-                        Text(
-                          label,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              NavChip(
+                icon: icon,
+                label: label,
+                selected: panel == p,
+                onTap: () => onPanel(p),
               ),
           ],
         ),

@@ -40,8 +40,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 const scales = <double>[1.0, 1.3, 1.6, 2.0];
 
 /// 검사할 화면 크기(논리 픽셀). 작은 기기일수록 먼저 깨진다.
+/// **크기를 함부로 줄이지 말 것** — 겹침은 특정 조합에서만 난다. 2026-08-06에
+/// 제보된 메뉴 겹침은 360×780 · 1.6배에서만 재현됐고, 목록에 그 크기가 없어
+/// 검사를 통과했었다.
 const sizes = <(String, Size)>[
   ('작은 폰 360×640', Size(360, 640)),
+  ('세로 긴 폰 360×780', Size(360, 780)),
   ('보통 폰 412×915', Size(412, 915)),
 ];
 
@@ -139,6 +143,98 @@ void main() {
   testWidgets('앱 셸(탭 레일 포함)이 큰 글자에서도 넘치지 않는다', (tester) async {
     failures.clear();
     await check(tester, '앱 셸', AppShell.new);
+    expect(failures, isEmpty, reason: '\n${failures.join('\n')}');
+  });
+
+  // ── 오버플로 예외를 안 던지는 깨짐 ──────────────────────────────
+  //
+  // 위 검사들은 `RenderFlex overflowed` 같은 **예외**만 잡는다. 그런데
+  // 사용자 제보(2026-08-06, 큰 글자 기기 스크린샷)의 두 증상은 예외를
+  // 던지지 않는다:
+  //   - 오른쪽 메뉴 두 개가 **겹쳐** 글자가 서로 위에 그려진다
+  //   - 만조·간조 카드가 화면에서 사라진다
+  // 그래서 "무엇이 실제로 보이는가"를 따로 확인한다.
+
+  testWidgets('큰 글자에서도 만조·간조가 화면에 남아 있다', (tester) async {
+    for (final (sizeName, size) in sizes) {
+      for (final scale in scales) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: await wrap(const TideScreen()),
+          ),
+        );
+        await tester.pump();
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        tester.takeException(); // 오버플로는 위 검사가 맡는다
+
+        expect(
+          find.textContaining('만조'),
+          findsWidgets,
+          reason: '$sizeName · 배율 ${scale}x에서 만조 카드가 사라졌다',
+        );
+        expect(
+          find.textContaining('간조'),
+          findsWidgets,
+          reason: '$sizeName · 배율 ${scale}x에서 간조 카드가 사라졌다',
+        );
+      }
+    }
+  });
+
+  testWidgets('큰 글자에서도 오른쪽 두 메뉴가 겹치지 않는다', (tester) async {
+    // 물때&날씨 화면은 오른쪽에 세로 메뉴가 **두 벌** 뜬다 — 화면 자체의
+    // 미니 메뉴(물때·낚시정보·날씨·물때달력·조위)와 앱 탭 레일(물때날씨·
+    // 바람지도·설정). 미니 메뉴는 레일 자리만큼 아래를 비워 두는데, 그 값이
+    // 1.0배 기준 높이로 박혀 있어서 글자를 키우면 레일만 길어져 겹쳤다.
+    //
+    // **개별 칩이 아니라 두 메뉴 상자(Key)를 비교한다** — 미니 메뉴는
+    // 스크롤 뷰라 칩 하나의 좌표는 화면 밖 값이 나올 수 있어 판정에 못 쓴다.
+    final failures = <String>[];
+    for (final (sizeName, size) in sizes) {
+      for (final scale in scales) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: await wrap(const AppShell()),
+          ),
+        );
+        await tester.pump();
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        tester.takeException();
+
+        final mini = find.byKey(const Key('tide_mini_menu'));
+        final rail = find.byKey(const Key('app_nav_rail'));
+        expect(mini, findsOneWidget, reason: '미니 메뉴를 못 찾았다 — 검사가 무의미해진다');
+        expect(rail, findsOneWidget, reason: '탭 레일을 못 찾았다 — 검사가 무의미해진다');
+
+        final a = tester.getRect(mini);
+        final b = tester.getRect(rail);
+        if (a.overlaps(b)) {
+          failures.add(
+            '$sizeName · 배율 ${scale}x → 미니 메뉴 ${a.top.round()}~'
+            '${a.bottom.round()} 와 탭 레일 ${b.top.round()}~'
+            '${b.bottom.round()} 가 겹친다',
+          );
+        }
+      }
+    }
     expect(failures, isEmpty, reason: '\n${failures.join('\n')}');
   });
 }

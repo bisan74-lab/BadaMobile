@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/remote_config/app_gate_provider.dart';
+import '../core/widgets/nav_chip.dart';
 import '../features/settings/app_info.dart';
 import '../features/settings/presentation/providers.dart';
 import '../features/settings/presentation/settings_screen.dart';
@@ -44,6 +45,14 @@ class BadaMobileApp extends ConsumerWidget {
   }
 }
 
+/// 우하단 탭 레일의 라벨. 물때 화면이 겹침을 피하려고 같은 목록으로 높이를
+/// 계산한다([sideNavRailHeight]).
+const sideNavRailLabels = <String>['물때날씨', '바람지도', '설정'];
+
+/// 우하단 탭 레일이 세로로 차지하는 높이(글자 배율 반영).
+double sideNavRailHeight(BuildContext context) =>
+    navChipsHeight(context, sideNavRailLabels);
+
 /// 하단 탭 기반 앱 셸: 물때&날씨 / Windy / 설정.
 /// 낚시정보(구 홈)·날씨 상세는 물때&날씨 화면의 오른쪽 메뉴에서 푸시로 연다.
 ///
@@ -81,6 +90,7 @@ class AppShell extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.only(right: 6, bottom: 88),
                 child: _SideNavRail(
+                  key: const Key('app_nav_rail'),
                   index: index,
                   onSelect: (i) =>
                       ref.read(appTabIndexProvider.notifier).state = i,
@@ -93,63 +103,38 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-/// 우하단 세로 탭 내비게이션(하단 바 대체). 그래프 위 미니 메뉴와 동일한
-/// 크기(46px 칩)의 아이콘+라벨로 통일하고, 활성 탭은 강조색으로 채운다.
-/// 전체 투명도 50%.
+/// 우하단 세로 탭 내비게이션(하단 바 대체). 물때 화면의 미니 메뉴와 같은
+/// [NavChip]을 쓰고, 활성 탭은 강조색으로 채운다. 전체 투명도 50%.
+///
+/// **높이가 글자 배율에 따라 커진다.** 물때 화면 미니 메뉴가 이 레일과 겹치지
+/// 않으려면 같은 계산([sideNavRailHeight])으로 자리를 비워 둬야 한다.
 class _SideNavRail extends StatelessWidget {
-  const _SideNavRail({required this.index, required this.onSelect});
+  const _SideNavRail({super.key, required this.index, required this.onSelect});
 
   final int index;
   final ValueChanged<int> onSelect;
 
-  static const _icons = <(IconData, IconData, String)>[
+  static const _icons = <(IconData, IconData)>[
     // 물때&날씨 화면의 미니 메뉴에 '물때' 버튼이 생기면서, 같은 이름이
     // 두 개 되지 않게 탭 라벨은 '물때날씨'(물때&날씨 축약)로 구분한다.
-    (Icons.waves_outlined, Icons.waves, '물때날씨'),
-    (Icons.air_outlined, Icons.air, '바람지도'),
-    (Icons.settings_outlined, Icons.settings, '설정'),
+    (Icons.waves_outlined, Icons.waves),
+    (Icons.air_outlined, Icons.air),
+    (Icons.settings_outlined, Icons.settings),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
     return Opacity(
       opacity: 0.5,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < _icons.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: InkWell(
-                onTap: () => onSelect(i),
-                borderRadius: BorderRadius.circular(9),
-                child: Container(
-                  width: 46,
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  decoration: BoxDecoration(
-                    color: i == index ? primary : Colors.black54,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        i == index ? _icons[i].$2 : _icons[i].$1,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _icons[i].$3,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            NavChip(
+              icon: i == index ? _icons[i].$2 : _icons[i].$1,
+              label: sideNavRailLabels[i],
+              selected: i == index,
+              onTap: () => onSelect(i),
             ),
         ],
       ),
