@@ -16,7 +16,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// `tool/fetch_fishing.py`가 만드는 것과 같은 구조의 표본 파일.
 /// 포인트 두 곳(가거도=서남해 먼바다, 김녕=제주 북동)만 담는다.
-String sampleFile() => jsonEncode({
+///
+/// [from]을 주면 그날과 다음날 지수로 만든다. **리포지토리 경로를 타는
+/// 테스트는 반드시 오늘 날짜로 만들어야 한다** — 오늘자가 없는 파일은
+/// "수집이 멈춘 상태"로 보고 직접 호출로 폴백하기 때문이다.
+String sampleFile({DateTime? from}) {
+  final day0 = from ?? DateTime(2026, 8, 1);
+  final day1 = day0.add(const Duration(days: 1));
+  String ymd(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+  return _sampleWithDates(ymd(day0), ymd(day1));
+}
+
+/// 오늘자 지수가 들어 있는 표본 파일(서버 수집이 정상인 상태).
+String freshSampleFile() => sampleFile(from: DateTime.now());
+
+String _sampleWithDates(String d0, String d1) => jsonEncode({
   'fmt': 1,
   'generated': '2026-08-01T09:00:00Z',
   'points': [
@@ -25,7 +41,7 @@ String sampleFile() => jsonEncode({
     // 총 지수만 있고 어종이 '-'인 포인트(실제 파일의 49곳 중 15곳이 이렇다).
     {'n': '제주항 북측', 'la': 33.52, 'lo': 126.53},
   ],
-  'dates': ['2026-08-01', '2026-08-02'],
+  'dates': [d0, d1],
   'species': ['감성돔', '우럭', '-', '기타어종'],
   'tides': ['대조기'],
   'slots': ['오전', '오후'],
@@ -139,7 +155,7 @@ void main() {
       var calls = 0;
       final client = MockClient((_) async {
         calls++;
-        return _jsonResponse(sampleFile());
+        return _jsonResponse(freshSampleFile());
       });
       final direct = _NeverRepository();
       final repo = GithubFishingRepository(
@@ -162,8 +178,10 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final cache = CacheStore(await SharedPreferences.getInstance());
       final client = MockClient(
-        (_) async =>
-            http.Response.bytes(gzip.encode(utf8.encode(sampleFile())), 200),
+        (_) async => http.Response.bytes(
+          gzip.encode(utf8.encode(freshSampleFile())),
+          200,
+        ),
       );
       final repo = GithubFishingRepository(
         direct: _NeverRepository(),
@@ -192,6 +210,48 @@ void main() {
       expect(direct.calls, 1);
     });
 
+    test('오늘자가 없는 낡은 파일이면 직접 호출로 폴백한다', () async {
+      // 서버 수집이 멈추면 릴리스에는 며칠 전 파일이 그대로 남는다
+      // (2026-08, data.go.kr 타임아웃으로 사흘 연속 실패). 그걸 그냥 쓰면
+      // 화면에 "이 날짜의 낚시지수가 없습니다"만 뜬다.
+      SharedPreferences.setMockInitialValues({});
+      final cache = CacheStore(await SharedPreferences.getInstance());
+      final stale = sampleFile(
+        from: DateTime.now().subtract(const Duration(days: 3)),
+      );
+      final direct = _StubRepository();
+      final repo = GithubFishingRepository(
+        direct: direct,
+        cache: cache,
+        client: MockClient((_) async => _jsonResponse(stale)),
+        url: 'https://example.test/fishing_index.json.gz',
+      );
+
+      await repo.fetchForecast(_jeju);
+      expect(direct.calls, 1, reason: '낡은 파일을 붙들고 있으면 안 된다');
+    });
+
+    test('낡은 파일은 디스크 캐시에 있어도 쓰지 않는다', () async {
+      // 오늘 아침에 받아 둔 것이 그 시점엔 최신이었어도, 릴리스가 며칠 전
+      // 것이었다면 캐시에도 낡은 내용이 들어간다.
+      SharedPreferences.setMockInitialValues({});
+      final cache = CacheStore(await SharedPreferences.getInstance());
+      final stale = sampleFile(
+        from: DateTime.now().subtract(const Duration(days: 3)),
+      );
+      await cache.writeString(_todayKey(), stale);
+
+      final direct = _StubRepository();
+      await GithubFishingRepository(
+        direct: direct,
+        cache: cache,
+        client: MockClient((_) async => throw http.ClientException('오프라인')),
+        url: 'https://example.test/fishing_index.json.gz',
+      ).fetchForecast(_jeju);
+
+      expect(direct.calls, 1);
+    });
+
     test('앱을 껐다 켜도 디스크 캐시로 즉시 뜬다', () async {
       SharedPreferences.setMockInitialValues({});
       final cache = CacheStore(await SharedPreferences.getInstance());
@@ -203,7 +263,7 @@ void main() {
         cache: cache,
         client: MockClient((_) async {
           calls++;
-          return _jsonResponse(sampleFile());
+          return _jsonResponse(freshSampleFile());
         }),
         url: url,
       ).fetchForecast(_jeju);

@@ -66,9 +66,9 @@ class GithubFishingRepository implements FishingRepository {
     final cached = cache.readString(key);
     if (cached != null) {
       try {
-        return await compute(parseFishingIndexFile, cached);
+        return _fresh(await compute(parseFishingIndexFile, cached));
       } catch (_) {
-        // 캐시가 깨졌으면 새로 받는다.
+        // 캐시가 깨졌거나 낡았으면 새로 받는다.
       }
     }
 
@@ -81,7 +81,7 @@ class GithubFishingRepository implements FishingRepository {
       bytes = Uint8List.fromList(gzip.decode(bytes));
     }
     final json = utf8.decode(bytes);
-    final file = await compute(parseFishingIndexFile, json);
+    final file = _fresh(await compute(parseFishingIndexFile, json));
 
     // 저장은 기다리지 않는다. 지난 날짜 캐시는 함께 정리한다.
     unawaited(
@@ -92,6 +92,19 @@ class GithubFishingRepository implements FishingRepository {
           )
           .catchError((_) {}),
     );
+    return file;
+  }
+
+  /// 오늘자 지수가 들어 있는 파일만 통과시킨다. 아니면 던져서
+  /// [fetchForecast]의 폴백(직접 호출)으로 넘긴다.
+  ///
+  /// 서버 수집이 멈추면 릴리스에는 며칠 전 파일이 그대로 남는데, 그걸 그냥
+  /// 쓰면 화면에 "이 날짜의 낚시지수가 없습니다"만 뜬다. 낡은 파일을 붙들고
+  /// 있는 것보다 느리더라도 직접 받아 오는 편이 낫다.
+  FishingIndexFile _fresh(FishingIndexFile file) {
+    if (!file.covers(DateTime.now())) {
+      throw const FormatException('낚시지수 파일에 오늘 날짜가 없음(수집이 멈춘 상태)');
+    }
     return file;
   }
 
@@ -122,6 +135,26 @@ class FishingIndexFile {
   final Map<String, List<FishingIndex>> indicesByPoint;
 
   final DateTime? generated;
+
+  /// 파일이 [day]자 지수를 담고 있는가.
+  ///
+  /// **서버 수집이 멈추면 릴리스에는 며칠 전 파일이 그대로 남아 있고**,
+  /// 앱은 그걸 받아 오늘 칸이 빈 화면("이 날짜의 낚시지수가 없습니다")을
+  /// 보여준다(2026-08, data.go.kr 타임아웃으로 사흘 연속 수집 실패 때 발생).
+  /// [GithubFishingRepository]가 이 값을 보고 낡은 파일이면 직접 호출로
+  /// 넘어간다.
+  bool covers(DateTime day) {
+    for (final list in indicesByPoint.values) {
+      for (final i in list) {
+        if (i.date.year == day.year &&
+            i.date.month == day.month &&
+            i.date.day == day.day) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
   /// [location]에서 가장 가까운 포인트의 지수를 돌려준다.
   ///

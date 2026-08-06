@@ -31,12 +31,35 @@ OP = 'GetFcstFishingApiServicev2'
 KEY = os.environ.get('DATA_GO_KR_API_KEY', '')
 OUT = os.environ.get('FISHING_OUT', 'fishing_index.json.gz')
 
+# 이미 올라가 있는 파일(앱이 받는 것과 같은 주소). `--check-published`가 본다.
+PUBLISHED_URL = os.environ.get(
+    'FISHING_DATA_URL',
+    'https://github.com/bisan74-lab/badawindy-data/releases/download/'
+    'fishing-data/fishing_index.json.gz',
+)
+
 PAGE_ROWS = 300  # 실측 상한. 넘기면 INVALID_REQUEST_PARAMETER_ERROR.
 MAX_PAGES = 40  # 안전장치(현재 6쪽이면 끝난다)
-TIMEOUT = 60
-RETRIES = 3
+
+# 정상일 때 응답은 1~2초다. **60초를 기다린다는 건 이미 죽었다는 뜻**이라,
+# 예전엔 3번 × 60초 = 3분을 통째로 날리고 실패했다(2026-08 실측). 짧게
+# 끊고 대신 더 여러 번, 점점 길게 쉬면서 다시 물어본다.
+TIMEOUT = 20
+BACKOFF = [5, 15, 45, 120]  # 재시도 간격(초). 총 대기는 최대 약 3분 반.
+
+# 기본 UA(`Python-urllib/3.x`)를 조용히 버리는 WAF가 흔하다 — 에러도 없이
+# 타임아웃으로만 보인다. 사람이 쓰는 도구처럼 밝히고 부른다.
+UA = 'BadaWindy-DataCollector/1.0 (+https://github.com/bisan74-lab/BadaMobile)'
 
 SLOTS = ['오전', '오후']
+
+
+class ApiError(RuntimeError):
+    """서버가 제대로 답했는데 그 내용이 오류인 경우.
+
+    파라미터가 틀렸다는 답은 몇 번을 다시 물어도 같으므로 **재시도하지
+    않는다**(예전엔 이것도 3분씩 재시도했다).
+    """
 
 
 def _get(ymd: str, page: int) -> dict:
@@ -48,22 +71,28 @@ def _get(ymd: str, page: int) -> dict:
         'pageNo': str(page),
         'numOfRows': str(PAGE_ROWS),
     })
-    url = f'{HOST}/{OP}?{q}'
+    req = urllib.request.Request(
+        f'{HOST}/{OP}?{q}', headers={'User-Agent': UA, 'Accept': '*/*'}
+    )
     last = None
-    for attempt in range(RETRIES):
+    for attempt in range(len(BACKOFF) + 1):
         try:
-            with urllib.request.urlopen(url, timeout=TIMEOUT) as res:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
                 doc = json.loads(res.read())
             doc = doc.get('response', doc)
             code = str(doc.get('header', {}).get('resultCode', ''))
             if code not in ('00', '0', ''):
                 msg = doc.get('header', {}).get('resultMsg', '')
-                raise RuntimeError(f'API 오류 {code} {msg}')
+                raise ApiError(f'API 오류 {code} {msg}')
             return doc
+        except ApiError:
+            raise  # 다시 물어도 같은 답이다
         except Exception as e:  # noqa: BLE001 - 재시도 후에도 실패하면 그대로 올린다
             last = e
-            if attempt < RETRIES - 1:
-                time.sleep(2 * (attempt + 1))
+            if attempt < len(BACKOFF):
+                wait = BACKOFF[attempt]
+                print(f'  {page}쪽 {attempt + 1}번째 실패({e}) — {wait}초 뒤 재시도')
+                time.sleep(wait)
     raise RuntimeError(f'{page}쪽 요청 실패: {last}')
 
 
@@ -158,7 +187,36 @@ def _avg(pair):
     return round((lo + hi) / 2, 2)
 
 
+def published_covers_today() -> bool:
+    """이미 올라가 있는 파일이 **오늘 날짜를 담고 있는지** 본다.
+
+    수집이 실패해도 그날 안에 다시 시도할 수 있게 크론을 여러 번 돌리는데,
+    이미 성공한 날에는 data.go.kr을 또 두드릴 이유가 없다. 확인 자체가
+    실패하면(파일 없음·네트워크 오류) **False**를 돌려 그냥 수집한다 —
+    확인 때문에 수집을 건너뛰면 안 된다.
+    """
+    today = time.strftime('%Y%m%d')
+    try:
+        req = urllib.request.Request(
+            PUBLISHED_URL, headers={'User-Agent': UA, 'Accept': '*/*'}
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
+            raw = res.read()
+        data = json.loads(gzip.decompress(raw))
+        # 파일의 날짜는 `2026-08-06` 형식이라 하이픈을 떼고 비교한다.
+        return any(d.replace('-', '') == today for d in data.get('dates', []))
+    except Exception as e:  # noqa: BLE001 - 확인 실패는 "없는 것"으로 친다
+        print(f'  올라가 있는 파일 확인 실패({e}) — 그냥 수집한다')
+        return False
+
+
 def main() -> int:
+    if '--check-published' in sys.argv:
+        # 워크플로가 이 출력을 $GITHUB_OUTPUT으로 받아 수집 스텝을 건너뛴다.
+        fresh = published_covers_today()
+        print(f'fresh={"true" if fresh else "false"}')
+        return 0
+
     if not KEY:
         print('::error::DATA_GO_KR_API_KEY 가 비어 있습니다.')
         return 1
