@@ -67,7 +67,9 @@ Future<Widget> wrap(Widget child) async {
         ),
       ),
     ],
-    child: MaterialApp(home: child),
+    // **앱과 같은 글자 배율 상한을 건다**(`kMaxTextScale`). 이걸 빼면
+    // 실제 화면보다 가혹한 조건으로 검사해 없는 문제를 쫓게 된다.
+    child: MaterialApp(builder: clampAppTextScale, home: child),
   );
 }
 

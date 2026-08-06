@@ -9,6 +9,10 @@
 /// 2026-08-06 사용자 제보: 큰 글자 기기에서 "낚시정보"와 "물때날씨"가 서로
 /// 겹쳐 그려졌다. 미니 메뉴가 레일 자리로 비워 두던 값이 **1.0배 기준 높이에
 /// 고정**돼 있어서, 배율이 오르면 레일만 길어지고 비운 공간은 그대로였다.
+///
+/// 라벨을 떼고 아이콘만 남겨 봤지만 "아이콘만으로는 알아보기 힘들다"는
+/// 제보를 받아 되돌렸다. 대신 앱 전체에 글자 배율 상한(`kMaxTextScale`)을
+/// 걸어 라벨이 쪼개지지 않게 했다.
 library;
 
 import 'package:flutter/material.dart';
@@ -29,24 +33,8 @@ const double navChipFontSize = 10;
 /// 아이콘 기준 크기.
 const double _iconBase = 16;
 
-/// **이 배율을 넘으면 라벨을 떼고 아이콘만 키운다.**
-///
-/// 폭 52px 세로 칩에 큰 글자를 넣으면 "낚시정/보"처럼 2~3줄로 쪼개져 오히려
-/// 읽기 어렵고, 메뉴가 화면을 덮을 만큼 길어진다(2026-08-06 사용자 제보:
-/// "큰글자 모드에서는 보는게 불편해진다"). 큰 글자를 쓰는 사람에게는 잘게
-/// 쪼개진 글자보다 **큰 아이콘**이 낫다.
-///
-/// 라벨을 떼도 뜻이 사라지지 않게:
-/// - [Semantics] 라벨이 남아 스크린리더는 그대로 읽고,
-/// - 길게 누르면 [Tooltip]으로 이름이 뜬다.
-const double navChipLabelMaxScale = 1.2;
-
-/// 아이콘 배율 상한. 라벨을 뗀 만큼 아이콘을 키우되, 칩 폭(52) 안에 든다.
-const double navChipIconMaxScale = 1.7;
-
-bool _labelVisible(BuildContext context) =>
-    MediaQuery.textScalerOf(context).scale(navChipFontSize) <=
-    navChipFontSize * navChipLabelMaxScale;
+/// 아이콘 배율 상한. 라벨과 함께 조금만 키운다.
+const double navChipIconMaxScale = 1.3;
 
 double _iconSizeOf(BuildContext context) {
   final scale =
@@ -60,9 +48,6 @@ double _iconSizeOf(BuildContext context) {
 /// 라벨을 뗀 배율에서는 아이콘 높이만 센다.
 double navChipsHeight(BuildContext context, List<String> labels) {
   final icon = _iconSizeOf(context);
-  if (!_labelVisible(context)) {
-    return labels.length * (_vPad * 2 + icon + navChipGap) + 8;
-  }
   // **칩이 실제로 쓰는 것과 같은 스타일로 재야 한다.** fontSize만 준 맨
   // TextStyle로 재면 글꼴·줄높이가 달라 실제보다 20%쯤 낮게 나오고, 그만큼
   // 덜 비워서 탭 레일과 겹친다(2026-08-06에 이 오차로 한 번 더 겹쳤다).
@@ -101,7 +86,6 @@ class NavChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final showLabel = _labelVisible(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: navChipGap),
       child: Tooltip(
@@ -124,17 +108,15 @@ class NavChip extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(icon, size: _iconSizeOf(context), color: Colors.white),
-                  if (showLabel) ...[
-                    const SizedBox(height: _iconGap),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: navChipFontSize,
-                      ),
+                  const SizedBox(height: _iconGap),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: navChipFontSize,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),

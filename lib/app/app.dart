@@ -12,6 +12,37 @@ import 'app_tab_provider.dart';
 import 'force_upgrade_screen.dart';
 import 'theme.dart';
 
+/// **앱 전체 글자 배율 상한.**
+///
+/// 시스템 글자 크기를 크게 하면 앱의 모든 글자가 그만큼 커진다. 이 앱은
+/// 물때표·상세예보 표·설정처럼 **한 화면에 많은 값을 촘촘히 담는 화면**이
+/// 많아, 배율이 이보다 오르면 글자가 서로 겹치거나 잘려 오히려 읽을 수
+/// 없게 된다(2026-08-06 사용자 제보 스크린샷 3종: 오른쪽 메뉴 겹침, 설정
+/// 화면 줄바꿈 붕괴, 상세예보 표 잘림).
+///
+/// 화면마다 따로 대응하는 것도 시도했지만(메뉴만 세 번 고쳤다) 같은 종류가
+/// 앱 곳곳에 있어 끝이 없었다. 여기서 한 번 막는 것이 실무에서 흔한 해법이고
+/// 효과도 확실하다.
+///
+/// **대가는 분명하다** — 사용자의 접근성 설정을 일부 무시한다. 그래서 값을
+/// 함부로 낮추지 말 것(1.3은 "본문이 눈에 띄게 커지지만 표는 아직 버티는"
+/// 선이다). 더 크게 보고 싶은 사용자를 위해서는 앱 안에 글자 크기 설정을
+/// 따로 두는 편이 맞다.
+const double kMaxTextScale = 1.3;
+
+/// [kMaxTextScale]을 적용한다. `MaterialApp.builder`에 그대로 넘기면 앱 안
+/// 모든 화면에 걸린다. **테스트 하네스도 같은 함수를 써야** 실제 화면과 같은
+/// 조건으로 검사된다.
+Widget clampAppTextScale(BuildContext context, Widget? child) {
+  final mq = MediaQuery.of(context);
+  return MediaQuery(
+    data: mq.copyWith(
+      textScaler: mq.textScaler.clamp(maxScaleFactor: kMaxTextScale),
+    ),
+    child: child ?? const SizedBox.shrink(),
+  );
+}
+
 /// 앱 진입점. `appGateProvider`의 설정이 **지금 버전을 막아야 한다고**
 /// 하면([AppGateConfig.blocks]) [AppShell] 대신 [ForceUpgradeScreen]을 띄워
 /// 실행을 막는다.
@@ -38,6 +69,8 @@ class BadaMobileApp extends ConsumerWidget {
       theme: buildLightTheme(skin.seed),
       darkTheme: buildDarkTheme(skin.seed),
       themeMode: themeMode,
+      // 모든 화면에 한 번에 적용된다([kMaxTextScale] 참고).
+      builder: clampAppTextScale,
       home: gate.blocks(AppInfo.appVersion)
           ? ForceUpgradeScreen(config: gate)
           : const AppShell(),

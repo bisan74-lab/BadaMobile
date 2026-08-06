@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app.dart' show sideNavRailLabels;
 import '../../../app/app_tab_provider.dart';
+import '../../../core/widgets/nav_chip.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/kst.dart';
 import '../../locations/data/models/sea_location.dart';
@@ -1031,60 +1033,36 @@ class _CursorWindBar extends StatelessWidget {
   }
 }
 
-/// Windy(몰입형 지도) 탭 우하단 세로 내비게이션. 물때&날씨 화면의 레일과
-/// 동일한 컴팩트 칩(46px, 아이콘+라벨) 스타일이며, 하단 바(시간 슬라이더/
-/// 상세 예보 표) 높이만큼 위로 올라가 겹치지 않는다.
+/// Windy(몰입형 지도) 탭 우하단 세로 내비게이션.
+///
+/// 앱 셸의 탭 레일과 **같은 [NavChip]**을 쓴다 — 예전엔 이 화면만 자기 방식
+/// (46px·8.5pt)으로 그려서, 큰 글자에서 여기만 "물때날/씨"로 쪼개졌다
+/// (2026-08-06 사용자 제보 스크린샷 2). 라벨 목록도 [sideNavRailLabels]를
+/// 그대로 쓴다.
 class _WindyNavRail extends StatelessWidget {
   const _WindyNavRail({required this.onSelect});
 
   final ValueChanged<int> onSelect;
 
-  static const _icons = <(IconData, IconData, String)>[
-    (Icons.waves_outlined, Icons.waves, '물때날씨'),
-    (Icons.air_outlined, Icons.air, '바람지도'),
-    (Icons.settings_outlined, Icons.settings, '설정'),
+  static const _icons = <(IconData, IconData)>[
+    (Icons.waves_outlined, Icons.waves),
+    (Icons.air_outlined, Icons.air),
+    (Icons.settings_outlined, Icons.settings),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
     return Opacity(
       opacity: 0.5,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < _icons.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: InkWell(
-                onTap: () => onSelect(i),
-                borderRadius: BorderRadius.circular(9),
-                child: Container(
-                  width: 46,
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  decoration: BoxDecoration(
-                    color: i == windyTabIndex ? primary : Colors.black54,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        i == windyTabIndex ? _icons[i].$2 : _icons[i].$1,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _icons[i].$3,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            NavChip(
+              icon: i == windyTabIndex ? _icons[i].$2 : _icons[i].$1,
+              label: sideNavRailLabels[i],
+              selected: i == windyTabIndex,
+              onTap: () => onSelect(i),
             ),
         ],
       ),
