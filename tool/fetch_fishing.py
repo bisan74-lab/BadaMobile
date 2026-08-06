@@ -18,6 +18,7 @@ data.go.kr의 이 API는 `numOfRows` 상한이 300이라 전국 1,750건을 받�
     DATA_GO_KR_API_KEY=... python3 tool/fetch_fishing.py
 """
 
+import calendar
 import gzip
 import json
 import os
@@ -50,6 +51,11 @@ BACKOFF = [5, 15, 45, 120]  # 재시도 간격(초). 총 대기는 최대 약 3�
 # 기본 UA(`Python-urllib/3.x`)를 조용히 버리는 WAF가 흔하다 — 에러도 없이
 # 타임아웃으로만 보인다. 사람이 쓰는 도구처럼 밝히고 부른다.
 UA = 'BadaWindy-DataCollector/1.0 (+https://github.com/bisan74-lab/BadaMobile)'
+
+# 올라가 있는 파일이 이보다 젊으면 수집을 건너뛴다. 하루 네 번 도는데
+# 갱신은 하루 한 번이라, 성공한 뒤 남은 세 번은 건너뛰고 다음 날 다시 받는
+# 값이다. 한 번 실패하면 다음 실행에서 나이가 이 값을 넘어 다시 시도한다.
+FRESH_HOURS = 20
 
 SLOTS = ['오전', '오후']
 
@@ -187,15 +193,20 @@ def _avg(pair):
     return round((lo + hi) / 2, 2)
 
 
-def published_covers_today() -> bool:
-    """이미 올라가 있는 파일이 **오늘 날짜를 담고 있는지** 본다.
+def published_is_fresh() -> bool:
+    """이미 올라가 있는 파일이 **최근에 만들어진 것인지** 본다.
 
     수집이 실패해도 그날 안에 다시 시도할 수 있게 크론을 여러 번 돌리는데,
-    이미 성공한 날에는 data.go.kr을 또 두드릴 이유가 없다. 확인 자체가
-    실패하면(파일 없음·네트워크 오류) **False**를 돌려 그냥 수집한다 —
-    확인 때문에 수집을 건너뛰면 안 된다.
+    이미 성공한 뒤에는 data.go.kr을 또 두드릴 이유가 없다.
+
+    **판단 기준은 `generated`(만든 시각)다.** "파일에 오늘 날짜가 들어 있는가"로
+    보면 안 된다 — 이 API는 며칠 앞까지 주므로 수집이 멈춘 뒤에도 이틀쯤은
+    오늘 날짜가 들어 있는 낡은 파일이 남고, 그러면 워크플로가 영영 수집을
+    건너뛴다(2026-08-06에 실제로 이렇게 한 번 건너뛰었다).
+
+    확인 자체가 실패하면(파일 없음·네트워크 오류) **False**를 돌려 그냥
+    수집한다 — 확인 때문에 수집을 건너뛰면 안 된다.
     """
-    today = time.strftime('%Y%m%d')
     try:
         req = urllib.request.Request(
             PUBLISHED_URL, headers={'User-Agent': UA, 'Accept': '*/*'}
@@ -203,17 +214,27 @@ def published_covers_today() -> bool:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
             raw = res.read()
         data = json.loads(gzip.decompress(raw))
-        # 파일의 날짜는 `2026-08-06` 형식이라 하이픈을 떼고 비교한다.
-        return any(d.replace('-', '') == today for d in data.get('dates', []))
+        made = data.get('generated', '')
+        age_h = (
+            time.time() - calendar.timegm(time.strptime(made, '%Y-%m-%dT%H:%M:%SZ'))
+        ) / 3600
+        # **진단은 stderr로.** stdout은 워크플로가 $GITHUB_OUTPUT으로 받으므로
+        # `fresh=...` 한 줄만 나가야 한다.
+        _log(f'올라가 있는 파일: {made} ({age_h:.1f}시간 전)')
+        return age_h < FRESH_HOURS
     except Exception as e:  # noqa: BLE001 - 확인 실패는 "없는 것"으로 친다
-        print(f'  올라가 있는 파일 확인 실패({e}) — 그냥 수집한다')
+        _log(f'올라가 있는 파일 확인 실패({e}) — 그냥 수집한다')
         return False
+
+
+def _log(msg: str) -> None:
+    print(f'  {msg}', file=sys.stderr)
 
 
 def main() -> int:
     if '--check-published' in sys.argv:
         # 워크플로가 이 출력을 $GITHUB_OUTPUT으로 받아 수집 스텝을 건너뛴다.
-        fresh = published_covers_today()
+        fresh = published_is_fresh()
         print(f'fresh={"true" if fresh else "false"}')
         return 0
 

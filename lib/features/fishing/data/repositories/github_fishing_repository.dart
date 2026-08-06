@@ -50,12 +50,26 @@ class GithubFishingRepository implements FishingRepository {
   Future<FishingForecast> fetchForecast(SeaLocation location) async {
     if (_url.isEmpty) return direct.fetchForecast(location);
     final ymd = _todayYmd();
+
+    FishingIndexFile? file;
     try {
-      final file = await _memo.putIfAbsent(ymd, () => _load(ymd));
-      return file.forecastFor(location);
+      file = await _memo.putIfAbsent(ymd, () => _load(ymd));
     } catch (_) {
       _memo.remove(ymd);
-      return direct.fetchForecast(location);
+    }
+
+    if (file != null && _isCurrent(file)) return file.forecastFor(location);
+
+    // 파일이 없거나 낡았다 — 느리더라도 직접 받아 온다.
+    try {
+      return await direct.fetchForecast(location);
+    } catch (_) {
+      // 직접 호출도 실패. **낡았어도 오늘 값이 있으면 그게 합성 데이터보다
+      // 낫다** — 여기서 그냥 던지면 체인이 목(합성)까지 내려간다.
+      if (file != null && file.covers(DateTime.now())) {
+        return file.forecastFor(location);
+      }
+      rethrow;
     }
   }
 
@@ -66,7 +80,7 @@ class GithubFishingRepository implements FishingRepository {
     final cached = cache.readString(key);
     if (cached != null) {
       try {
-        return _fresh(await compute(parseFishingIndexFile, cached));
+        return await compute(parseFishingIndexFile, cached);
       } catch (_) {
         // 캐시가 깨졌거나 낡았으면 새로 받는다.
       }
@@ -81,7 +95,7 @@ class GithubFishingRepository implements FishingRepository {
       bytes = Uint8List.fromList(gzip.decode(bytes));
     }
     final json = utf8.decode(bytes);
-    final file = _fresh(await compute(parseFishingIndexFile, json));
+    final file = await compute(parseFishingIndexFile, json);
 
     // 저장은 기다리지 않는다. 지난 날짜 캐시는 함께 정리한다.
     unawaited(
@@ -95,18 +109,28 @@ class GithubFishingRepository implements FishingRepository {
     return file;
   }
 
-  /// 오늘자 지수가 들어 있는 파일만 통과시킨다. 아니면 던져서
-  /// [fetchForecast]의 폴백(직접 호출)으로 넘긴다.
+  /// 이 파일만으로 충분한가 — 아니면 직접 호출을 먼저 시도할 것인가.
   ///
-  /// 서버 수집이 멈추면 릴리스에는 며칠 전 파일이 그대로 남는데, 그걸 그냥
-  /// 쓰면 화면에 "이 날짜의 낚시지수가 없습니다"만 뜬다. 낡은 파일을 붙들고
-  /// 있는 것보다 느리더라도 직접 받아 오는 편이 낫다.
-  FishingIndexFile _fresh(FishingIndexFile file) {
-    if (!file.covers(DateTime.now())) {
-      throw const FormatException('낚시지수 파일에 오늘 날짜가 없음(수집이 멈춘 상태)');
-    }
-    return file;
+  /// 두 가지를 본다.
+  /// - **오늘 날짜 지수가 들어 있는가.** 없으면 화면에 "이 날짜의 낚시지수가
+  ///   없습니다"만 뜬다.
+  /// - **언제 만들어진 파일인가.** 이 API는 며칠 앞까지 주므로, 수집이 멈춰도
+  ///   이틀쯤은 "오늘이 들어 있는" 낡은 파일이 남는다(2026-08 실제로 겪음).
+  ///   그동안 예보는 갱신되는데 앱은 이틀 전 판단을 계속 보여 준다.
+  ///
+  /// 여기서 false가 나와도 파일을 버리지는 않는다 — 직접 호출까지 실패하면
+  /// [fetchForecast]가 이 파일로 되돌아온다(합성 데이터보다는 낫다).
+  bool _isCurrent(FishingIndexFile file) {
+    if (!file.covers(DateTime.now())) return false;
+    final at = file.generated;
+    // 만든 시각을 모르는 파일(옛 형식)은 새것이라고 볼 근거가 없다.
+    if (at == null) return false;
+    return DateTime.now().toUtc().difference(at.toUtc()) < _staleAfter;
   }
+
+  /// 하루 한 번 갱신되므로 다음 수집 직전이면 24시간이 조금 넘는다.
+  /// 그보다 더 오래됐으면 수집이 멈춘 것으로 본다.
+  static const _staleAfter = Duration(hours: 30);
 
   static String _todayYmd() {
     final n = DateTime.now();

@@ -20,21 +20,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// [from]을 주면 그날과 다음날 지수로 만든다. **리포지토리 경로를 타는
 /// 테스트는 반드시 오늘 날짜로 만들어야 한다** — 오늘자가 없는 파일은
 /// "수집이 멈춘 상태"로 보고 직접 호출로 폴백하기 때문이다.
-String sampleFile({DateTime? from}) {
+String sampleFile({DateTime? from, DateTime? generatedAt}) {
   final day0 = from ?? DateTime(2026, 8, 1);
   final day1 = day0.add(const Duration(days: 1));
   String ymd(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
-  return _sampleWithDates(ymd(day0), ymd(day1));
+  // `generated`도 같이 움직여야 한다 — 앱은 "오늘이 들어 있는가"만이 아니라
+  // **언제 만든 파일인가**로도 판단한다.
+  final made =
+      generatedAt?.toUtc() ?? DateTime.utc(day0.year, day0.month, day0.day, 9);
+  return _sampleWithDates(ymd(day0), ymd(day1), made.toIso8601String());
 }
 
 /// 오늘자 지수가 들어 있는 표본 파일(서버 수집이 정상인 상태).
 String freshSampleFile() => sampleFile(from: DateTime.now());
 
-String _sampleWithDates(String d0, String d1) => jsonEncode({
+String _sampleWithDates(String d0, String d1, String made) => jsonEncode({
   'fmt': 1,
-  'generated': '2026-08-01T09:00:00Z',
+  'generated': made,
   'points': [
     {'n': '가거도', 'la': 34.073, 'lo': 125.088},
     {'n': '김녕', 'la': 33.558, 'lo': 126.758},
@@ -229,6 +233,51 @@ void main() {
 
       await repo.fetchForecast(_jeju);
       expect(direct.calls, 1, reason: '낡은 파일을 붙들고 있으면 안 된다');
+    });
+
+    test('오늘이 들어 있어도 만든 지 오래된 파일이면 직접 호출을 먼저 쓴다', () async {
+      // 이 API는 며칠 앞까지 주므로, 수집이 멈춰도 이틀쯤은 "오늘이 들어
+      // 있는" 낡은 파일이 남는다. 그동안 예보는 갱신되는데 앱만 이틀 전
+      // 판단을 계속 보여 주게 된다(2026-08-06에 실제로 이 상태였다).
+      SharedPreferences.setMockInitialValues({});
+      final cache = CacheStore(await SharedPreferences.getInstance());
+      // 이틀 전에 만들었지만 날짜는 오늘·내일까지 담고 있는 파일.
+      final stale = sampleFile(
+        from: DateTime.now(),
+        generatedAt: DateTime.now().subtract(const Duration(days: 2)),
+      );
+
+      final direct = _StubRepository();
+      await GithubFishingRepository(
+        direct: direct,
+        cache: cache,
+        client: MockClient((_) async => _jsonResponse(stale)),
+        url: 'https://example.test/fishing_index.json.gz',
+      ).fetchForecast(_jeju);
+
+      expect(direct.calls, 1, reason: '이틀 전 판단을 그대로 보여 주면 안 된다');
+    });
+
+    test('직접 호출까지 실패하면 낡은 파일이라도 쓴다(합성보다 낫다)', () async {
+      // 여기서 그냥 던지면 체인이 목(합성 데이터)까지 내려간다. 이틀 전
+      // 것이어도 실제 관측에 기반한 오늘 값이 합성보다는 낫다.
+      SharedPreferences.setMockInitialValues({});
+      final cache = CacheStore(await SharedPreferences.getInstance());
+      final stale = sampleFile(
+        from: DateTime.now(),
+        generatedAt: DateTime.now().subtract(const Duration(days: 2)),
+      );
+
+      final direct = _NeverRepository(); // 직접 호출은 늘 실패
+      final forecast = await GithubFishingRepository(
+        direct: direct,
+        cache: cache,
+        client: MockClient((_) async => _jsonResponse(stale)),
+        url: 'https://example.test/fishing_index.json.gz',
+      ).fetchForecast(_jeju);
+
+      expect(direct.calls, 1);
+      expect(forecast.indices, isNotEmpty, reason: '합성으로 내려가지 말고 이 파일을 써야 한다');
     });
 
     test('낡은 파일은 디스크 캐시에 있어도 쓰지 않는다', () async {
