@@ -464,6 +464,10 @@ class _TideBody extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
+              // 오른쪽 미니 메뉴 자리를 비운다 — 아래 패널([_PanelBox])과 **같은
+              // 폭**이라 왼쪽 끝이 나란히 맞고, 메뉴 아이콘이 "강함 56%" 배지를
+              // 덮지 않는다(2026-08-06 사용자 요구).
+              margin: const EdgeInsets.only(right: 56),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.35),

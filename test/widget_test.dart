@@ -149,7 +149,7 @@ void main() {
 
     // 정보 항목은 아래로 스크롤해야 보인다(새 섹션 추가로 길어짐).
     await tester.scrollUntilVisible(
-      find.text('오류신고 및 사업제휴 문의'),
+      find.text('오류신고 및 제휴문의'),
       200,
       scrollable: find
           .descendant(
@@ -158,6 +158,6 @@ void main() {
           )
           .first,
     );
-    expect(find.text('오류신고 및 사업제휴 문의'), findsOneWidget);
+    expect(find.text('오류신고 및 제휴문의'), findsOneWidget);
   });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -233,15 +234,40 @@ Future<ui.Image> buildWindHeatmapImage(
   int width = 420,
   int height = 404,
 }) async {
-  final buffer = await compute(_fillHeatmapPixels, (
-    field: field,
-    minLat: crop?.minLat ?? field.minLat,
-    maxLat: crop?.maxLat ?? field.maxLat,
-    minLon: crop?.minLon ?? field.minLon,
-    maxLon: crop?.maxLon ?? field.maxLon,
-    width: width,
-    height: height,
-  ));
+  final minLat = crop?.minLat ?? field.minLat;
+  final maxLat = crop?.maxLat ?? field.maxLat;
+  final minLon = crop?.minLon ?? field.minLon;
+  final maxLon = crop?.maxLon ?? field.maxLon;
+
+  // **가로 띠로 나눠 여러 아이솔레이트에서 동시에 굽는다.**
+  //
+  // 픽셀 하나마다 bicubic 샘플 2번 + FBM 노이즈 4번이 돌아 88만 px짜리
+  // 핵심영역은 한 아이솔레이트에서 1.5초가 넘는다(실측). 사용자 제보로는
+  // 실기기에서 슬라이더를 놓고 지도가 바뀌기까지 약 3초 걸렸다.
+  // 픽셀끼리 서로를 참조하지 않으므로 행 단위로 그냥 쪼개면 된다.
+  final bands = _bandCount(width * height);
+  final buffer = bands == 1
+      ? await compute(_fillHeatmapPixels, (
+          field: field,
+          minLat: minLat,
+          maxLat: maxLat,
+          minLon: minLon,
+          maxLon: maxLon,
+          width: width,
+          height: height,
+          yStart: 0,
+          yEnd: height,
+        ))
+      : await _fillInBands(
+          field: field,
+          minLat: minLat,
+          maxLat: maxLat,
+          minLon: minLon,
+          maxLon: maxLon,
+          width: width,
+          height: height,
+          bands: bands,
+        );
   final completer = Completer<ui.Image>();
   ui.decodeImageFromPixels(
     buffer,
@@ -253,8 +279,64 @@ Future<ui.Image> buildWindHeatmapImage(
   return completer.future;
 }
 
+/// 이 래스터를 몇 개의 띠로 나눠 구울지.
+///
+/// 아이솔레이트를 띄우는 데도 비용이 있어(수십 ms) 작은 래스터는 오히려
+/// 손해다. 기기 코어 수를 넘겨 봐야 서로 밀어내기만 하므로 거기서 자른다.
+int _bandCount(int pixels) {
+  final byCores = Platform.numberOfProcessors;
+  final bySize = pixels >= 400000
+      ? 4
+      : pixels >= 150000
+      ? 2
+      : 1;
+  return bySize.clamp(1, byCores < 1 ? 1 : byCores);
+}
+
+/// 가로 띠로 나눠 동시에 굽고 하나로 잇는다.
+///
+/// 각 띠는 **전체 높이 기준의 y 범위**를 받는다 — 띠마다 자기 높이로
+/// 위경도를 계산하면 띠 경계에서 색이 끊긴다.
+Future<Uint8List> _fillInBands({
+  required WindField field,
+  required double minLat,
+  required double maxLat,
+  required double minLon,
+  required double maxLon,
+  required int width,
+  required int height,
+  required int bands,
+}) async {
+  final rows = (height / bands).ceil();
+  final parts = await Future.wait([
+    for (var i = 0; i < bands; i++)
+      if (i * rows < height)
+        compute(_fillHeatmapPixels, (
+          field: field,
+          minLat: minLat,
+          maxLat: maxLat,
+          minLon: minLon,
+          maxLon: maxLon,
+          width: width,
+          height: height,
+          yStart: i * rows,
+          yEnd: math.min((i + 1) * rows, height),
+        )),
+  ]);
+  final buffer = Uint8List(width * height * 4);
+  var offset = 0;
+  for (final part in parts) {
+    buffer.setRange(offset, offset + part.length, part);
+    offset += part.length;
+  }
+  return buffer;
+}
+
 /// 픽셀 채우기(아이솔레이트에서 실행). [WindField]는 프리미티브 리스트로만
 /// 구성돼 isolate 경계를 그대로 넘는다.
+///
+/// [args.yStart]~[args.yEnd] 행만 채운 바이트를 돌려준다. 위경도 계산은
+/// **전체 [args.height]** 기준이라 띠를 이어 붙여도 이음매가 생기지 않는다.
 Uint8List _fillHeatmapPixels(
   ({
     WindField field,
@@ -264,14 +346,16 @@ Uint8List _fillHeatmapPixels(
     double maxLon,
     int width,
     int height,
+    int yStart,
+    int yEnd,
   })
   args,
 ) {
   final field = args.field;
   final width = args.width, height = args.height;
-  final buffer = Uint8List(width * height * 4);
+  final buffer = Uint8List(width * (args.yEnd - args.yStart) * 4);
   var idx = 0;
-  for (var y = 0; y < height; y++) {
+  for (var y = args.yStart; y < args.yEnd; y++) {
     final ty = height == 1 ? 0.0 : y / (height - 1);
     final lat = args.maxLat - ty * (args.maxLat - args.minLat);
     for (var x = 0; x < width; x++) {

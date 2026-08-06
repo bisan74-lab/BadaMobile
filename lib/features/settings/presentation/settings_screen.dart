@@ -340,7 +340,7 @@ class _InfoSection extends StatelessWidget {
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.mail_outline),
-          title: const Text('오류신고 및 사업제휴 문의'),
+          title: const Text('오류신고 및 제휴문의'),
           subtitle: const Text(AppInfo.contactEmail),
           onTap: () => _sendMail(context),
         ),

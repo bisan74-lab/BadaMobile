@@ -8,10 +8,10 @@ class AppInfo {
   const AppInfo._();
 
   static const appName = '바다윈디';
-  static const appVersion = '0.4.14';
+  static const appVersion = '0.4.15';
   static const releaseDate = '2026-08-03';
 
-  /// 오류신고 및 사업제휴 문의 이메일.
+  /// 오류신고 및 제휴문의 이메일.
   static const contactEmail = 'bisan74@gmail.com';
 
   /// 개인정보처리방침 전문(웹) 주소. **Play Console에 등록하는 URL과 같아야
