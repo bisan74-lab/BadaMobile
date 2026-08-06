@@ -141,23 +141,27 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    // 템플릿(펼침) + 데이터 정확도 + 하단 광고 자리.
+    // 템플릿(펼침) + 하단 광고 자리.
     expect(find.text('템플릿'), findsOneWidget);
     expect(find.text('앱 테마'), findsOneWidget);
-    expect(find.text('데이터 출처와 정확도'), findsOneWidget);
     expect(find.text('바다윈디'), findsOneWidget); // 하단 광고 자리(고정)
 
-    // 정보 항목은 아래로 스크롤해야 보인다(새 섹션 추가로 길어짐).
-    await tester.scrollUntilVisible(
-      find.text('오류신고 및 제휴문의'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    expect(find.text('오류신고 및 제휴문의'), findsOneWidget);
+    // 아래 항목들은 스크롤해야 보인다 — 템플릿 섹션이 길어질 때마다(배경
+    // 사진이 늘거나 설명 줄이 붙을 때마다) 한 화면에서 밀려나므로 **위치를
+    // 가정하지 않고** 스크롤로 찾는다.
+    final listView = find
+        .descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    for (final label in ['데이터 출처와 정확도', '오류신고 및 제휴문의']) {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        200,
+        scrollable: listView,
+      );
+      expect(find.text(label), findsOneWidget);
+    }
   });
 }

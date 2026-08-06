@@ -72,6 +72,7 @@ const backgroundImageChoices = <({String asset, String label})>[
   (asset: 'assets/images/sea_bg_dusk.jpg', label: '보랏빛 황혼'),
   (asset: 'assets/images/sea_bg_night.jpg', label: '달밤 바다'),
   (asset: 'assets/images/sea_bg_emerald.jpg', label: '에메랄드 아침'),
+  (asset: 'assets/images/sea_bg_morning.jpg', label: '밝은 아침'),
 ];
 
 /// 선택된 배경 사진 에셋 경로(설정 > 배경 사진). 저장되어 유지된다.

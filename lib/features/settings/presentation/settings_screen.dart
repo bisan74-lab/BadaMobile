@@ -106,6 +106,15 @@ class _TemplateSection extends ConsumerWidget {
           onSelectionChanged: (s) =>
               ref.read(themeModeProvider.notifier).select(s.first),
         ),
+        const SizedBox(height: 4),
+        // "시스템"이 무슨 뜻인지 묻는 제보가 있었다(2026-08-06) — 폰 자체의
+        // 다크 모드 설정을 그대로 따른다는 뜻이라 한 줄로 밝혀 둔다.
+        Text(
+          '시스템: 휴대폰 설정의 다크 모드를 그대로 따릅니다.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -117,7 +126,7 @@ class _TemplateSection extends ConsumerWidget {
         ),
         if (backdrop) ...[
           _label(context, '배경 사진'),
-          // 물때&날씨 전체화면 배경 사진 선택(자체 생성 이미지 5종, 썸네일).
+          // 물때&날씨 전체화면 배경 사진 선택(자체 생성 이미지 6종, 썸네일).
           // 높이를 상수로 두면 시스템 글자 크기를 키웠을 때 이름 줄이 넘친다
           // — 썸네일(72) + 간격(2) + 라벨 한 줄을 **현재 배율로 계산**한다.
           SizedBox(

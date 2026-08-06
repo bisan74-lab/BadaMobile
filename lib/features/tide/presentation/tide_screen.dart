@@ -1078,7 +1078,7 @@ class _WeatherPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final forecastAsync = ref.watch(weatherForecastProvider(location));
     return _PanelBox(
-      title: '날씨 · ${location.name} (향후 2주)',
+      title: '날씨 · ${location.name} (2주 예보)',
       child: forecastAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => const Center(
