@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 /// 빌드 시 주입되는 환경 값.
 ///
 /// 예: flutter run --dart-define=DATA_GO_KR_API_KEY=발급받은키
@@ -38,7 +40,7 @@ class Env {
         'main/app_gate.json',
   );
 
-  /// 물때 화면 하단 배너의 AdMob 광고 단위 ID.
+  /// 물때 화면 하단 배너의 AdMob 광고 단위 ID(플랫폼별).
   ///
   /// 기본값은 **구글이 공개한 테스트 광고 단위 ID**다. 그래서 아무 설정 없이
   /// 빌드해도 테스트 광고가 뜨고, 실제 수익 계정에 무효 트래픽이 잡히지 않는다.
@@ -47,14 +49,33 @@ class Env {
   ///
   /// 빈 문자열을 주입하면 광고를 아예 로드하지 않고 앱 소개 박스만 보여준다
   /// (광고 없는 버전을 내보낼 때 쓴다).
-  static const admobBannerAdUnitId = String.fromEnvironment(
+  /// **AdMob 광고 단위는 플랫폼마다 다르다.** 같은 앱이라도 Android용과 iOS용
+  /// 단위를 AdMob에서 따로 만들어야 하고, 서로 바꿔 넣으면 광고가 안 나온다.
+  /// 그래서 주입 키도 `..._IOS`로 나누고, iOS에서 값을 안 주면 구글 iOS
+  /// **테스트** 단위로 떨어진다(안드로이드 단위로 폴백하지 않는다 — 잘못된
+  /// 플랫폼 단위를 쓰면 조용히 광고가 사라진다).
+  static const _androidBannerAdUnitId = String.fromEnvironment(
     'ADMOB_BANNER_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-3940256099942544/6300978111',
   );
+  static const _iosBannerAdUnitId = String.fromEnvironment(
+    'ADMOB_BANNER_AD_UNIT_ID_IOS',
+    defaultValue: 'ca-app-pub-3940256099942544/2934735716',
+  );
 
-  static const _settingsBannerAdUnitId = String.fromEnvironment(
+  static String get admobBannerAdUnitId =>
+      Platform.isIOS ? _iosBannerAdUnitId : _androidBannerAdUnitId;
+
+  static const _androidSettingsBannerAdUnitId = String.fromEnvironment(
     'ADMOB_SETTINGS_BANNER_AD_UNIT_ID',
   );
+  static const _iosSettingsBannerAdUnitId = String.fromEnvironment(
+    'ADMOB_SETTINGS_BANNER_AD_UNIT_ID_IOS',
+  );
+
+  static String get _settingsBannerAdUnitId => Platform.isIOS
+      ? _iosSettingsBannerAdUnitId
+      : _androidSettingsBannerAdUnitId;
 
   /// 설정 화면 하단 배너의 AdMob 광고 단위 ID.
   ///

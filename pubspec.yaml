@@ -33,7 +33,7 @@ flutter:
 # 런처 아이콘 생성: dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
-  ios: false # iOS 확장 시 true로 변경
+  ios: true
   image_path: "assets/icon/app_icon.png"
   adaptive_icon_background: "#07162b"
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"

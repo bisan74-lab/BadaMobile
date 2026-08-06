@@ -1,0 +1,63 @@
+name: iOS build (unsigned)
+
+# iOS 쪽이 **컴파일되는지**만 확인한다. 서명·배포는 Apple Developer Program
+# (연 US$99) 가입 후에 붙인다 — 계정이 없어도 여기까지는 검증할 수 있고,
+# 안드로이드만 고치다가 iOS가 조용히 깨지는 것을 막아 준다.
+#
+# macOS 러너는 ubuntu보다 분당 요금이 10배라, 매 푸시가 아니라 **손으로 돌리거나
+# iOS 관련 파일이 바뀐 푸시에서만** 실행한다.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/ios-build.yml'
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.5'
+          channel: stable
+          cache: true
+
+      - name: 의존성 설치
+        run: flutter pub get
+
+      # 실제 광고 ID는 Secret이 있을 때만 들어간다. 없으면 테스트 ID로 빌드된다.
+      - name: AdMob iOS 앱 ID 주입 (있으면)
+        env:
+          ADMOB_APP_ID_IOS: ${{ secrets.ADMOB_APP_ID_IOS }}
+        run: tool/set_ios_admob_id.sh
+
+      - name: 분석·테스트
+        run: |
+          flutter analyze
+          flutter test
+
+      # --no-codesign: 서명 인증서 없이 앱 번들까지 만들어 본다. 컴파일·링크·
+      # 플러그인 통합이 깨졌는지는 여기서 다 드러난다.
+      - name: iOS 빌드 (서명 없음)
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+          ADMOB_BANNER_AD_UNIT_ID_IOS: ${{ secrets.ADMOB_BANNER_AD_UNIT_ID_IOS }}
+          ADMOB_SETTINGS_BANNER_AD_UNIT_ID_IOS:
+            ${{ secrets.ADMOB_SETTINGS_BANNER_AD_UNIT_ID_IOS }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=DATA_GO_KR_API_KEY="$DATA_GO_KR_API_KEY" \
+            --dart-define=ADMOB_BANNER_AD_UNIT_ID_IOS="$ADMOB_BANNER_AD_UNIT_ID_IOS" \
+            --dart-define=ADMOB_SETTINGS_BANNER_AD_UNIT_ID_IOS="$ADMOB_SETTINGS_BANNER_AD_UNIT_ID_IOS"
+
+      - name: 결과 확인
+        run: |
+          APP="build/ios/iphoneos/Runner.app"
+          test -d "$APP" || { echo "::error::$APP 가 없다"; exit 1; }
+          echo "번들 크기: $(du -sh "$APP" | cut -f1)"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist"

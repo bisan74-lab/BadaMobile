@@ -3,6 +3,13 @@
 Flutter 앱. 바다타임(물때·조석)과 윈디(바람·해양 날씨 지도)를 하나로 합친
 무료 한국어 낚시/해양 앱. Android 우선, iOS 확장 전제.
 
+**iOS도 같은 저장소에서 간다**(`ios/`). 저장소를 나누거나 코드를 플랫폼별로
+분기하지 않는다 — `lib/`는 공통이고, 갈리는 건 AdMob 광고 단위 ID 하나뿐이다
+(`Env`가 `Platform.isIOS`로 읽는다. **iOS 키를 안 주면 안드로이드 단위로
+폴백하지 않고 iOS 테스트 단위로 떨어진다** — 플랫폼이 다른 단위를 쓰면 광고가
+조용히 사라지기 때문). 현재 상태와 남은 일은
+[docs/IOS_SETUP.md](docs/IOS_SETUP.md).
+
 **세부 설계·데이터 연동·화면별 책임은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)를,
 요구사항(FR/NFR)은 [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)를 먼저 읽는다.**
 이 파일은 그 두 문서에 없는, 매번 반복되는 실전 규칙만 담는다.

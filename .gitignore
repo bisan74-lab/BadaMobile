@@ -43,3 +43,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# iOS — CocoaPods 산출물과 Xcode 사용자 설정은 커밋하지 않는다.
+# (Podfile.lock은 의존성 고정용이라 **커밋한다**)
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+**/*.xcuserdatad/
+**/xcuserdata/
