@@ -175,7 +175,12 @@ class _MulTtaeCalendarState extends State<MulTtaeCalendarView> {
               crossAxisCount: 7,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 0.82,
+              // **칸 높이를 글자 배율에 맞춰 늘린다.** 한 칸에 날짜와 물때
+              // 이름 두 줄이 들어가는데, 비율을 고정해 두면 큰 글자에서 글자가
+              // 칸 밖으로 밀려 아랫줄 날짜와 겹친다(2026-08-06 사용자 제보
+              // 스크린샷: 달력에서 "10물"이 "8" 위에 그려졌다).
+              // 세로로만 길어지므로 가로 7칸 배치는 그대로다.
+              childAspectRatio: _cellAspectRatio(context),
               children: [
                 for (var i = 0; i < firstWeekday; i++) const SizedBox.shrink(),
                 for (var day = 1; day <= daysInMonth; day++)
@@ -186,6 +191,12 @@ class _MulTtaeCalendarState extends State<MulTtaeCalendarView> {
         ),
       ),
     );
+  }
+
+  /// 날짜 칸의 가로:세로 비율. 배율이 오를수록 칸을 세로로 늘린다.
+  static double _cellAspectRatio(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    return 0.82 / scale.clamp(1.0, 2.0);
   }
 
   Widget _dayCell(BuildContext context, DateTime d) {
@@ -207,26 +218,34 @@ class _MulTtaeCalendarState extends State<MulTtaeCalendarView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              '${d.day}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: selected ? FontWeight.bold : null,
-                color: !enabled
-                    ? scheme.onSurfaceVariant.withValues(alpha: 0.35)
-                    : d.weekday == DateTime.sunday
-                    ? scheme.error
-                    : null,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '${d.day}',
+                maxLines: 1,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: selected ? FontWeight.bold : null,
+                  color: !enabled
+                      ? scheme.onSurfaceVariant.withValues(alpha: 0.35)
+                      : d.weekday == DateTime.sunday
+                      ? scheme.error
+                      : null,
+                ),
               ),
             ),
-            Text(
-              mt.label,
-              style: TextStyle(
-                fontSize: 9.5,
-                color: !enabled
-                    ? scheme.onSurfaceVariant.withValues(alpha: 0.35)
-                    : mt.isSari
-                    ? scheme.error
-                    : scheme.onSurfaceVariant,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                mt.label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  color: !enabled
+                      ? scheme.onSurfaceVariant.withValues(alpha: 0.35)
+                      : mt.isSari
+                      ? scheme.error
+                      : scheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],

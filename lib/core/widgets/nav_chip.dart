@@ -19,29 +19,50 @@ const double navChipWidth = 52;
 /// 칩 사이 세로 간격.
 const double navChipGap = 5;
 
-/// 아이콘 크기와 세로 여백.
-const double _iconSize = 16;
+/// 세로 여백.
 const double _iconGap = 2;
 const double _vPad = 5;
 
 /// 라벨 기준 글자 크기.
 const double navChipFontSize = 10;
 
-/// **라벨 배율 상한.** 칩 폭이 고정된 UI 가구라 배율을 그대로 받으면 높이가
-/// 끝없이 늘어 다른 메뉴를 덮는다(광고 자리와 같은 이유의 예외). 상한을
-/// 두더라도 접근성을 버리지 않도록:
-/// - 기준 글자를 8.5 → [navChipFontSize]로 키웠고,
-/// - 각 칩에 [Semantics] 라벨을 달아 스크린리더는 전체를 그대로 읽는다.
+/// 아이콘 기준 크기.
+const double _iconBase = 16;
+
+/// **이 배율을 넘으면 라벨을 떼고 아이콘만 키운다.**
 ///
-/// **본문 화면에는 이 상한을 쓰지 말 것** — 사용자의 접근성 설정을 무시하게 된다.
-const double navChipMaxTextScale = 1.5;
+/// 폭 52px 세로 칩에 큰 글자를 넣으면 "낚시정/보"처럼 2~3줄로 쪼개져 오히려
+/// 읽기 어렵고, 메뉴가 화면을 덮을 만큼 길어진다(2026-08-06 사용자 제보:
+/// "큰글자 모드에서는 보는게 불편해진다"). 큰 글자를 쓰는 사람에게는 잘게
+/// 쪼개진 글자보다 **큰 아이콘**이 낫다.
+///
+/// 라벨을 떼도 뜻이 사라지지 않게:
+/// - [Semantics] 라벨이 남아 스크린리더는 그대로 읽고,
+/// - 길게 누르면 [Tooltip]으로 이름이 뜬다.
+const double navChipLabelMaxScale = 1.2;
+
+/// 아이콘 배율 상한. 라벨을 뗀 만큼 아이콘을 키우되, 칩 폭(52) 안에 든다.
+const double navChipIconMaxScale = 1.7;
+
+bool _labelVisible(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(navChipFontSize) <=
+    navChipFontSize * navChipLabelMaxScale;
+
+double _iconSizeOf(BuildContext context) {
+  final scale =
+      MediaQuery.textScalerOf(context).scale(navChipFontSize) / navChipFontSize;
+  return _iconBase * scale.clamp(1.0, navChipIconMaxScale);
+}
 
 /// [context]의 글자 배율에서 이 칩들이 세로로 차지하는 높이(간격 포함).
 ///
-/// 라벨이 칩 폭 안에서 몇 줄이 되는지까지 실제로 재므로, 배율이 올라
-/// 두 줄이 되는 순간도 그대로 반영된다.
+/// 라벨이 보이는 배율에서는 칩 폭 안에서 몇 줄이 되는지까지 실제로 재고,
+/// 라벨을 뗀 배율에서는 아이콘 높이만 센다.
 double navChipsHeight(BuildContext context, List<String> labels) {
-  final scaler = _cappedScaler(context);
+  final icon = _iconSizeOf(context);
+  if (!_labelVisible(context)) {
+    return labels.length * (_vPad * 2 + icon + navChipGap) + 8;
+  }
   // **칩이 실제로 쓰는 것과 같은 스타일로 재야 한다.** fontSize만 준 맨
   // TextStyle로 재면 글꼴·줄높이가 달라 실제보다 20%쯤 낮게 나오고, 그만큼
   // 덜 비워서 탭 레일과 겹친다(2026-08-06에 이 오차로 한 번 더 겹쳤다).
@@ -53,17 +74,14 @@ double navChipsHeight(BuildContext context, List<String> labels) {
     final painter = TextPainter(
       text: TextSpan(text: label, style: style),
       textDirection: TextDirection.ltr,
-      textScaler: scaler,
+      textScaler: MediaQuery.textScalerOf(context),
     )..layout(maxWidth: navChipWidth);
-    total += _vPad * 2 + _iconSize + _iconGap + painter.height + navChipGap;
+    total += _vPad * 2 + icon + _iconGap + painter.height + navChipGap;
   }
   // 글꼴 대체(fallback)나 줄높이 차이로 몇 px씩 모자랄 수 있다. **모자라면
   // 겹치고 남으면 여백일 뿐**이라 넉넉한 쪽으로 올림한다.
   return total + 8;
 }
-
-TextScaler _cappedScaler(BuildContext context) =>
-    MediaQuery.textScalerOf(context).clamp(maxScaleFactor: navChipMaxTextScale);
 
 /// 세로 메뉴 칩 하나.
 class NavChip extends StatelessWidget {
@@ -83,39 +101,42 @@ class NavChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final showLabel = _labelVisible(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: navChipGap),
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: label,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: Container(
-            width: navChipWidth,
-            padding: const EdgeInsets.symmetric(vertical: _vPad),
-            decoration: BoxDecoration(
-              color: selected ? primary : Colors.black54,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: _iconSize, color: Colors.white),
-                const SizedBox(height: _iconGap),
-                MediaQuery.withClampedTextScaling(
-                  maxScaleFactor: navChipMaxTextScale,
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: navChipFontSize,
+      child: Tooltip(
+        message: label,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: label,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(9),
+            child: Container(
+              width: navChipWidth,
+              padding: const EdgeInsets.symmetric(vertical: _vPad),
+              decoration: BoxDecoration(
+                color: selected ? primary : Colors.black54,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: _iconSizeOf(context), color: Colors.white),
+                  if (showLabel) ...[
+                    const SizedBox(height: _iconGap),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: navChipFontSize,
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                ],
+              ),
             ),
           ),
         ),
