@@ -111,10 +111,28 @@ void main() {
 
     printReport('바람지도 시간 스텝 1회당 굽는 비용', rows);
 
-    // 결정적 단언: 시간 스텝을 한 번 옮길 때마다 이만큼의 픽셀을 계산한다.
-    // 이 수가 줄면(프리페치·저해상도 스크럽 등) 개선된 것이다.
-    const pxPerStep = bgW * bgH + coreW * coreH;
-    expect(pxPerStep, 1049680, reason: '시간 스텝 1회당 계산 픽셀 수');
+    // 결정적 단언: 시간 스텝을 한 번 옮길 때 계산하는 픽셀 수.
+    //
+    // **드래그 중에는 배경만 굽는다**(`_WindMapArea.scrubbing`). 고해상도
+    // 핵심영역은 손을 뗀 뒤 딱 한 번 굽고, 그때 배경은 이미 구워져 있으니
+    // 다시 굽지 않는다. 그래서 슬라이더를 N칸 끌면
+    //   배경 N번 + 핵심영역 1번
+    // 이고, 예전(칸마다 두 장)의 `N × 1049680`과 비교된다.
+    const scrubPx = bgW * bgH; // 드래그 중 한 칸당
+    const releasePx = coreW * coreH; // 손 뗀 뒤 한 번
+    expect(scrubPx, 169680, reason: '드래그 중 한 칸당 계산 픽셀 수');
+    expect(releasePx, 880000, reason: '손을 뗀 뒤 한 번만 계산하는 픽셀 수');
+
+    // 8칸을 끄는 동안의 총량 — 개선 효과를 한 숫자로 본다.
+    const steps = 8;
+    const before = steps * (scrubPx + releasePx);
+    const after = steps * scrubPx + releasePx;
+    // ignore: avoid_print
+    print(
+      '  슬라이더 $steps칸: ${before ~/ 1000}K px → ${after ~/ 1000}K px '
+      '(${(100 - after * 100 / before).round()}% 감소)\n',
+    );
+    expect(after, lessThan(before ~/ 2), reason: '스크럽 최적화 효과');
   });
 
   test('기준선 — 해안선 Path 생성', () async {

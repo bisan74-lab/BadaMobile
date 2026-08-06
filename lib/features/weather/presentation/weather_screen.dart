@@ -58,6 +58,10 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   /// 슬라이더로 시각을 고르면 지도도 그 시각의 바람으로 바뀐다(윈디처럼).
   int _hourOffset = 0;
 
+  /// 시간 슬라이더를 잡고 있는 중인지. 드래그 동안에는 지도 히트맵의 고해상도
+  /// 레이어를 굽지 않는다(굽는 비용이 배경의 약 5배라 슬라이더가 밀린다).
+  bool _scrubbing = false;
+
   /// 상세 예보로 켜진 지점. null이면 지도 모드(하단 표 없음).
   SeaLocation? _forecastPoint;
 
@@ -116,6 +120,11 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   }
 
   /// 지도 모드 하단 슬라이더로 바람장 시각을 바꾼다.
+  /// 슬라이더를 잡았다/놓았다. 놓는 순간 미뤄 뒀던 고해상도 굽기가 시작된다.
+  void _setScrubbing(bool value) {
+    if (value != _scrubbing) setState(() => _scrubbing = value);
+  }
+
   void _setMapHour(int idx) {
     if (idx != _hourOffset) setState(() => _hourOffset = idx);
   }
@@ -320,6 +329,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                     onPick: _onPick,
                     onOpenDetail: _openDetail,
                     bottomBarHeight: _bottomBarHeight,
+                    scrubbing: _scrubbing,
                   ),
                 ),
                 // 상단: 상세 예보 진입 전, 커서 지점의 바람 세기·방향 + 진입 버튼.
@@ -350,6 +360,7 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                         nowOffset: series.indexAtOrBefore(nowKst()),
                         synthetic: result.isSynthetic,
                         onChanged: _setMapHour,
+                        onScrubbing: _setScrubbing,
                         onNow: _mapHourToNow,
                       ),
                     ),
@@ -420,10 +431,15 @@ class _WindMapArea extends StatefulWidget {
     required this.onPick,
     required this.onOpenDetail,
     required this.bottomBarHeight,
+    this.scrubbing = false,
   });
 
   final WindField field;
   final List<WindParticle> particles;
+
+  /// 사용자가 시간 슬라이더를 **잡고 끄는 중**인지. 이때는 히트맵 핵심영역
+  /// (고해상도)을 굽지 않고 배경만 갱신해 슬라이더가 밀리지 않게 한다.
+  final bool scrubbing;
 
   /// 매 프레임 파티클 레이어만 다시 그리게 하는 리페인트 신호.
   final Listenable repaint;
@@ -453,19 +469,38 @@ class _WindMapArea extends StatefulWidget {
   State<_WindMapArea> createState() => _WindMapAreaState();
 }
 
-/// 같은 시각으로 구운 히트맵 두 장(전체 bbox 배경 + 한반도 핵심영역 고해상도).
+/// 화면에 그리고 있는 히트맵 한 벌 — **항상 같은 시각([time])의 것**이다.
 ///
-/// 한 벌로 묶어 두는 게 핵심이다 — 따로 들고 있으면 새 시각의 배경과 옛 시각의
-/// 핵심영역이 겹쳐 그려지는 중간 상태가 생긴다.
+/// 전체 bbox 배경과 한반도 핵심영역(고해상도)을 따로 들고 있으면, 새 시각의
+/// 배경 위에 **옛 시각의 핵심영역**이 덮이는 중간 상태가 생긴다(화면 아래쪽
+/// 띠만 먼저 바뀌었다가 잠시 뒤 전체가 바뀌는 것처럼 보인다). 그래서 두 장을
+/// 한 객체로 묶고, 교체는 통째로만 한다.
+///
+/// [core]는 **null일 수 있다** — 시간 슬라이더를 드래그하는 동안에는 배경만
+/// 굽고(약 1/5 비용) 핵심영역은 손을 뗀 뒤에 굽기 때문이다. 이때 화면은
+/// 해상도만 낮을 뿐 **전체가 같은 시각**이라 시각이 섞이지 않는다. 금지되는
+/// 것은 "배경은 새 시각인데 핵심영역은 옛 시각"이지, "핵심영역이 아직 없음"이
+/// 아니다.
 class _HeatmapPair {
-  const _HeatmapPair({required this.background, required this.core});
+  const _HeatmapPair({
+    required this.background,
+    required this.core,
+    required this.time,
+  });
 
   final ui.Image background;
-  final ui.Image core;
+  final ui.Image? core;
+
+  /// 두 장을 구운 바람장 시각. 이 값이 같아야 한 벌이다.
+  final DateTime time;
+
+  /// 배경은 그대로 두고 핵심영역만 채운 새 한 벌.
+  _HeatmapPair withCore(ui.Image image) =>
+      _HeatmapPair(background: background, core: image, time: time);
 
   void dispose() {
     background.dispose();
-    core.dispose();
+    core?.dispose();
   }
 }
 
@@ -550,6 +585,9 @@ class _WindMapAreaState extends State<_WindMapArea> {
     super.didUpdateWidget(oldWidget);
     if (widget.field.time != _heatmapTime) {
       _rebuildHeatmap();
+    } else if (oldWidget.scrubbing && !widget.scrubbing) {
+      // 손을 뗐다 — 스크럽 중 미뤄 둔 고해상도만 이제 굽는다.
+      _bakeCoreIfNeeded();
     }
     // 상세 예보를 새로 열었거나(새 지점 탭 포함) 하단 표 높이가 막
     // 확정됐으면(패널 종류가 바뀌어 높이가 달라지는 첫 프레임엔 아직 이전
@@ -605,6 +643,15 @@ class _WindMapAreaState extends State<_WindMapArea> {
       ..scale(s);
   }
 
+  /// 히트맵을 다시 굽는다.
+  ///
+  /// **시간 슬라이더를 드래그하는 동안엔 배경만 굽는다.** 핵심영역은 배경의
+  /// 5배가 넘는 픽셀(1100×800 = 88만 vs 420×404 = 17만)이라 굽는 데 실측
+  /// 1710ms vs 366ms가 든다(`test/perf/perf_baseline_test.dart`). 스크럽할 때
+  /// 매 칸마다 둘 다 구우면 슬라이더가 통째로 밀린다.
+  ///
+  /// 손을 떼면 [\_bakeCoreIfNeeded]가 **배경은 그대로 두고 핵심영역만** 채운다
+  /// — 그 시각 배경은 스크럽 중에 이미 구워 놨으므로 다시 구울 이유가 없다.
   Future<void> _rebuildHeatmap() async {
     final field = widget.field;
     final time = field.time;
@@ -620,25 +667,29 @@ class _WindMapAreaState extends State<_WindMapArea> {
       });
       return;
     }
-    // 배경(전체 bbox)과 핵심영역(고해상도)을 **동시에** 굽고 **한 번에** 교체
-    // 한다. 예전엔 배경을 먼저 setState로 띄우고 핵심영역을 이어서 띄웠는데,
-    // 그 사이 몇 프레임 동안 새 시각의 배경 위에 **직전 시각의 핵심영역**이
-    // 덮여, 핵심영역 밖(화면 아래쪽 남중국해 띠 등)만 먼저 바뀌었다가 잠시 뒤
-    // 전체가 바뀌는 것처럼 보였다(시간 슬라이더를 옮길 때마다 발생. 실측:
-    // 아래 띠가 바뀐 뒤 약 0.12초 지나 전체 갱신).
+    // 드래그 중이면 배경만. 아니면 둘을 **병렬로** 구워 한 번에 교체한다
+    // (각자 아이솔레이트에서 도니 총 시간은 둘 중 긴 쪽 정도).
     //
-    // 두 빌드는 각자 아이솔레이트에서 도니 병렬로 돌려 총 시간도 둘 중 긴 쪽
-    // 정도로만 든다.
+    // 한 번에 교체하는 이유: 예전엔 배경을 먼저 setState로 띄우고 핵심영역을
+    // 이어서 띄웠는데, 그 사이 몇 프레임 동안 새 시각의 배경 위에 **직전
+    // 시각의 핵심영역**이 덮여, 핵심영역 밖(화면 아래쪽 띠)만 먼저 바뀌었다가
+    // 잠시 뒤 전체가 바뀌는 것처럼 보였다(실측 약 0.12초).
+    final scrubbing = widget.scrubbing;
     final built = await Future.wait([
       buildWindHeatmapImage(field),
-      buildWindHeatmapImage(
-        field,
-        crop: _coreBounds,
-        width: _coreTexW,
-        height: _coreTexH,
-      ),
+      if (!scrubbing)
+        buildWindHeatmapImage(
+          field,
+          crop: _coreBounds,
+          width: _coreTexW,
+          height: _coreTexH,
+        ),
     ]);
-    final pair = _HeatmapPair(background: built[0], core: built[1]);
+    final pair = _HeatmapPair(
+      background: built[0],
+      core: built.length > 1 ? built[1] : null,
+      time: time,
+    );
     if (!mounted || requestId != _heatmapRequestId) {
       pair.dispose();
       return;
@@ -648,6 +699,36 @@ class _WindMapAreaState extends State<_WindMapArea> {
       _heatmap = pair;
       _heatmapTime = time;
     });
+  }
+
+  /// 스크럽이 끝난 뒤, **배경은 그대로 두고 핵심영역만** 채운다.
+  ///
+  /// 이미 이 시각의 배경을 갖고 있으므로 다시 굽지 않는다 — 굽는 것은
+  /// 핵심영역 하나뿐이라 스크럽 중 절약한 비용이 마지막에 한 번만 청구된다.
+  Future<void> _bakeCoreIfNeeded() async {
+    final field = widget.field;
+    final current = _heatmap;
+    // 배경이 없거나(데이터 없는 시각), 이미 핵심영역이 있거나, 배경이 다른
+    // 시각의 것이면 여기서 할 일이 없다(뒷 경우는 _rebuildHeatmap이 맡는다).
+    if (current == null || current.core != null || current.time != field.time) {
+      return;
+    }
+    final requestId = ++_heatmapRequestId;
+    final core = await buildWindHeatmapImage(
+      field,
+      crop: _coreBounds,
+      width: _coreTexW,
+      height: _coreTexH,
+    );
+    // 그새 시각이 바뀌었거나 화면이 사라졌으면 버린다. 배경은 _heatmap이
+    // 그대로 들고 있으므로 여기서 dispose하면 안 된다.
+    if (!mounted ||
+        requestId != _heatmapRequestId ||
+        !identical(_heatmap, current)) {
+      core.dispose();
+      return;
+    }
+    setState(() => _heatmap = current.withCore(core));
   }
 
   @override
@@ -1022,6 +1103,7 @@ class _MapTimeBar extends StatelessWidget {
     required this.nowOffset,
     required this.synthetic,
     required this.onChanged,
+    required this.onScrubbing,
     required this.onNow,
   });
 
@@ -1033,6 +1115,10 @@ class _MapTimeBar extends StatelessWidget {
   /// 알려 실데이터(윈디)와 비교하다 혼동하지 않게 한다.
   final bool synthetic;
   final ValueChanged<int> onChanged;
+
+  /// 슬라이더를 잡았을 때 true, 놓았을 때 false. 잡고 있는 동안에는 지도가
+  /// 고해상도 레이어를 굽지 않아 드래그가 부드럽다.
+  final ValueChanged<bool> onScrubbing;
   final VoidCallback onNow;
 
   @override
@@ -1213,7 +1299,9 @@ class _MapTimeBar extends StatelessWidget {
                         value: i.toDouble(),
                         min: 0,
                         max: maxIdx.toDouble(),
+                        onChangeStart: (_) => onScrubbing(true),
                         onChanged: (v) => onChanged(v.round()),
+                        onChangeEnd: (_) => onScrubbing(false),
                       ),
                     ),
                   ),
