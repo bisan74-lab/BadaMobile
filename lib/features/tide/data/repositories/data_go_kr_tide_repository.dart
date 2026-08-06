@@ -63,6 +63,15 @@ class DataGoKrTideRepository implements TideRepository {
         .where((e) => !e.time.isBefore(day))
         .where((e) => e.time.isBefore(day.add(const Duration(days: 1))))
         .toList();
+    // **당일 것이 하나도 없으면 실패로 친다.** 예전엔 3일 전체가 빈 경우만
+    // 막아서, 전날·다음날은 왔는데 당일만 빠지면(간헐적 응답 실패) 그대로
+    // "성공"으로 올라갔다. 그러면 화면에 만조·간조 카드가 하나도 없고,
+    // 조위 곡선은 마지막 극값으로 25시간 내내 고정돼 조류세기가 0%로 뜬다
+    // (2026-08-06 사용자 제보 화면이 정확히 이 상태였다). 여기서 던져야
+    // 폴백 체인(고저조 → 합성)이 이어진다.
+    if (dayExtremes.isEmpty) {
+      throw const FormatException('조석예보에 당일 고저조가 없음');
+    }
 
     return TideDay(
       date: day,

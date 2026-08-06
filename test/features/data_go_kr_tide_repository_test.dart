@@ -179,6 +179,49 @@ void main() {
       expect(tide.hourlyHeightsCm[8], closeTo(700, 0.01));
     });
 
+    test('당일만 비어 오면 실패로 쳐서 폴백으로 넘긴다', () async {
+      // **2026-08-06 사용자 제보 재현.** 전날·다음날은 정상인데 당일 응답만
+      // 비어 오면(간헐적 응답 실패), 예전엔 이걸 성공으로 올렸다. 그러면
+      // 화면에 만조·간조 카드가 하나도 없고, 조위 곡선은 마지막 극값으로
+      // 25시간 내내 고정돼 조류세기가 0%로 뜬다.
+      final date = DateTime.now().add(const Duration(days: 3));
+      String ymdOf(DateTime d) =>
+          '${d.year}'
+          '${d.month.toString().padLeft(2, '0')}'
+          '${d.day.toString().padLeft(2, '0')}';
+      final today = ymdOf(DateTime(date.year, date.month, date.day));
+
+      final holeyClient = MockClient((request) async {
+        final ymd = request.url.queryParameters['reqDate']!;
+        // 당일만 빈 목록으로 답한다(HTTP는 200 정상).
+        if (ymd == today) return http.Response(_body(const []), 200);
+        return http.Response(
+          _body([
+            {
+              'obsvtrNm': '인천',
+              'predcDt':
+                  '${ymd.substring(0, 4)}-${ymd.substring(4, 6)}-'
+                  '${ymd.substring(6)} 08:00',
+              'predcTdlvVl': 700.0,
+              'extrSe': '1',
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final repo = DataGoKrTideRepository(
+        client: holeyClient,
+        serviceKey: 'test-key',
+      );
+      expect(
+        () => repo.fetchTideDay(incheon, date),
+        throwsA(isA<FormatException>()),
+        reason: '당일 극값이 없는데 성공으로 올리면 빈 물때 화면이 나온다',
+      );
+    });
+
     test('바다누리식 봉투(result.data)와 tph_level 필드도 처리한다', () async {
       final khoaClient = MockClient((request) async {
         final ymd = request.url.queryParameters['reqDate']!;

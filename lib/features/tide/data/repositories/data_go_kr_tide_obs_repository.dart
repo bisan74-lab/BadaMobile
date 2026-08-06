@@ -66,7 +66,7 @@ class DataGoKrTideObsRepository implements TideRepository {
       return TideDay(
         date: day,
         locationId: location.id,
-        extremes: _dayExtremes(_allExtremes(s), day),
+        extremes: _requireDayExtremes(_dayExtremes(_allExtremes(s), day)),
         hourlyHeightsCm: _hourlyFromSeries(s, day),
       );
     }
@@ -79,9 +79,21 @@ class DataGoKrTideObsRepository implements TideRepository {
     return TideDay(
       date: day,
       locationId: location.id,
-      extremes: _dayExtremes(blended, day),
+      extremes: _requireDayExtremes(_dayExtremes(blended, day)),
       hourlyHeightsCm: interpolateHourlyHeights(blended, day),
     );
+  }
+
+  /// **당일 만조·간조가 하나도 없으면 실패로 친다.**
+  ///
+  /// 시계열은 왔는데 그날 극값만 안 잡히는 경우(응답이 부분적으로 빠짐)를
+  /// 성공으로 올리면, 화면에 만조·간조가 하나도 없고 조류세기가 0%로 뜬다
+  /// (2026-08-06 사용자 제보). 여기서 던져야 폴백 체인이 이어진다.
+  List<TideExtreme> _requireDayExtremes(List<TideExtreme> dayExtremes) {
+    if (dayExtremes.isEmpty) {
+      throw const FormatException('실측·예측 조위에서 당일 극값을 못 찾음');
+    }
+    return dayExtremes;
   }
 
   Future<_Station> _fetchStation(
