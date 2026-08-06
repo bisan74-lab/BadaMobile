@@ -8,6 +8,16 @@ import '../config/env.dart';
 /// 아예 건드리지 않고, 화면에는 아래 앱 소개 박스가 그대로 나온다.
 bool adsRuntimeEnabled = false;
 
+/// 광고 SDK 초기화가 끝나기를 기다리는 Future. `main()`이 채운다.
+///
+/// 예전엔 `main()`이 초기화를 **await한 뒤에야** `runApp`을 불렀다 — 광고는
+/// 부가 기능인데도 최대 3초 동안 첫 프레임조차 안 그려졌다. 지금은 초기화를
+/// 띄워만 두고 바로 화면을 올리고, 배너 자리가 이 Future를 기다렸다가
+/// 준비되면 그때 로드한다.
+///
+/// 테스트에서는 null이라 광고 플랫폼 채널을 아예 건드리지 않는다.
+Future<void>? adsReady;
+
 /// 배너가 붙는 자리. 자리마다 광고 단위를 따로 두면 AdMob 리포트에서 어느
 /// 화면이 얼마나 버는지 나눠 볼 수 있다.
 enum AdSlot {
@@ -47,7 +57,15 @@ class _AdPlaceholderState extends State<AdPlaceholder> {
   @override
   void initState() {
     super.initState();
-    _loadBanner();
+    if (adsRuntimeEnabled) {
+      _loadBanner();
+    } else {
+      // 아직 SDK 초기화가 안 끝났을 수 있다(첫 화면을 막지 않으려고 병렬로
+      // 돌린다). 끝나면 그때 로드하고, 끝내 실패하면 소개 박스로 남는다.
+      adsReady?.then((_) {
+        if (mounted && adsRuntimeEnabled) _loadBanner();
+      });
+    }
   }
 
   void _loadBanner() {
