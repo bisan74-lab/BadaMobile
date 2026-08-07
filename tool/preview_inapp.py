@@ -6,6 +6,7 @@
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,9 @@ def with_scrim(path: Path) -> Image.Image:
 
 
 def main() -> None:
-    out_dir = Path(__file__).parent
+    # 저장소 안(`tool/`)에 PNG를 떨어뜨리지 않는다 — 미리보기는 버릴 파일이다.
+    out_dir = Path(tempfile.gettempdir()) / 'bada_preview'
+    out_dir.mkdir(exist_ok=True)
     for name in sys.argv[1:]:
         src = Path('/home/user/BadaMobile/assets/images') / f'{name}.jpg'
         both = Image.new('RGB', (960, 800))

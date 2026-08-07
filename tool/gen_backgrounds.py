@@ -8,7 +8,15 @@
 - `sea_bg_night.jpg` **달밤 바다** — 달이 높이의 28% 지점에 있어 날짜 줄·물때
   칩에 가려 잘 안 보였다(2026-08-06 사용자 제보). 달을 [SKY_SAFE_TOP]으로
   올린다.
-- `sea_bg_morning.jpg` **밝은 아침 바다** — 해를 같은 자리에 둔다(사용자 요구).
+- `sea_bg_morning.jpg` **밝은 아침 바다** — **파란 하늘·파란 바다에 황금빛
+  해**가 떠 햇살이 퍼지는 그림. 해는 달보다 조금 더 위([SUN_Y]).
+
+  색을 고를 때 두 번 헛짚었다. ① 바탕까지 금빛으로 물들였더니 해와 배경의
+  색이 같아져 **아무리 밝혀도 해가 배경에서 떨어져 나오지 않았다** —
+  금빛은 해와 햇살에서만 나와야 한다. ② 파란 하늘에 노란빛을 **더하기만**
+  했더니 R·G가 먼저 포화돼 햇살이 흰색으로 나왔다 — 파랑을 **빼야** 금빛이
+  산다. 그래서 `_sun_rays`·`_glow`·`_light_path`의 색 인자는 음수를 받는
+  **RGB 증분**이다.
 
 **원본 사진을 오려 옮기지 않고 통째로 다시 그린다.** 예전엔 기존
 `sea_bg_night.jpg`에서 달과 달무리만 떼어 위로 옮기려 했는데 세 번 실패했다:
@@ -154,7 +162,14 @@ def _light_path(horizon: int, x_frac: float, color, seed: int = 7):
     return amp[:, :, None] * np.array(color, dtype=np.float32)
 
 
-def _sun_rays(center, horizon: int, color, strength: float, seed: int = 21):
+def _sun_rays(
+    center,
+    horizon: int,
+    color,
+    strength: float,
+    seed: int = 21,
+    blur: float = 14,
+):
     """해에서 뻗어 나오는 **햇살 줄기**(부챗살 모양 빛기둥).
 
     "햇살이 내리쬐는 느낌"을 내는 핵심이고, 기존 `한낮 바다`(차가운 파랑 +
@@ -163,6 +178,11 @@ def _sun_rays(center, horizon: int, color, strength: float, seed: int = 21):
 
     각도에 대한 사인 몇 개를 겹쳐 굵기가 제각각인 줄기를 만들고, 해에서
     멀어질수록·수평선을 지날수록 잦아들게 한다.
+
+    [color]는 색이 아니라 **더할 RGB 증분이고, 음수를 넣을 수 있다.**
+    파란 하늘에 노란빛을 그냥 더하면 R·G가 먼저 포화돼 줄기가 **금빛이
+    아니라 흰색**으로 나온다(2026-08-07에 실제로 그렇게 나왔다). 파랑을
+    **빼야** 금빛이 산다 — 예: `(90, 46, -70)`.
     """
     w, h = SIZE
     cx, cy = center
@@ -180,12 +200,12 @@ def _sun_rays(center, horizon: int, color, strength: float, seed: int = 21):
     near = np.clip((r - w * 0.10) / (w * 0.18), 0, 1)
     far = np.clip(1 - (r - w * 0.28) / (w * 1.15), 0, 1) ** 1.3
     # 수면 위에서는 빠르게 잦아든다 — 물 위까지 줄기가 뻗으면 어색하다.
-    below = np.clip(1 - (yy - horizon * 0.94) / (h * 0.08), 0, 1)
+    below = np.clip(1 - (yy - horizon * 0.72) / (h * 0.13), 0, 1)
 
     amp = beams * near * far * below * strength
     amp = np.asarray(
         Image.fromarray((np.clip(amp, 0, 1) * 255).astype(np.uint8)).filter(
-            ImageFilter.GaussianBlur(14)
+            ImageFilter.GaussianBlur(blur)
         )
     ).astype(np.float32) / 255.0
     return amp[:, :, None] * np.array(color, dtype=np.float32)
@@ -263,39 +283,48 @@ def make_morning(dst: Path) -> None:
     horizon = int(h * HORIZON)
     sun = (int(w * LIGHT_X), int(h * SUN_Y))
 
-    # **따뜻한 금빛으로 간다.** 기존 `한낮 바다`가 차가운 파랑·청록이라,
-    # 아침을 그냥 밝게만 만들면 둘이 비슷해 보인다(사용자 제보). 위쪽 하늘만
-    # 파랗게 남기고 수평선으로 갈수록 금빛으로 물들이며, 바다도 청록 대신
-    # 따뜻한 물빛으로 둔다.
+    # **파란 하늘·파란 바다 위에 황금빛 해**(사용자 요구, 2026-08-07).
+    #
+    # 앞선 판은 바탕색까지 금빛으로 물들였다가 "선명하지 않다"는 제보를
+    # 받았다. 원인은 밝기가 아니라 **금빛을 바탕에 깔았다는 것** — 해와
+    # 배경의 색이 같으니 아무리 밝혀도 해가 배경에서 떨어져 나오지 않는다.
+    # 그래서 바탕은 하늘색으로 되돌리고, **금빛은 해와 햇살에서만** 나오게
+    # 한다. 파랑 위의 금빛이라 대비가 서고, 그래야 `한낮 바다`와도 계속
+    # 구분된다(그쪽은 금빛 요소가 아예 없다).
     #
     # **화면에서는 이보다 어둡게 보인다.** 물때 화면이 글자 가독성을 위해
     # 위 35% · 가운데 15% · 아래 35%의 검은 그라디언트를 덮기 때문이다
     # (`tide_screen.dart`). 그 막을 얇게 하면 모든 배경에서 글자가 읽기
-    # 힘들어지므로, **원본 쪽을 밝게** 해서 막을 견디게 한다. 밝히더라도
-    # 흰색이 아니라 **금빛**으로 올려야 `한낮 바다`와 계속 구분된다.
+    # 힘들어지므로 **원본 쪽을 밝게** 해서 막을 견디게 한다.
+    # `tool/preview_inapp.py`로 막을 씌운 모습을 보고 맞춘다.
     img = _vertical_gradient([
-        (0.00, (140, 190, 232)),
-        (0.12, (206, 220, 234)),
-        (0.22, (248, 234, 200)),
-        (0.30, (255, 226, 158)),
-        (0.34, (255, 232, 168)),  # 수평선 부근이 가장 밝다(금빛)
-        (0.35, (154, 188, 184)),
-        (0.50, (120, 164, 168)),
-        (0.72, (82, 128, 144)),
-        (1.00, (46, 86, 106)),
+        (0.00, (74, 152, 222)),  # 맑은 하늘색
+        (0.14, (120, 184, 234)),
+        (0.26, (174, 214, 240)),
+        (0.34, (222, 234, 240)),  # 수평선은 옅게
+        (0.35, (108, 178, 218)),  # 바다도 하늘색 계열
+        (0.50, (72, 148, 200)),
+        (0.72, (44, 112, 170)),
+        (1.00, (24, 74, 132)),
     ])
 
-    img += _clouds(horizon, seed=9) * np.array([52, 44, 28], dtype=np.float32)
+    # 구름은 옅게만 — 짙으면 하늘이 뿌예져 해가 묻힌다.
+    img += _clouds(horizon, seed=9) * np.array([26, 30, 34], dtype=np.float32)
+
     # 햇살 줄기 → 빛무리 → 원반 순서. 줄기를 먼저 깔아야 빛무리가 그 위를
     # 부드럽게 덮어 해 주변에서 줄기가 튀지 않는다.
-    img += _sun_rays(sun, horizon, (255, 216, 132), 0.26)
-    img += _glow(sun, 640, (255, 204, 112), 88)
-    img += _glow(sun, 230, (255, 226, 154), 118)
-    m, c = _disk(sun, 94, (255, 250, 226), softness=5.0)
+    #
+    # **빛무리를 넓게 깔면 안 된다.** 예전엔 반지름 640까지 퍼뜨렸는데,
+    # 하늘 절반이 뿌옇게 흐려지면서 정작 해가 그 안개에 묻혔다. 지금은
+    # 해에 바짝 붙는 코로나만 남긴다.
+    img += _sun_rays(sun, horizon, (104, 54, -76), 0.62, blur=8)
+    img += _glow(sun, 340, (150, 92, -46), 190)
+    img += _glow(sun, 160, (255, 224, 146), 74)
+    m, c = _disk(sun, 96, (255, 248, 214), softness=2.5)
     img = img * (1 - m) + c * m
-    img += _light_path(horizon, LIGHT_X, (255, 228, 168), seed=3) * 1.0
+    img += _light_path(horizon, LIGHT_X, (232, 156, 34), seed=3) * 1.1
 
-    img = _island(img, horizon, (86, 104, 112), 0.66)
+    img = _island(img, horizon, (72, 104, 132), 0.62)
     img[horizon : horizon + 2] = np.clip(img[horizon : horizon + 2] + 22, 0, 255)
 
     _save(img, dst)
