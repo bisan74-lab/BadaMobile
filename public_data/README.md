@@ -1,18 +1,36 @@
 # 공개 데이터 저장소로 올릴 파일
 
-코드 저장소(`BadaMobile`)는 **비공개**라 앱이 여기 있는 파일을 직접 받을 수
-없다(릴리스 자산·raw 파일 모두 인증이 필요하고, 비공개 저장소의 GitHub
-Pages는 유료 플랜 전용이다). 그래서 **기상 데이터와 공개 문서만** 별도의
-공개 저장소에 둔다.
+**기상 데이터와 공개 문서만** 별도의 공개 저장소(`badawindy-data`)에 둔다.
 
 ```
-BadaMobile        (비공개)  소스 코드 전부
-badawindy-data    (공개)    이 폴더의 파일 + 바람장 릴리스
+BadaMobile        (공개)  소스 코드 전부
+badawindy-data    (공개)  이 폴더의 파일 + 데이터 수집 크론 3종 + 릴리스
 ```
 
-공개되는 것은 **기상 데이터와 개인정보처리방침뿐**이고 소스는 노출되지 않는다.
+> **2026-08-08 이전엔 BadaMobile이 비공개였다.** 그때는 앱이 비공개 저장소의
+> 릴리스 자산·raw 파일을 인증 없이 못 받아서(비공개 저장소의 GitHub Pages도
+> 유료 플랜 전용) 데이터만 억지로 분리해 둘 필요가 있었다. 지금은 BadaMobile도
+> 공개라 그 이유는 사라졌지만, 코드와 데이터를 나눠 두는 편이 여전히 정리에
+> 낫다고 보고 분리 구조는 유지한다. **다만 데이터 수집 크론 자체는
+> `badawindy-data`로 옮겼다** — 아래 "데이터 수집 크론" 참고. 여기 BadaMobile
+> 쪽엔 더 이상 `wind-data.yml`·`point-forecast.yml`·`fishing-data.yml`이 없다.
 
-## 공개 저장소 최초 설정
+## 데이터 수집 크론은 `badawindy-data`에 있다
+
+바람장·지점 예보·낚시지수를 모아 릴리스로 올리는 크론은
+[`badawindy-data/.github/workflows/`](https://github.com/bisan74-lab/badawindy-data/tree/main/.github/workflows)
+에 있다. **수집 스크립트(`tool/fetch_*.py`)는 옮기지 않고 여기(BadaMobile)에
+그대로 둔다** — `badawindy-data`의 워크플로가 매 실행마다 이 저장소를 읽기
+전용으로 체크아웃해 그대로 돌린다. 스크립트를 두 곳에 복사해 두면 한쪽만
+고치고 잊어버리는 사고가 나므로, 코드는 항상 여기 한 곳에만 둔다(지역
+목록 `sample_locations.dart`도 같은 이유로 원본을 그대로 읽힌다).
+
+그래서 이 스크립트를 고치면(`tool/fetch_wind.py` 등) **다음 크론 실행부터
+자동으로 반영된다** — 저장소를 오가며 따로 배포할 필요가 없다. 다만 스크립트가
+새 파일을 요구하게 되면(새 인자·새 데이터 소스 등) `badawindy-data`
+워크플로의 체크아웃 범위·Secret도 함께 봐야 한다.
+
+## 공개 저장소 최초 설정 (`app_gate.json`·`privacy-policy.html`용)
 
 1. GitHub에서 **공개** 저장소 `badawindy-data`를 만든다(기본 브랜치 `main`).
 2. 이 폴더의 `privacy-policy.html`과 `app_gate.json`을 그 저장소 **루트**에
@@ -21,22 +39,6 @@ badawindy-data    (공개)    이 폴더의 파일 + 바람장 릴리스
    브랜치 `main`, 폴더 **`/ (root)`** → Save.
    1~2분 뒤 방침 URL이 살아난다:
    `https://bisan74-lab.github.io/badawindy-data/privacy-policy.html`
-4. PAT 발급: 코드 저장소의 크론이 여기에 바람장을 올려야 한다.
-   GitHub Settings → Developer settings → Personal access tokens →
-   **Fine-grained token** → Repository access: `badawindy-data`만 →
-   Permissions: **Contents: Read and write** → 생성 후 값 복사.
-   > 값은 **생성 직후 한 번만** 보인다. `github_pat_`로 시작하는 **93자
-   > 전체**를 복사한다(classic 토큰이면 `ghp_`로 시작하는 40자). 앞부분을
-   > 빼먹거나 잘라 넣으면 워크플로가 `Bad credentials`로 실패한다 —
-   > 실제로 36자만 들어가 한 번 겪었다. 워크플로 첫 단계가 접두사·길이를
-   > 검사해 이 경우 수집 전에 바로 멈추고 알려 준다.
-5. **코드 저장소**(BadaMobile) Settings → Secrets and variables → Actions에
-   `BADAWINDY_TK` 이름으로 그 PAT를 등록한다.
-   저장소 이름을 다르게 지었다면 같은 화면 **Variables** 탭에
-   `PUBLIC_DATA_REPO` = `소유자/저장소이름` 도 함께 등록한다.
-6. 코드 저장소 Actions → **Wind data refresh** 를 수동 실행해,
-   `badawindy-data`에 `wind-data` 릴리스와 `wind_field.json.gz`가
-   올라오는지 확인한다.
 
 ## 앱이 이 파일들을 쓰는 방식
 

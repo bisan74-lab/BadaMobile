@@ -80,7 +80,9 @@ dart format lib test       # 커밋 전 포맷
   없는 것보다 낫다). 저장 형식은 `{fetchedAt, forecast}` 봉투이고, 봉투 없는
   옛 캐시는 신선하다고 보지 않는다.
 - **지도 바람장은 서버 파일 우선**(`features/weather/.../github_wind_field_repository.dart`):
-  GitHub Actions 크론(`.github/workflows/wind-data.yml` → `tool/fetch_wind.py`)이
+  GitHub Actions 크론(`badawindy-data` 저장소의 `.github/workflows/wind-data.yml`이
+  이 저장소를 체크아웃해 `tool/fetch_wind.py`를 돌린다 — 크론은 2026-08-08에
+  `badawindy-data`로 옮겼고 스크립트는 여기 그대로 둔다)이
   Open-Meteo에서 격자(현재 64×66≈0.62°, 4224점)를 배치로 받아 롤링 릴리스 `wind-data`의
   `wind_field.json.gz`(u/v를 cm/s int16 양자화)로 올리고, 앱은 그 파일 하나만
   내려받는다. 그래서 **사용자 기기는 Open-Meteo를 직접 다지점 호출하지 않아**
@@ -127,7 +129,9 @@ dart format lib test       # 커밋 전 포맷
   조정한다.
 - **홈·낚시정보 카드의 예보도 서버 파일 우선**
   (`features/weather/.../github_point_forecast_repository.dart`):
-  `.github/workflows/point-forecast.yml` → `tool/fetch_points.py`가 3시간마다
+  `badawindy-data` 저장소의 `.github/workflows/point-forecast.yml`(크론은
+  2026-08-08에 `badawindy-data`로 옮겼고, 이 저장소를 체크아웃해
+  `tool/fetch_points.py`를 그대로 돌린다)가 3시간마다
   전국 지역(앱 `sample_locations.dart`를 파이썬이 그대로 읽는다)을 Open-Meteo
   다지점 요청 4번으로 모아 롤링 릴리스 `point-forecast`의
   `point_forecast.json.gz`(약 100KB)로 올린다. `OpenMeteoMarineRepository`는
@@ -139,7 +143,9 @@ dart format lib test       # 커밋 전 포맷
   값이 원본과 맞는지는 `tool/verify_points.py`가 표본 10곳을 같은 시각
   Open-Meteo와 대조해 확인하며, 수집 워크플로가 업로드 직후 함께 돌린다.
 - **낚시지수도 서버 파일 우선**(`features/fishing/.../github_fishing_repository.dart`):
-  GitHub Actions 크론(`.github/workflows/fishing-data.yml` → `tool/fetch_fishing.py`)이
+  GitHub Actions 크론(`badawindy-data` 저장소의 `.github/workflows/fishing-data.yml`이
+  이 저장소를 체크아웃해 `tool/fetch_fishing.py`를 돌린다 — 크론은 2026-08-08에
+  `badawindy-data`로 옮겼고 스크립트는 여기 그대로 둔다)이
   data.go.kr에서 전국 하루치를 모아 롤링 릴리스 `fishing-data`의
   `fishing_index.json.gz`(약 20KB)로 올리고, 앱은 그 파일 하나만 받는다.
   **이 API의 `numOfRows` 상한은 300이다** — 넘기면 HTTP 200에

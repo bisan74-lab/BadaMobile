@@ -59,25 +59,29 @@ base64 -w0 upload-keystore.jks > keystore.base64.txt   # macOS는 -w0 대신 -b0
 | `ADMOB_APP_ID` | `ca-app-pub-XXXX~YYYY` |
 | `ADMOB_BANNER_AD_UNIT_ID` | 물때 화면 하단 배너 단위 `ca-app-pub-XXXX/YYYY` |
 | `ADMOB_SETTINGS_BANNER_AD_UNIT_ID` | (선택) 설정 화면 하단 배너 단위. 없으면 위 값을 함께 쓴다 |
-| `BADAWINDY_TK` | 공개 데이터 저장소용 PAT (5단계 참고) |
 | `DATA_GO_KR_API_KEY` | (이미 등록돼 있음) |
+
+> **`BADAWINDY_TK`는 더 이상 필요 없다**(2026-08-08). 출시 당시엔 이 저장소가
+> 비공개라 공개 데이터 저장소에 올리는 크론을 여기서 돌리고 저장소 간
+> PAT로 넘겼는데, 그 크론을 `badawindy-data` 자신으로 옮기면서 저장소 간
+> 이동이 없어졌다(자기 자신에게 올리므로 기본 `GITHUB_TOKEN`으로 충분).
+> 이 저장소엔 이제 이 Secret을 쓰는 워크플로가 없다.
 
 ## 5. 공개 데이터 저장소 만들기 (개인정보처리방침 + 바람장)
 
-이 저장소는 **비공개**라 앱이 여기 있는 파일을 익명으로 받을 수 없고,
-비공개 저장소의 GitHub Pages는 유료 플랜 전용이다. 그래서 **기상 데이터와
-공개 문서만** 별도의 공개 저장소에 둔다.
+이 저장소는 지금은 공개이지만, **기상 데이터와 공개 문서는 여전히** 별도의
+공개 저장소(`badawindy-data`)에 둔다(코드와 데이터 분리). 데이터 수집
+크론도 `badawindy-data` 자신에서 돈다 — 자세한 구조는
+[`public_data/README.md`](../public_data/README.md) 참고.
 
-절차는 [`public_data/README.md`](../public_data/README.md)에 정리돼 있다.
-요약하면:
+최초 설정 요약:
 
 1. 공개 저장소 `badawindy-data` 생성(기본 브랜치 `main`)
 2. `public_data/`의 `privacy-policy.html`·`app_gate.json`을 그 저장소 루트에 올리기
 3. 그 저장소 Settings → Pages → Source: `main` / `/ (root)` → Save
    → `https://bisan74-lab.github.io/badawindy-data/privacy-policy.html`
-4. `badawindy-data`에 **Contents: Read and write** 권한만 가진 fine-grained PAT 발급
-5. 이 저장소 Secret에 `BADAWINDY_TK`로 등록(4단계 표에도 포함)
-6. Actions → **Wind data refresh** 수동 실행 → 바람장이 공개 저장소에 올라오는지 확인
+4. `badawindy-data` 저장소 Actions → **Wind data refresh** 수동 실행 →
+   바람장이 그 저장소 릴리스에 올라오는지 확인
 
 > Play Console에 등록할 개인정보처리방침 URL은 3번에서 나온 주소이고,
 > 앱의 `AppInfo.privacyPolicyUrl`과 같아야 한다.
