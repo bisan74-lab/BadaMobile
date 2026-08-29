@@ -167,4 +167,99 @@ void main() {
     await settle(60);
     expect(core(), isNotNull, reason: '손을 떼면 고해상도가 채워져야 한다');
   });
+
+  testWidgets('드래그 중 시각이 연달아 여러 번 바뀌어도 마지막 시각으로 안전하게 정착한다', (
+    tester,
+  ) async {
+    // 2026-08-08 성능 제보 대응: `Slider`는 `divisions`가 없어 실제 드래그
+    // 한 번에 `onChanged`가 초당 수십 번, 서로 다른 시각으로 불린다. 예전엔
+    // 호출마다 새 아이솔레이트를 스폰해(각 300ms대) 드래그 내내 여러 개가
+    // 동시에 떠 프레임을 밀어냈다. `LatestOnlyRunner`로 "한 번에 하나만"
+    // 돌게 조율했는데(조율 로직 자체는
+    // `test/core/utils/latest_only_runner_test.dart`에서 결정적으로 검증),
+    // 이 테스트는 **위젯에 실제로 그렇게 연결됐는지** — 사이에 정착할 틈을
+    // 전혀 안 주고 값을 연달아 밀어 넣어도 충돌 없이, 뒤섞인 프레임 없이
+    // 마지막 값으로 정착하는지를 본다.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          windFieldRepositoryProvider.overrideWithValue(
+            MockWindFieldRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: WeatherScreen()),
+      ),
+    );
+
+    (ui.Image, ui.Image?)? current() {
+      for (final paint in tester.widgetList<CustomPaint>(
+        find.byType(CustomPaint),
+      )) {
+        final p = paint.painter;
+        if (p is WindHeatmapPainter) return (p.image, p.coreImage);
+      }
+      return null;
+    }
+
+    ui.Image? core() => current()?.$2;
+
+    final seen = <(ui.Image, ui.Image?)>[];
+    Future<void> pumpFrames(int count) async {
+      for (var i = 0; i < count; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+        final now = current();
+        if (now != null &&
+            (seen.isEmpty ||
+                !identical(seen.last.$1, now.$1) ||
+                !identical(seen.last.$2, now.$2))) {
+          seen.add(now);
+        }
+      }
+    }
+
+    await tester.pump();
+    await pumpFrames(40);
+
+    final slider = tester.widget<Slider>(find.byType(Slider).first);
+    slider.onChangeStart!(0);
+    // 실제 드래그를 흉내내 진행 중에도 계속 다른 시각을 **연달아** 요청한다
+    // — 각 호출 사이에 pump를 넣지 않아, 앞선 요청이 끝날 틈도 없이 값이
+    // 계속 밀려드는 최악의 경우를 재현한다.
+    for (var step = 1; step <= 10; step++) {
+      slider.onChanged!(step.toDouble());
+    }
+    await pumpFrames(60);
+    slider.onChangeEnd!(10);
+    await pumpFrames(80);
+
+    expect(tester.takeException(), isNull);
+    expect(
+      core(),
+      isNotNull,
+      reason: '손을 뗀 뒤엔 결국 고해상도까지 채워져 정착해야 한다',
+    );
+
+    // 같은 불변식(첫 번째 테스트 참고): 어느 프레임에서도 "새 배경 + 옛
+    // 핵심영역"이 함께 그려지면 안 된다. 연달아 밀어 넣은 값들 사이에서도
+    // 이게 깨지면, 화면에 시각이 섞인 프레임이 실제로 보였다는 뜻이다.
+    for (var i = 1; i < seen.length; i++) {
+      final prev = seen[i - 1], now = seen[i];
+      final bgChanged = !identical(prev.$1, now.$1);
+      final coreKeptOld = now.$2 != null && identical(prev.$2, now.$2);
+      expect(
+        bgChanged && coreKeptOld,
+        isFalse,
+        reason:
+            '$i번째 상태: 연달아 밀어 넣은 요청들 사이에서 배경은 새 '
+            '시각인데 핵심영역이 옛 시각 그대로다',
+      );
+    }
+  });
 }

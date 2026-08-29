@@ -10,6 +10,7 @@ import '../../../app/app_tab_provider.dart';
 import '../../../core/widgets/nav_chip.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/kst.dart';
+import '../../../core/utils/latest_only_runner.dart';
 import '../../locations/data/models/sea_location.dart';
 import '../../kma_weather/presentation/widgets/weather_icon.dart';
 import '../data/land_mask.dart';
@@ -390,6 +391,8 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
                             location: fp,
                             roseHour: _roseHour,
                             onClose: _closeDetail,
+                            // 지도에서 골라 둔 시각(_hourOffset) 그대로 열린다.
+                            initialTime: field.time,
                           ),
                         ),
                       ),
@@ -515,6 +518,13 @@ class _WindMapAreaState extends State<_WindMapArea> {
   /// 진행 중인 히트맵 빌드의 최신성 토큰 — 시간 스크럽 등으로 빌드가 겹치면
   /// 낡은 결과를 버린다(시간 비교만으로는 같은 시각의 재빌드 경쟁을 못 거름).
   int _heatmapRequestId = 0;
+
+  /// 배경 히트맵 재굽기를 "한 번에 하나만" 돌게 조율한다 — `divisions` 없는
+  /// 연속 슬라이더라 드래그 한 번에 시각이 수십 번 바뀌는데, 바뀔 때마다
+  /// 새 아이솔레이트를 스폰하면 그 스폰·직렬화 경합만으로 프레임이 밀렸다
+  /// (2026-08-08 사용자 제보 — "지도에서 날짜를 이동할 때 반응 속도가
+  /// 너무 느리다"). [LatestOnlyRunner] 문서 참고.
+  final _heatmapRunner = LatestOnlyRunner();
 
   /// 고해상도 오버레이 범위: 남한 전역 + 서해·남해·동해·대한해협·규슈 연안.
   /// 약 50px/°로 구워 전체 bbox 래스터(10.5px/°)의 5배² 밀도.
@@ -654,7 +664,16 @@ class _WindMapAreaState extends State<_WindMapArea> {
   ///
   /// 손을 떼면 [\_bakeCoreIfNeeded]가 **배경은 그대로 두고 핵심영역만** 채운다
   /// — 그 시각 배경은 스크럽 중에 이미 구워 놨으므로 다시 구울 이유가 없다.
-  Future<void> _rebuildHeatmap() async {
+  ///
+  /// **실제로 굽는 일은 [_heatmapRunner]가 한 번에 하나만 돌게 조율한다** —
+  /// 드래그 중 시각이 겹쳐 바뀌어도 진행 중인 굽기가 끝날 때까지 새로 아이솔
+  /// 레이트를 스폰하지 않고, 끝난 뒤 그사이 최신 시각으로 한 번만 이어서
+  /// 돈다(중간에 지나친 시각은 건너뛴다). 그래서 이 메서드는 항상
+  /// `widget.field`(호출 시점이 아니라 **실제로 도는 시점**의 최신 값)를
+  /// 다시 읽어야 한다 — [LatestOnlyRunner] 문서의 사용 조건.
+  void _rebuildHeatmap() => _heatmapRunner.run(_doRebuildHeatmap);
+
+  Future<void> _doRebuildHeatmap() async {
     final field = widget.field;
     final time = field.time;
     final requestId = ++_heatmapRequestId;
@@ -1586,6 +1605,7 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
     required this.location,
     required this.roseHour,
     required this.onClose,
+    required this.initialTime,
   });
 
   final SeaLocation location;
@@ -1593,6 +1613,12 @@ class _PointForecastPanel extends ConsumerStatefulWidget {
   /// 선택 중인 시각의 해양값을 지도 위 방향 나침반에 전달하는 통로.
   final ValueNotifier<HourlyMarine?> roseHour;
   final VoidCallback onClose;
+
+  /// 패널이 처음 열릴 때 맞춰야 할 시각 — 지도에서 날짜 슬라이더로 골라 둔
+  /// 시각(`_hourOffset`)이다. 이게 없으면 지도에서 미래 날짜를 골라 두고
+  /// 상세 예보로 들어가도 표가 "지금"부터 보여, 방금 고른 날짜가 사라진
+  /// 것처럼 보인다(사용자 제보, 2026-08-08).
+  final DateTime initialTime;
 
   @override
   ConsumerState<_PointForecastPanel> createState() =>
@@ -1782,10 +1808,15 @@ class _PointForecastPanelState extends ConsumerState<_PointForecastPanel> {
                   }
                   _stepCount = steps.length;
                   final nowIdx = _closestToNow(steps);
-                  // 진입 시 현재 시각과 가장 가까운 칸에 위치시키고 그리로 스크롤.
+                  // 진입 시 **지도에서 골라 둔 시각**(widget.initialTime)과 가장
+                  // 가까운 칸에 위치시키고 그리로 스크롤한다. "지금"이 아니라
+                  // 이 시각을 쓰는 이유는 위 필드 설명 참고.
                   if (!_initialized) {
                     _initialized = true;
-                    _i = nowIdx;
+                    _i = currentStepIndex(
+                      steps.map((s) => s.time).toList(),
+                      widget.initialTime,
+                    );
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) _scrollToSelected();
                     });

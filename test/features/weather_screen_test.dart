@@ -1,7 +1,11 @@
 import 'package:bada_mobile/core/storage/prefs.dart';
+import 'package:bada_mobile/core/utils/formatters.dart';
+import 'package:bada_mobile/core/utils/kst.dart';
 import 'package:bada_mobile/features/locations/data/sample_locations.dart';
 import 'package:bada_mobile/features/locations/presentation/providers.dart';
+import 'package:bada_mobile/features/weather/data/repositories/mock_marine_weather_repository.dart';
 import 'package:bada_mobile/features/weather/data/repositories/mock_wind_field_repository.dart';
+import 'package:bada_mobile/features/weather/presentation/providers.dart';
 import 'package:bada_mobile/features/weather/presentation/weather_screen.dart';
 import 'package:bada_mobile/features/weather/presentation/wind_field_providers.dart';
 import 'package:flutter/material.dart';
@@ -77,5 +81,79 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
 
     expect(container.read(selectedLocationProvider).id, target.id);
+  });
+
+  testWidgets('지도에서 날짜를 옮긴 뒤 상세 예보로 들어가면 그 날짜가 유지된다', (
+    tester,
+  ) async {
+    // 2026-08-08 사용자 제보: 지도 시간 슬라이더로 미래 날짜를 골라 둔 채
+    // "상세 예보"로 들어가면 표가 그 날짜가 아니라 "지금"부터 보였다.
+    // 원인은 `_PointForecastPanel`이 지도의 선택 시각을 아예 전달받지 않고
+    // 첫 진입 시 항상 `nowIdx`로 `_i`를 초기화했기 때문이다.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          windFieldRepositoryProvider.overrideWithValue(
+            MockWindFieldRepository(),
+          ),
+          // 상세 표는 marineForecastProvider를 따로 쓰므로 이것도 목으로
+          // 바꿔야 실 네트워크를 타지 않는다.
+          marineWeatherRepositoryProvider.overrideWithValue(
+            MockMarineWeatherRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: WeatherScreen()),
+      ),
+    );
+
+    await tester.pump(); // FutureProvider 완료
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 지도 시각을 30시간(하루+6시간) 앞으로 옮긴다 — Slider의 onChanged를
+    // 실제 드래그처럼 한 번 호출한다(내부적으로 `_setMapHour`를 그대로 탄다).
+    const movedOffset = 30;
+    tester.widget<Slider>(find.byType(Slider)).onChanged!(
+      movedOffset.toDouble(),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 지도를 탭해 커서를 찍고 "상세 예보"로 들어간다(기존 테스트와 같은 흐름).
+    await tester.tapAt(tester.getCenter(find.byType(WeatherScreen)));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.tap(find.text('상세 예보'));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16)); // marineForecastProvider 완료
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 앱과 같은 계산으로 "옮겨 둔 시각"이 표에서 어느 3시간 칸에 떨어지는지
+    // 독립적으로 구한다(MockWindFieldRepository·MockMarineWeatherRepository가
+    // 둘 다 "지금을 정시로 자른 값"을 기준으로 삼으므로 시작점이 같다).
+    final now = nowKst();
+    final hourStart = DateTime(now.year, now.month, now.day, now.hour);
+    final movedFieldTime = hourStart.add(const Duration(hours: movedOffset));
+    final steps = [
+      for (var i = 0; i < 16 * 24; i++)
+        if (hourStart.add(Duration(hours: i)).hour % 3 == 0)
+          hourStart.add(Duration(hours: i)),
+    ].take(16 * 8).toList();
+    final expectedIdx = currentStepIndex(steps, movedFieldTime);
+    final nowIdx = currentStepIndex(steps, now);
+    // 두 인덱스가 실제로 다른 칸이어야 이 테스트가 버그를 가려낼 수 있다.
+    expect(
+      expectedIdx,
+      isNot(equals(nowIdx)),
+      reason: '30시간을 옮겼는데도 같은 3시간 칸이면 이 테스트가 무의미하다',
+    );
+    final expectedText =
+        '${formatMonthDay(steps[expectedIdx])} ${formatHm(steps[expectedIdx])}';
+
+    // 표 상단 시각 표시가 "지금"이 아니라 옮겨 둔 시각과 가장 가까운 칸이어야
+    // 한다. 고친 전이라면 이 텍스트 대신 "지금" 시각이 표시돼 실패한다.
+    expect(find.text(expectedText), findsOneWidget);
   });
 }
