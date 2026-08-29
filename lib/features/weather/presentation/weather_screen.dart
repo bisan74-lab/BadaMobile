@@ -111,15 +111,15 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen>
   }
 
   void _closeDetail() {
+    // **지도 시각은 건드리지 않는다.** 상세 예보 표가 시각을 고를 때마다
+    // `_syncMapHour`가 이미 `_hourOffset`을 그 시각으로 맞춰 두므로, 여기서
+    // "지금"으로 되돌리면 방금 보고 있던 미래/과거 시각이 창을 닫는 순간
+    // 사라지는 것처럼 보인다(2026-08-08 사용자 제보 — "상세보기에서 나가면
+    // 오늘 날짜로 가는게 아니라 지금 보고 있던 시간 그대로 유지"). 지도로
+    // 돌아가도 보던 시각 그대로 두고, "지금"으로 가고 싶으면 지도 하단
+    // 슬라이더의 "지금" 버튼([_mapHourToNow])을 쓰면 된다.
     _roseHour.value = null;
-    setState(() {
-      _forecastPoint = null;
-      // 표를 닫으면 지도를 다시 현재 시각(서울 기준) 바람으로 되돌린다.
-      final series = _series;
-      if (series != null) {
-        _hourOffset = series.indexAtOrBefore(nowKst());
-      }
-    });
+    setState(() => _forecastPoint = null);
   }
 
   /// 지도 모드 하단 슬라이더로 바람장 시각을 바꾼다.

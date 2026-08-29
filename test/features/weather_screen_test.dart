@@ -156,4 +156,63 @@ void main() {
     // 한다. 고친 전이라면 이 텍스트 대신 "지금" 시각이 표시돼 실패한다.
     expect(find.text(expectedText), findsOneWidget);
   });
+
+  testWidgets('상세 예보 창을 닫아도 보고 있던 시각이 유지된다', (tester) async {
+    // 2026-08-08 사용자 제보: 상세 예보 창을 닫으면 지도가 "지금"으로
+    // 되돌아갔다. `_closeDetail`이 창을 닫을 때 `_hourOffset`을 명시적으로
+    // `nowKst()` 기준으로 되돌리고 있었는데, 표를 보는 동안 이미
+    // `_syncMapHour`가 `_hourOffset`을 표의 선택 시각과 맞춰 두므로 이 되돌림
+    // 자체가 불필요했고, 방금 보던 미래/과거 시각이 창을 닫는 순간 사라지는
+    // 것처럼 보였다.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          windFieldRepositoryProvider.overrideWithValue(
+            MockWindFieldRepository(),
+          ),
+          marineWeatherRepositoryProvider.overrideWithValue(
+            MockMarineWeatherRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: WeatherScreen()),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 지도 시각을 30시간 앞으로 옮긴다 — "지금"(0)과 확실히 다른 값.
+    const movedOffset = 30;
+    tester.widget<Slider>(find.byType(Slider)).onChanged!(
+      movedOffset.toDouble(),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
+    await tester.tapAt(tester.getCenter(find.byType(WeatherScreen)));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.tap(find.text('상세 예보'));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 표를 닫는다.
+    await tester.tap(find.byTooltip('지도로 돌아가기'));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 지도 모드로 돌아왔으니 슬라이더가 다시 하나(지도용)만 있어야 하고,
+    // 그 값이 0("지금")으로 되돌아가 있으면 안 된다 — 옮겨 둔 시각 근방을
+    // 유지해야 한다(패널의 3시간 칸 반올림 오차를 감안해 넉넉히 확인).
+    final slider = tester.widget<Slider>(find.byType(Slider));
+    expect(
+      slider.value,
+      greaterThanOrEqualTo(movedOffset - 3),
+      reason: '상세 예보를 닫자 지도 시각이 "지금"으로 되돌아갔다',
+    );
+  });
 }
