@@ -94,6 +94,18 @@ dart format lib test       # 커밋 전 포맷
   어긋난다. `caching_wind_field_repository`의 캐시 왕복도 이 배열을 보존해야
   한다. 수집 **간격**을 줄이는 건 의미가 없다(ECMWF가 하루 4번만 발표) —
   체감 신선도는 시간 해상도(`FINE_HOURS`)가 좌우한다.
+- **`badawindy-data`의 크론 셋(wind-data·point-forecast·fishing-data)은
+  GitHub의 "60일 무커밋 자동 비활성화"에 한 번 실제로 당했다**(2026-10-13
+  사용자 제보로 발견 — 두 달간 하루도 안 쉬고 성공했는데 전부
+  `disabled_inactivity`로 꺼져 6일치 데이터가 밀려 있었다). 세 크론이
+  저장소에 남기는 흔적이 `softprops/action-gh-release`로 올리는 **릴리스**
+  뿐이었는데, 릴리스 갱신은 깃 커밋이 아니라서 "60일 무활동" 판정에
+  안 들어간다. 그래서 각 워크플로 마지막에 `status/<이름>.txt`에 실행
+  시각만 적어 진짜 커밋을 하나씩 남기는 스텝을 추가했다(자세한 경위는
+  `badawindy-data`의 `README.md`와 세 워크플로 파일 상단 주석 참고).
+  **데이터가 또 안 받아지면 가장 먼저 의심할 곳**: `badawindy-data` 저장소
+  Settings → Actions에서 워크플로가 `disabled_inactivity`로 꺼져 있는지
+  본다(API로는 `GET .../actions/workflows`의 `state` 필드).
 - **서버 격자는 적응형(비균일)**: `fetch_wind.py`의 `_density_axis()`가 위·경도
   축마다 대한해협·서해·남해 연안(`LAT_FOCUS`/`LON_FOCUS`)에 밀도를 더 준
   비균일 좌표를 만든다(총점은 그대로, 핵심 해역만 더 촘촘히 재배치). 그래서
